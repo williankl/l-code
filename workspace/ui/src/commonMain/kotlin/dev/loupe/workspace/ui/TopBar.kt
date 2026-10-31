@@ -1,0 +1,208 @@
+package dev.loupe.workspace.ui
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import com.teya.lemonade.HorizontalDivider
+import com.teya.lemonade.IconButton
+import com.teya.lemonade.LemonadeTheme
+import com.teya.lemonade.LemonadeUi
+import com.teya.lemonade.SegmentedControl
+import com.teya.lemonade.Switch
+import com.teya.lemonade.SymbolContainer
+import com.teya.lemonade.Tag
+import com.teya.lemonade.Text
+import com.teya.lemonade.core.LemonadeButtonSize
+import com.teya.lemonade.core.LemonadeButtonType
+import com.teya.lemonade.core.LemonadeButtonVariant
+import com.teya.lemonade.core.LemonadeIcons
+import com.teya.lemonade.core.LemonadeSegmentedControlSize
+import com.teya.lemonade.core.SymbolContainerShape
+import com.teya.lemonade.core.SymbolContainerSize
+import com.teya.lemonade.core.SymbolContainerVoice
+import com.teya.lemonade.core.TabButtonProperties
+import com.teya.lemonade.core.TagVoice
+import dev.loupe.platform.designsystem.AnchoredPopover
+import dev.loupe.platform.designsystem.DotLabel
+import dev.loupe.platform.designsystem.Hairline
+import dev.loupe.platform.designsystem.HoverTooltip
+import dev.loupe.platform.designsystem.StatusDot
+import dev.loupe.platform.designsystem.TooltipPlacement
+import dev.loupe.platform.localization.resolve
+import dev.loupe.workspace.strings.Res
+import dev.loupe.workspace.strings.app_name
+import dev.loupe.workspace.strings.keep_awake_description
+import dev.loupe.workspace.strings.keep_awake_title
+import dev.loupe.workspace.strings.sessions_collapse
+import dev.loupe.workspace.strings.sessions_expand
+import dev.loupe.workspace.strings.settings_appearance
+import dev.loupe.workspace.strings.settings_title
+import dev.loupe.workspace.strings.theme_dark
+import dev.loupe.workspace.strings.theme_light
+import dev.loupe.workspace.strings.theme_system
+import dev.loupe.workspace.uimodel.SettingsModel
+import dev.loupe.workspace.uimodel.ThemeOption
+import dev.loupe.workspace.uimodel.TopBarModel
+import dev.loupe.workspace.uimodel.WorkspaceEvent
+import org.jetbrains.compose.resources.stringResource
+
+@Composable
+internal fun TopBar(
+  topBar: TopBarModel,
+  settings: SettingsModel,
+  sessionsVisible: Boolean,
+  narrowLayout: Boolean,
+  showAttentionDot: Boolean,
+  onEvent: (WorkspaceEvent) -> Unit,
+  modifier: Modifier = Modifier,
+) {
+  val spaces = LemonadeTheme.spaces
+  Row(
+    verticalAlignment = Alignment.CenterVertically,
+    horizontalArrangement = Arrangement.spacedBy(spaces.spacing300),
+    modifier = modifier
+      .fillMaxWidth()
+      .heightIn(min = 56.dp)
+      .padding(start = spaces.spacing300, end = spaces.spacing400, top = spaces.spacing200, bottom = spaces.spacing200),
+  ) {
+    val toggleLabel = stringResource(if (sessionsVisible) Res.string.sessions_collapse else Res.string.sessions_expand)
+    HoverTooltip(text = toggleLabel, placement = TooltipPlacement.BelowStart) {
+      Box {
+        LemonadeUi.IconButton(
+          icon = LemonadeIcons.Board,
+          contentDescription = toggleLabel,
+          onClick = { onEvent(WorkspaceEvent.ToggleSessionsPanel(narrowLayout)) },
+          variant = LemonadeButtonVariant.Neutral,
+          type = LemonadeButtonType.Ghost,
+          size = LemonadeButtonSize.Small,
+        )
+        if (showAttentionDot) {
+          StatusDot(
+            color = LemonadeTheme.colors.background.bgInfo,
+            ring = LemonadeTheme.colors.background.bgSubtle,
+            modifier = Modifier.align(Alignment.TopEnd).offset(x = (-2).dp, y = 2.dp),
+          )
+        }
+      }
+    }
+    Row(
+      verticalAlignment = Alignment.CenterVertically,
+      horizontalArrangement = Arrangement.spacedBy(spaces.spacing200),
+    ) {
+      LemonadeUi.SymbolContainer(
+        icon = LemonadeIcons.Search,
+        contentDescription = null,
+        voice = SymbolContainerVoice.Brand,
+        size = SymbolContainerSize.Small,
+        shape = SymbolContainerShape.Rounded,
+      )
+      LemonadeUi.Text(text = stringResource(Res.string.app_name), textStyle = LemonadeTheme.typography.headingXXSmall)
+    }
+    Hairline(width = 1.dp, height = 20.dp)
+    LemonadeUi.Text(
+      text = topBar.path.orEmpty(),
+      textStyle = LemonadeTheme.typography.bodySmallRegular,
+      color = LemonadeTheme.colors.content.contentSecondary,
+      maxLines = 1,
+      overflow = TextOverflow.Ellipsis,
+      modifier = Modifier.weight(1f),
+    )
+    Row(
+      verticalAlignment = Alignment.CenterVertically,
+      horizontalArrangement = Arrangement.spacedBy(spaces.spacing200),
+    ) {
+      topBar.keepAwakeLabel?.let { label ->
+        LemonadeUi.Tag(label = label.resolve(), icon = LemonadeIcons.Lightning, voice = TagVoice.Neutral)
+      }
+      Box {
+        LemonadeUi.IconButton(
+          icon = LemonadeIcons.Gear,
+          contentDescription = stringResource(Res.string.settings_title),
+          onClick = { onEvent(WorkspaceEvent.ToggleSettings) },
+          variant = LemonadeButtonVariant.Neutral,
+          type = if (settings.open) LemonadeButtonType.Solid else LemonadeButtonType.Ghost,
+          size = LemonadeButtonSize.Small,
+        )
+        if (settings.open) {
+          SettingsPopover(settings = settings, onEvent = onEvent)
+        }
+      }
+    }
+  }
+}
+
+private val ThemeTabs = listOf(
+  ThemeOption.Dark to Res.string.theme_dark,
+  ThemeOption.Light to Res.string.theme_light,
+  ThemeOption.System to Res.string.theme_system,
+)
+
+@Composable
+private fun SettingsPopover(
+  settings: SettingsModel,
+  onEvent: (WorkspaceEvent) -> Unit,
+) {
+  val spaces = LemonadeTheme.spaces
+  val colors = LemonadeTheme.colors
+  AnchoredPopover(onDismissRequest = { onEvent(WorkspaceEvent.DismissSettings) }) {
+    LemonadeUi.Text(text = stringResource(Res.string.settings_title), textStyle = LemonadeTheme.typography.headingXXSmall)
+    Column(verticalArrangement = Arrangement.spacedBy(spaces.spacing200)) {
+      LemonadeUi.Text(text = stringResource(Res.string.settings_appearance), textStyle = LemonadeTheme.typography.bodySmallSemiBold)
+      LemonadeUi.SegmentedControl(
+        properties = ThemeTabs.map { (_, label) -> TabButtonProperties.label(stringResource(label)) },
+        selectedTab = ThemeTabs.indexOfFirst { (theme, _) -> theme == settings.theme },
+        onTabSelected = { index -> onEvent(WorkspaceEvent.SetTheme(ThemeTabs[index].first)) },
+        size = LemonadeSegmentedControlSize.Medium,
+        modifier = Modifier.fillMaxWidth(),
+      )
+    }
+    LemonadeUi.HorizontalDivider()
+    Row(
+      horizontalArrangement = Arrangement.spacedBy(spaces.spacing300),
+      modifier = Modifier.toggleable(
+        value = settings.keepAwake,
+        role = Role.Switch,
+        onValueChange = { onEvent(WorkspaceEvent.SetKeepAwake(it)) },
+      ),
+    ) {
+      Column(
+        verticalArrangement = Arrangement.spacedBy(spaces.spacing50),
+        modifier = Modifier.weight(1f),
+      ) {
+        LemonadeUi.Text(
+          text = stringResource(Res.string.keep_awake_title),
+          textStyle = LemonadeTheme.typography.bodySmallSemiBold,
+        )
+        LemonadeUi.Text(
+          text = stringResource(Res.string.keep_awake_description),
+          textStyle = LemonadeTheme.typography.bodyXSmallRegular,
+          color = colors.content.contentSecondary,
+        )
+        val active = settings.keepAwakeStatus.active
+        DotLabel(
+          text = settings.keepAwakeStatus.text.resolve(),
+          dotColor = if (active) colors.background.bgBrand else colors.background.bgNeutral,
+          textColor = if (active) colors.content.contentBrand else colors.content.contentSecondary,
+          modifier = Modifier.padding(top = spaces.spacing100),
+        )
+      }
+      LemonadeUi.Switch(
+        checked = settings.keepAwake,
+        onCheckedChange = { onEvent(WorkspaceEvent.SetKeepAwake(it)) },
+        modifier = Modifier.padding(top = 2.dp),
+      )
+    }
+  }
+}

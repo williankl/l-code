@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- Top bar and settings -->
+  <string name="app_name">loupe</string>
+  <string name="sessions_collapse">Recolher sessões</string>
+  <string name="sessions_expand">Expandir sessões</string>
+  <string name="settings_title">Definições</string>
+  <string name="settings_appearance">Aparência</string>
+  <string name="theme_dark">Escuro</string>
+  <string name="theme_light">Claro</string>
+  <string name="theme_system">Sistema</string>
+  <string name="keep_awake_title">Manter acordado enquanto as sessões trabalham</string>
+  <string name="keep_awake_description">Impede este computador de adormecer enquanto alguma sessão está a trabalhar. O ecrã pode desligar-se na mesma.</string>
+  <string name="keep_awake_tag">A manter acordado · %1$d a trabalhar</string>
+  <string name="keep_awake_off">Desligado · este computador pode adormecer</string>
+  <plurals name="keep_awake_active">
+    <item quantity="one">A manter acordado · %1$d sessão a trabalhar</item>
+    <item quantity="other">A manter acordado · %1$d sessões a trabalhar</item>
+  </plurals>
+  <string name="keep_awake_idle">Ligado · nenhuma sessão a trabalhar, pode adormecer</string>
+
+  <!-- Sessions -->
+  <string name="sessions_title">Sessões</string>
+  <string name="action_new_session">Nova sessão</string>
+  <string name="status_working">a trabalhar</string>
+  <string name="status_needs_input">precisa de ti</string>
+  <string name="status_idle">parada</string>
+  <string name="status_exited">terminada</string>
+  <string name="fold_hidden_count">%1$d ocultas</string>
+  <plurals name="fold_show">
+    <item quantity="one">Mostrar %1$d subsessão</item>
+    <item quantity="other">Mostrar %1$d subsessões</item>
+  </plurals>
+  <plurals name="fold_hide">
+    <item quantity="one">Ocultar %1$d subsessão</item>
+    <item quantity="other">Ocultar %1$d subsessões</item>
+  </plurals>
+  <string name="meta_shell_place">%1$s · %2$s</string>
+  <plurals name="meta_review">
+    <item quantity="one">%1$d comentário por resolver</item>
+    <item quantity="other">%1$d comentários por resolver</item>
+  </plurals>
+  <string name="meta_split_same_folder">%1$s · mesma pasta</string>
+  <string name="meta_split_worktree">%1$s · worktree</string>
+
+  <!-- New session -->
+  <string name="action_new_terminal">Novo terminal</string>
+  <string name="no_sessions_title">Ainda não há sessões</string>
+  <string name="no_sessions_detail">Cada sessão é um terminal, a começar na tua pasta pessoal.</string>
+
+  <!-- Session header -->
+  <string name="view_terminal">Terminal</string>
+  <string name="view_diff">Diff vs %1$s</string>
+  <string name="tag_sub_session_same_folder">subsessão · mesma pasta</string>
+  <string name="tag_sub_session_worktree">subsessão · worktree</string>
+
+  <!-- New sub-session -->
+  <string name="sub_session_title">Nova subsessão</string>
+  <string name="sub_session_from">a partir de %1$s</string>
+  <string name="sub_session_location">Local</string>
+  <string name="location_same_folder">Mesma pasta</string>
+  <string name="location_new_worktree">Nova worktree</string>
+  <string name="branch_note_same">mesmo branch</string>
+  <string name="branch_note_new">novo branch a partir de %1$s</string>
+  <string name="sub_help_same">Partilha ficheiros e branch com %1$s. As alterações ficam na mesma árvore de trabalho.</string>
+  <string name="sub_help_worktree">Pasta e branch próprios, para que as alterações nunca colidam com %1$s.</string>
+  <string name="sub_help_no_repo">Esta pasta não é um checkout git, por isso uma subsessão só a pode partilhar.</string>
+  <string name="action_create_sub_session">Criar subsessão</string>
+  <string name="action_cancel">Cancelar</string>
+  <string name="action_dismiss">Fechar</string>
+
+  <!-- Diff review -->
+  <string name="diff_changes">Alterações</string>
+  <string name="diff_vs">vs</string>
+  <string name="diff_refresh">Atualizar diff</string>
+  <string name="diff_source_working_tree">árvore de trabalho</string>
+  <plurals name="diff_summary_uncommitted">
+    <item quantity="one">inclui alterações por fazer commit · %1$d ficheiro</item>
+    <item quantity="other">inclui alterações por fazer commit · %1$d ficheiros</item>
+  </plurals>
+  <plurals name="diff_summary">
+    <item quantity="one">%1$d ficheiro</item>
+    <item quantity="other">%1$d ficheiros</item>
+  </plurals>
+  <string name="file_added">Adicionado</string>
+  <string name="file_modified">Modificado</string>
+  <string name="file_deleted">Eliminado</string>
+  <string name="file_renamed">Renomeado</string>
+  <string name="file_collapse">Recolher ficheiro</string>
+  <string name="file_expand">Expandir ficheiro</string>
+  <string name="file_full">Ficheiro completo</string>
+  <string name="file_show_full">Mostrar ficheiro completo</string>
+  <string name="file_show_full_link">mostrar ficheiro completo</string>
+  <string name="file_binary">Ficheiro binário, não mostrado</string>
+  <plurals name="file_comment_count">
+    <item quantity="one">%1$d comentário</item>
+    <item quantity="other">%1$d comentários</item>
+  </plurals>
+  <plurals name="hunk_show_hidden">
+    <item quantity="one">Mostrar %1$d linha oculta</item>
+    <item quantity="other">Mostrar %1$d linhas ocultas</item>
+  </plurals>
+  <plurals name="file_unchanged_below">
+    <item quantity="one">%1$d linha sem alterações abaixo</item>
+    <item quantity="other">%1$d linhas sem alterações abaixo</item>
+  </plurals>
+  <string name="comment_on_line">Comentar %1$s</string>
+  <string name="comment_author_you">Tu</string>
+  <string name="comment_unsent">Por enviar</string>
+  <string name="comment_sent_to">Enviado para %1$s</string>
+  <string name="comment_in_session">Em %1$s</string>
+  <string name="comment_delete">Eliminar comentário</string>
+  <string name="comment_placeholder">O que deve mudar aqui?</string>
+  <string name="action_add_comment">Adicionar comentário</string>
+  <string name="message_loading_diff">A ler o diff…</string>
+  <string name="message_no_changes">Sem alterações face a %1$s</string>
+  <string name="message_not_repo">Não é um checkout git</string>
+  <string name="message_not_repo_detail">O Loupe revê as alterações de um checkout git.</string>
+  <string name="message_no_base">Não há branch %1$s para comparar</string>
+  <string name="message_no_base_detail">Faz fetch ou cria-o e depois atualiza.</string>
+  <string name="message_diff_failed">Não foi possível ler o diff</string>
+  <string name="message_terminal_closed">O terminal desta sessão fechou</string>
+
+  <!-- Send bar -->
+  <string name="send_preview_note">Isto é colado no terminal sem carregar em Enter, por isso nada corre até o fazeres. Uma subsessão recebe o mesmo texto.</string>
+  <string name="action_preview">Pré-visualizar</string>
+  <string name="action_new_sub_session">Nova subsessão</string>
+  <string name="action_send_to_terminal">Colar no terminal</string>
+  <plurals name="send_unsent">
+    <item quantity="one">%1$d comentário por enviar</item>
+    <item quantity="other">%1$d comentários por enviar</item>
+  </plurals>
+  <plurals name="send_across_files">
+    <item quantity="one">em %1$d ficheiro</item>
+    <item quantity="other">em %1$d ficheiros</item>
+  </plurals>
+  <string name="send_all_delivered">Todos os comentários entregues</string>
+  <string name="send_no_comments">Ainda sem comentários</string>
+  <string name="send_hint">Clica em + ao lado de uma linha, ou arrasta por várias, para comentar</string>
+
+  <!-- Terminal transcript -->
+  <string name="terminal_running">a executar…</string>
+
+  <!-- Errors -->
+  <string name="error_folder_missing">Essa pasta já não existe: %1$s</string>
+  <string name="error_not_repo">As worktrees precisam de um checkout git.</string>
+  <string name="error_worktree">Não foi possível criar a worktree: %1$s</string>
+  <string name="error_launch">Não foi possível iniciar a sessão: %1$s</string>
+  <string name="error_send">Não foi possível enviar os comentários: %1$s</string>
+</resources>

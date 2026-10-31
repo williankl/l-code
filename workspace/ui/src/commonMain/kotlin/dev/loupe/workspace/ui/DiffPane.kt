@@ -50,7 +50,9 @@ import dev.loupe.workspace.strings.file_deleted
 import dev.loupe.workspace.strings.file_expand
 import dev.loupe.workspace.strings.file_full
 import dev.loupe.workspace.strings.file_modified
+import dev.loupe.workspace.strings.file_preview
 import dev.loupe.workspace.strings.file_renamed
+import dev.loupe.workspace.ui.preview.FilePreviewBody
 import dev.loupe.workspace.uimodel.DiffFileModel
 import dev.loupe.workspace.uimodel.DiffReviewModel
 import dev.loupe.workspace.uimodel.FileChangeKind
@@ -80,7 +82,12 @@ internal fun DiffPane(
         }
         if (file.expanded) {
           item(key = "body:${file.id}") {
-            DiffFileBody(file = file, onEvent = onEvent)
+            val preview = file.preview
+            if (preview != null && preview.showing) {
+              FilePreviewBody(file = file, preview = preview, onEvent = onEvent)
+            } else {
+              DiffFileBody(file = file, onEvent = onEvent)
+            }
           }
         }
       }
@@ -209,6 +216,14 @@ private fun DiffFileHeader(
           color = colors.content.contentCritical,
         )
       }
+    }
+    file.preview?.let { preview ->
+      LemonadeUi.Chip(
+        label = stringResource(Res.string.file_preview),
+        selected = preview.showing,
+        leadingIcon = LemonadeIcons.EyeOpen,
+        onChipClicked = { onEvent(WorkspaceEvent.ToggleFilePreview(file.id)) },
+      )
     }
     if (file.canShowFullFile) {
       LemonadeUi.Chip(

@@ -1,5 +1,6 @@
 package dev.loupe.data.git.impl
 
+import dev.loupe.data.git.GitBlob
 import dev.loupe.data.git.GitCheckout
 import dev.loupe.data.git.GitDataSource
 import dev.loupe.data.git.GitError
@@ -44,16 +45,43 @@ internal class GitCliDataSource(
     return LoupeResult.failure(GitError.RefNotFound(originHead?.removePrefix("origin/") ?: "main"))
   }
 
-  override suspend fun diffAgainst(repositoryRoot: String, baseRef: String): LoupeResult<String, GitError> = git(repositoryRoot, "merge-base", baseRef, "HEAD").flatMap { mergeBase ->
-    if (!mergeBase.isSuccess) return@flatMap LoupeResult.failure(GitError.RefNotFound(baseRef))
+  override suspend fun diffAgainst(repositoryRoot: String, baseRef: String): LoupeResult<String, GitError> = mergeBase(repositoryRoot, baseRef).flatMap { mergeBase ->
     git(
       repositoryRoot,
       "-c", "core.quotePath=false",
       "diff", "--no-color", "--no-ext-diff", "--find-renames", "--unified=$WholeFile",
-      mergeBase.stdout.trim(), "--",
+      mergeBase, "--",
       timeoutSeconds = 60,
     ).flatMap { it.requireSuccess() }.map { it.stdout }
   }
+
+  override suspend fun mergeBase(repositoryRoot: String, baseRef: String): LoupeResult<String, GitError> = git(repositoryRoot, "merge-base", baseRef, "HEAD").flatMap { mergeBase ->
+    if (mergeBase.isSuccess) LoupeResult.success(mergeBase.stdout.trim()) else LoupeResult.failure(GitError.RefNotFound(baseRef))
+  }
+
+  override suspend fun readFileAt(
+    repositoryRoot: String,
+    revision: String,
+    path: String,
+    maxBytes: Long,
+  ): LoupeResult<GitBlob, GitError> {
+    val objectName = "$revision:$path"
+    return git(repositoryRoot, "cat-file", "-s", objectName).flatMap { size ->
+      val bytes = size.stdout.trim().toLongOrNull()
+      when {
+        !size.isSuccess || bytes == null -> LoupeResult.success(GitBlob.Missing)
+        bytes > maxBytes -> LoupeResult.success(GitBlob.TooLarge(bytes))
+        else -> processRunner.runForBytes(listOf("git", "cat-file", "blob", objectName), repositoryRoot, 60.seconds)
+          .mapError { GitError.Unavailable(it.message ?: "git couldn't be started") }
+          .flatMap { blob ->
+            if (blob.isSuccess) LoupeResult.success(GitBlob.Content(blob.stdout)) else LoupeResult.failure(GitError.CommandFailed(blob.stderr.trim()))
+          }
+      }
+    }
+  }
+
+  override suspend fun readWorkingFile(repositoryRoot: String, path: String, maxBytes: Long): LoupeResult<GitBlob, GitError> = safeSuspendRunCatchingOn(dispatchers.io) { files.readBytes(repositoryRoot, path, maxBytes) }
+    .mapError { GitError.Unavailable(it.message ?: "Couldn't read $path") }
 
   override suspend fun untrackedFiles(repositoryRoot: String): LoupeResult<List<String>, GitError> = git(repositoryRoot, "ls-files", "--others", "--exclude-standard", "-z")
     .flatMap { it.requireSuccess() }

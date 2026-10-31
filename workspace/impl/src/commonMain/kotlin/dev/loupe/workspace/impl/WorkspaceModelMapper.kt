@@ -45,6 +45,10 @@ internal data class WorkspaceInput(
   val subSessionPlan: SubSessionPlan?,
   val pendingMessage: String?,
   val homeDirectory: String,
+  /** What has loaded for the files in [WorkspaceViewState.previews], by path. */
+  val previews: Map<String, PreviewLoad> = emptyMap(),
+  /** The worktree a sub-session started from the open session menu would get. */
+  val menuWorktreePlan: SubSessionPlan? = null,
 )
 
 /** Turns domain state and the workspace's UI state into the immutable Model the UI draws. */
@@ -68,6 +72,15 @@ internal object WorkspaceModelMapper {
         drawerOpen = view.drawerOpen,
         navigation = SessionsMapper.navigation(sessions, selected, view.navigationStyle, view.folded, input.homeDirectory),
         tiles = SessionsMapper.tiles(sessions, selected),
+        menu = view.sessionMenu?.let { id -> sessions.firstOrNull { it.id == id } }?.let { session ->
+          SessionsMapper.menu(
+            session = session,
+            style = view.navigationStyle,
+            home = input.homeDirectory,
+            worktreePlan = input.menuWorktreePlan,
+            renaming = view.renaming == session.id,
+          )
+        },
       ),
       header = selected?.let { SessionsMapper.header(it, parent, view.navigationStyle) },
       viewSwitcher = selected?.let {
@@ -82,7 +95,7 @@ internal object WorkspaceModelMapper {
       content = when {
         selected == null -> WorkspaceContentModel.NoSessions
         view.view == WorkspaceView.Terminal -> WorkspaceContentModel.Terminal(selected.id.value)
-        else -> DiffMapper.content(input.review, view, input.pendingMessage)
+        else -> DiffMapper.content(input.review, view, input.pendingMessage, input.previews)
       },
       settings = SettingsModel(
         open = view.settingsOpen,
@@ -96,6 +109,7 @@ internal object WorkspaceModelMapper {
       ),
       newSubSession = newSubSession(selected, view.subSessionMenu ?: input.settings.subSessionLocation, view.subSessionMenu != null, input),
       error = view.error,
+      toast = view.toast,
       eventSink = eventSink,
     )
   }
@@ -104,7 +118,7 @@ internal object WorkspaceModelMapper {
 
   private fun newSubSession(selected: Session?, location: SubSessionLocation, open: Boolean, input: WorkspaceInput): NewSubSessionModel {
     val plan = input.subSessionPlan
-    val name = selected?.name.orEmpty()
+    val name = selected?.displayName.orEmpty()
     val worktree = plan?.location == SubSessionLocation.NewWorktree
     return NewSubSessionModel(
       open = open && selected != null,

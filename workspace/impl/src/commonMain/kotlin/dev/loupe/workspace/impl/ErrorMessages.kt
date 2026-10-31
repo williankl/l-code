@@ -8,6 +8,7 @@ import dev.loupe.workspace.strings.Res
 import dev.loupe.workspace.strings.error_folder_missing
 import dev.loupe.workspace.strings.error_launch
 import dev.loupe.workspace.strings.error_not_repo
+import dev.loupe.workspace.strings.error_preview
 import dev.loupe.workspace.strings.error_send
 import dev.loupe.workspace.strings.error_worktree
 import dev.loupe.workspace.strings.message_terminal_closed
@@ -27,5 +28,6 @@ internal object ErrorMessages {
     ReviewError.NothingToSend -> null
     ReviewError.UnknownSession -> Res.string.message_terminal_closed.asLoupeString()
     is ReviewError.DeliveryFailed -> Res.string.error_send.asLoupeString(error.message)
+    is ReviewError.ReadFailed -> Res.string.error_preview.asLoupeString(error.message)
   }
 }

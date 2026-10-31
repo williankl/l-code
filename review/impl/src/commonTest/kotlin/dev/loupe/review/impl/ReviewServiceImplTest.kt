@@ -6,6 +6,8 @@ import dev.loupe.data.git.fake.FakeGitDataSource
 import dev.loupe.domain.review.CommentStatus
 import dev.loupe.domain.review.DiffState
 import dev.loupe.domain.review.FileChange
+import dev.loupe.domain.review.FileContent
+import dev.loupe.domain.review.FileVersion
 import dev.loupe.domain.review.LineAnchor
 import dev.loupe.domain.review.LineSide
 import dev.loupe.domain.review.NewComment
@@ -21,6 +23,7 @@ import dev.loupe.sessions.api.SessionService
 import dev.loupe.sessions.fake.FakeSessionService
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
+import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
@@ -58,7 +61,7 @@ class ReviewServiceImplTest {
     uncommittedResult = LoupeResult.success(true)
   }
 
-  private fun service(scope: kotlinx.coroutines.CoroutineScope) = ReviewServiceImpl(sessions, LoadDiffUseCase(git, FakeLoupeCoroutineDispatchers()), scope)
+  private fun service(scope: kotlinx.coroutines.CoroutineScope) = ReviewServiceImpl(sessions, LoadDiffUseCase(git, FakeLoupeCoroutineDispatchers()), git, scope)
 
   @Test
   fun `loads the diff with untracked files when first observed`() = runTest {
@@ -117,5 +120,38 @@ class ReviewServiceImplTest {
     val service = service(backgroundScope)
     service.refresh(id)
     assertEquals(LoupeResult.failure(dev.loupe.review.api.ReviewError.NothingToSend), service.sendToSession(id))
+  }
+
+  @Test
+  fun `reads both sides of a file for its preview, the base from the merge base`() = runTest {
+    git.diffResult = LoupeResult.success(
+      """
+      diff --git a/art/old-logo.png b/art/logo.png
+      similarity index 80%
+      rename from art/old-logo.png
+      rename to art/logo.png
+      Binary files a/art/old-logo.png and b/art/logo.png differ
+      """.trimIndent() + "\n",
+    )
+    git.untrackedResult = LoupeResult.success(emptyList())
+    git.mergeBaseResult = LoupeResult.success("abc123")
+    git.committedFiles = mapOf("abc123:art/old-logo.png" to byteArrayOf(1, 2, 3))
+    git.workingFiles = mapOf("art/logo.png" to byteArrayOf(4, 5))
+    val service = service(backgroundScope)
+    service.refresh(id)
+
+    val before = assertIs<FileContent.Bytes>(service.fileContent(id, "art/logo.png", FileVersion.Base).getOrNull())
+    assertContentEquals(byteArrayOf(1, 2, 3), before.bytes)
+    val after = assertIs<FileContent.Bytes>(service.fileContent(id, "art/logo.png", FileVersion.WorkingTree).getOrNull())
+    assertContentEquals(byteArrayOf(4, 5), after.bytes)
+  }
+
+  @Test
+  fun `an added file has no base side to preview`() = runTest {
+    git.committedFiles = mapOf("base0000:src/new.ts" to byteArrayOf(9))
+    val service = service(backgroundScope)
+    service.refresh(id)
+    assertEquals(FileContent.Missing, service.fileContent(id, "src/new.ts", FileVersion.Base).getOrNull())
+    assertIs<dev.loupe.review.api.ReviewError.ReadFailed>((service.fileContent(id, "nope.ts", FileVersion.Base) as LoupeResult.Failure).error)
   }
 }

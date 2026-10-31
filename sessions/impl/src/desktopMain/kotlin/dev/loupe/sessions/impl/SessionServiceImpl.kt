@@ -150,6 +150,11 @@ internal class SessionServiceImpl(
     state.update { sessions -> sessions.filterNot { it.id in doomed } }
   }
 
+  override fun rename(id: SessionId, name: String?) {
+    val custom = name?.trim()?.takeIf { it.isNotEmpty() }
+    update(id) { it.copy(customName = custom) }
+  }
+
   override suspend fun restore(): Int {
     val saved = safeSuspendRunCatching { store.load() }.getOrNull()?.sessions.orEmpty()
     var count = 0
@@ -171,6 +176,7 @@ internal class SessionServiceImpl(
           placement = if (parent == null) SessionPlacement.Root else entry.placement(),
           origin = entry.origin(),
           status = SessionStatus.Shell,
+          customName = entry.customName,
         )
       }
       if (restored is LoupeResult.Success) count++
@@ -212,6 +218,7 @@ internal class SessionServiceImpl(
       SavedSession(
         id = session.id.value,
         name = session.name,
+        customName = session.customName,
         workingDirectory = session.workingDirectory,
         parentId = session.parentId?.value,
         placement = session.placement.name,

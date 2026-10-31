@@ -8,6 +8,7 @@ public value class SessionId(public val value: String)
 /** A terminal: the user's login shell in a pseudo-terminal, following wherever they `cd`. */
 public data class Session(
   val id: SessionId,
+  /** The name Loupe gives it: the shell's folder for a terminal, e.g. `sub-1` for a sub-session. */
   val name: String,
   /** Short name of the shell, e.g. `zsh`. */
   val shell: String,
@@ -20,7 +21,12 @@ public data class Session(
   val placement: SessionPlacement,
   val origin: SessionOrigin,
   val status: SessionStatus,
-)
+  /** The name the user gave it, kept as the shell moves; null shows [name]. */
+  val customName: String? = null,
+) {
+  /** What the session is called on screen. */
+  public val displayName: String get() = customName ?: name
+}
 
 /** Where a session runs relative to its parent. */
 public enum class SessionPlacement { Root, SameFolder, Worktree }

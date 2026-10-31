@@ -1,9 +1,16 @@
 package dev.loupe.workspace.impl.ui
 
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.platform.ClipEntry
+import androidx.compose.ui.platform.Clipboard
+import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.test.DesktopComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.MouseButton
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasScrollToIndexAction
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
@@ -18,16 +25,23 @@ import androidx.compose.ui.test.performMouseInput
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.pressKey
+import androidx.compose.ui.test.rightClick
 import androidx.compose.ui.test.runDesktopComposeUiTest
 import androidx.compose.ui.test.withKeyDown
 import dev.loupe.platform.designsystem.LoupeTheme
 import dev.loupe.workspace.impl.showcase.ShowcaseFixtures
 import dev.loupe.workspace.impl.showcase.WorkspaceShowcase
 import dev.loupe.workspace.impl.showcase.WorkspaceShowcaseContent
+import dev.loupe.workspace.ui.TerminalTranscript
+import dev.loupe.workspace.ui.WorkspaceContent
+import dev.loupe.workspace.uimodel.SessionMenuModel
 import dev.loupe.workspace.uimodel.SubSessionLocation
 import dev.loupe.workspace.uimodel.ThemeOption
 import dev.loupe.workspace.uimodel.WorkspaceEvent
+import dev.loupe.workspace.uimodel.WorkspaceModel
 import dev.loupe.workspace.uimodel.WorkspaceView
+import java.awt.datatransfer.DataFlavor
+import java.awt.datatransfer.Transferable
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -42,6 +56,27 @@ class WorkspaceContentUiTest {
   private fun show(showcase: WorkspaceShowcase, block: DesktopComposeUiTest.() -> Unit) = runDesktopComposeUiTest(width = showcase.widthDp, height = 900) {
     setContent {
       LoupeTheme { WorkspaceShowcaseContent(showcase, onEvent = { events += it }) }
+    }
+    waitForIdle()
+    block()
+  }
+
+  /** [showcase] with its Model changed by [edit], e.g. to open a menu the design doesn't show. */
+  private fun show(
+    showcase: WorkspaceShowcase,
+    edit: (WorkspaceModel) -> WorkspaceModel,
+    clipboard: Clipboard = FakeClipboard(),
+    block: DesktopComposeUiTest.() -> Unit,
+  ) = runDesktopComposeUiTest(width = showcase.widthDp, height = 900) {
+    setContent {
+      LoupeTheme {
+        CompositionLocalProvider(LocalClipboard provides clipboard) {
+          WorkspaceContent(
+            model = edit(showcase.model { events += it }),
+            terminal = { id, modifier -> TerminalTranscript(showcase.transcript(id), modifier) },
+          )
+        }
+      }
     }
     waitForIdle()
     block()
@@ -150,5 +185,113 @@ class WorkspaceContentUiTest {
     expect(WorkspaceEvent.NewSession) { command(Key.T) }
     expect(WorkspaceEvent.SendToSession) { command(Key.Enter) }
     expect(WorkspaceEvent.CloseSelectedSession) { command(Key.W) }
+  }
+
+  @Test
+  fun `middle click closes a session row without selecting it, right click opens its menu`() = show(WorkspaceShowcase.AgentFinishes) {
+    events.clear()
+    onNodeWithText("checkout-flake").performMouseInput {
+      moveTo(center)
+      press(MouseButton.Tertiary)
+      release(MouseButton.Tertiary)
+    }
+    waitForIdle()
+    assertEquals(listOf<WorkspaceEvent>(WorkspaceEvent.CloseSession("cf")), events)
+    expect(WorkspaceEvent.OpenSessionMenu("cf")) { onNodeWithText("checkout-flake").performMouseInput { rightClick(center) } }
+    assertEquals(listOf<WorkspaceEvent>(WorkspaceEvent.OpenSessionMenu("cf")), events)
+  }
+
+  @Test
+  fun `tiles close on middle click and open their menu on right click`() = show(WorkspaceShowcase.CommentOnDiff) {
+    val tile = onNodeWithContentDescription("checkout-flake")
+    expect(WorkspaceEvent.CloseSession("cf")) {
+      tile.performMouseInput {
+        moveTo(center)
+        press(MouseButton.Tertiary)
+        release(MouseButton.Tertiary)
+      }
+    }
+    expect(WorkspaceEvent.OpenSessionMenu("cf")) { tile.performMouseInput { rightClick(center) } }
+  }
+
+  @Test
+  fun `the session menu names the session and raises its actions`() {
+    val clipboard = FakeClipboard()
+    show(WorkspaceShowcase.SessionMenu, edit = { it }, clipboard = clipboard) {
+      onNodeWithText("~/code/storefront · feat/rate-limit").assertExists()
+      onNodeWithText("Same folder · feat/rate-limit").assertExists()
+      onNodeWithText("New branch feat/rate-limit-sub-1").assertExists()
+      expect(WorkspaceEvent.CreateSubSessionFrom("d3", SubSessionLocation.SameFolder)) { onNodeWithText("New sub-session in current worktree").performClick() }
+      expect(WorkspaceEvent.CreateSubSessionFrom("d3", SubSessionLocation.NewWorktree)) { onNodeWithText("New sub-session in new worktree").performClick() }
+      expect(WorkspaceEvent.StartRenamingSession("d3")) { onNodeWithText("Rename").performClick() }
+      expect(WorkspaceEvent.CopiedSessionPath(ShowcaseFixtures.Repo)) { onNodeWithText("Copy folder path").performClick() }
+      assertEquals(ShowcaseFixtures.Repo, clipboard.text)
+    }
+  }
+
+  @Test
+  fun `outside a git checkout a sub-session can only share the folder`() {
+    val menu = SessionMenuModel(
+      sessionId = "ar",
+      title = "api-ratelimit",
+      location = "~/scratch",
+      folderPath = "/tmp",
+      canStartSubSession = true,
+      branch = null,
+      worktreeAvailable = false,
+      worktreeBranch = null,
+    )
+    show(WorkspaceShowcase.SessionTree, edit = { it.copy(sessions = it.sessions.copy(menu = menu)) }) {
+      onNodeWithText("Same folder").assertExists()
+      onNodeWithText("Needs a git checkout").assertExists()
+      events.clear()
+      onNodeWithText("New sub-session in new worktree").performClick()
+      waitForIdle()
+      assertEquals(emptyList(), events)
+    }
+  }
+
+  @Test
+  fun `the rename field saves on Enter or Rename and closes on Escape or Cancel`() = show(WorkspaceShowcase.RenamingSession, edit = { it }) {
+    onNodeWithText("Copy folder path").assertDoesNotExist()
+    val field = onNode(hasSetTextAction())
+    field.performTextReplacement("lua-atomic-refill")
+    expect(WorkspaceEvent.RenameSession("d3", "lua-atomic-refill")) { field.performKeyInput { pressKey(Key.Enter) } }
+    expect(WorkspaceEvent.CancelRenamingSession) { field.performKeyInput { pressKey(Key.Escape) } }
+    expect(WorkspaceEvent.RenameSession("d3", "lua-atomic-refill")) { onNodeWithText("Rename").performClick() }
+    expect(WorkspaceEvent.CancelRenamingSession) { onNodeWithText("Cancel").performClick() }
+
+    // The buttons took the focus; the keys below go to the field again.
+    field.performClick()
+    field.performTextReplacement("  ")
+    onNodeWithText("Rename").assertIsNotEnabled()
+    events.clear()
+    field.performKeyInput { pressKey(Key.Enter) }
+    waitForIdle()
+    assertEquals(emptyList(), events, "a blank name can't be saved")
+  }
+
+  @Test
+  fun `a tile's menu renames in place too`() {
+    val menu = WorkspaceShowcase.RenamingSession.model().sessions.menu!!.copy(sessionId = "cf", title = "checkout-flake")
+    show(WorkspaceShowcase.CommentOnDiff, edit = { it.copy(sessions = it.sessions.copy(menu = menu)) }) {
+      val field = onNode(hasSetTextAction() and hasText("Session name"))
+      field.performTextReplacement("flaky checkout")
+      expect(WorkspaceEvent.RenameSession("cf", "flaky checkout")) { field.performKeyInput { pressKey(Key.Enter) } }
+    }
+  }
+
+  /** Keeps what is copied, as plain text. */
+  @OptIn(ExperimentalComposeUiApi::class)
+  private class FakeClipboard : Clipboard {
+    var text: String? = null
+
+    override suspend fun getClipEntry(): ClipEntry? = null
+
+    override suspend fun setClipEntry(clipEntry: ClipEntry?) {
+      text = (clipEntry?.nativeClipEntry as? Transferable)?.getTransferData(DataFlavor.stringFlavor) as? String
+    }
+
+    override val nativeClipboard: java.awt.datatransfer.Clipboard = java.awt.datatransfer.Clipboard("test")
   }
 }

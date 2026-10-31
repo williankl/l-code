@@ -8,6 +8,7 @@ kotlin {
       api(projects.workspace.uimodel)
       api(projects.platform.designsystem)
       implementation(libs.compose.components.resources)
+      implementation(libs.kotlinx.serialization.json)
     }
   }
 }

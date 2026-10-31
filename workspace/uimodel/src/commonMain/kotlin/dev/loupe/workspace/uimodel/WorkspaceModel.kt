@@ -19,6 +19,8 @@ public data class WorkspaceModel(
   val newSubSession: NewSubSessionModel,
   /** Brief problem report, e.g. a worktree that couldn't be created. */
   val error: LoupeString? = null,
+  /** A short confirmation shown at the bottom for a moment, e.g. after copying a path. */
+  val toast: LoupeString? = null,
   val eventSink: (WorkspaceEvent) -> Unit = {},
 )
 

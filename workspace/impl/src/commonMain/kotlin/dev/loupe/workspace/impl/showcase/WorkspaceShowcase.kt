@@ -56,6 +56,8 @@ public enum class WorkspaceShowcase(
   SettingsOpen("4a", "Settings open, an agent working", "Appearance and keep awake. The top bar tag shows keep awake is holding the machine up."),
   LightKeepAwake("4b", "Light theme, keep awake on", "The same diff review in the light palette."),
   MultiLineComment("5a", "A range comment posted, another range selected", "rateLimit.ts:24–26 has a range comment; 28–32 is selected with the composer open."),
+  SessionMenu("6a", "Menu on lua-script", "Right-click a session: the menu names it and its folder, and the row holds a ring."),
+  RenamingSession("6b", "Renaming in place", "Rename swaps the menu’s actions for a name field."),
   ;
 
   public fun model(eventSink: (WorkspaceEvent) -> Unit = {}): WorkspaceModel = WorkspaceModelMapper.map(scene.input, eventSink)
@@ -113,6 +115,7 @@ private fun scene(
   view: WorkspaceViewState.() -> WorkspaceViewState = { this },
   settings: AppSettings = AppSettings(),
   plan: SubSessionPlan? = null,
+  menuPlan: SubSessionPlan? = null,
   transcripts: Map<String, List<TerminalLineModel>> = baseTranscripts,
 ): Scene {
   val collapsed = listOf("cfg", "thr", "test", "readme").associate { path(it) to false }
@@ -130,6 +133,7 @@ private fun scene(
       subSessionPlan = plan,
       pendingMessage = null,
       homeDirectory = ShowcaseFixtures.Home,
+      menuWorktreePlan = menuPlan,
     ),
     transcripts = transcripts,
   )
@@ -171,14 +175,24 @@ private fun treeScene(
   selected: String = "d4",
   menu: SubSessionLocation? = null,
   plan: SubSessionPlan? = null,
+  sessionMenu: SessionId? = null,
+  renaming: Boolean = false,
   extraTranscripts: Map<String, List<TerminalLineModel>> = emptyMap(),
 ) = scene(
   sessions = sessions,
   selected = selected,
   comments = firstReview.withStatus(CommentStatus.InSubSession(SessionId("r1"), "review-1")) +
     comment("app", 9, CommentStatus.InSubSession(SessionId("r2"), "review-2")),
-  view = { copy(navigationStyle = NavigationStyle.Tree, subSessionMenu = menu) },
+  view = {
+    copy(
+      navigationStyle = NavigationStyle.Tree,
+      subSessionMenu = menu,
+      sessionMenu = sessionMenu,
+      renaming = sessionMenu?.takeIf { renaming },
+    )
+  },
   plan = plan,
+  menuPlan = sessionMenu?.let { SubSessionPlan("sub-1", SubSessionLocation.NewWorktree, "$Repo.worktrees/sub-1", "feat/rate-limit-sub-1", true, "feat/rate-limit") },
   transcripts = baseTranscripts + mapOf(
     "d2" to ShowcaseTranscripts.blank("review-1"),
     "d3" to ShowcaseTranscripts.blank("atomic-refill"),
@@ -241,6 +255,8 @@ private fun sceneFor(showcase: WorkspaceShowcase): Scene = when (showcase) {
     settings = AppSettings(sidebarExpanded = false),
     view = { copy(view = WorkspaceView.Diff, composer = Composer(LineRange(path("rl"), rowOf("rl", 28), rowOf("rl", 32)), "")) },
   )
+  WorkspaceShowcase.SessionMenu -> treeScene(sessionMenu = SessionId("d3"))
+  WorkspaceShowcase.RenamingSession -> treeScene(sessionMenu = SessionId("d3"), renaming = true)
 }
 
 private object ShowcaseSources {

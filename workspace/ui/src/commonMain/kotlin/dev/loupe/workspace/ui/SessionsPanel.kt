@@ -24,6 +24,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -34,11 +35,13 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.teya.lemonade.Icon
 import com.teya.lemonade.IconButton
@@ -65,6 +68,7 @@ import dev.loupe.workspace.strings.fold_hide
 import dev.loupe.workspace.strings.fold_show
 import dev.loupe.workspace.strings.sessions_title
 import dev.loupe.workspace.uimodel.SessionListRowModel
+import dev.loupe.workspace.uimodel.SessionMenuModel
 import dev.loupe.workspace.uimodel.SessionNavigationModel
 import dev.loupe.workspace.uimodel.SessionStatus
 import dev.loupe.workspace.uimodel.SessionTileModel
@@ -79,9 +83,11 @@ internal fun SessionsSidebar(
   navigation: SessionNavigationModel,
   onEvent: (WorkspaceEvent) -> Unit,
   modifier: Modifier = Modifier,
+  menu: SessionMenuModel? = null,
 ) {
   val spaces = LemonadeTheme.spaces
   val sessionsLabel = stringResource(Res.string.sessions_title)
+  val labels = sessionActionLabels()
   Column(
     verticalArrangement = Arrangement.spacedBy(spaces.spacing100),
     modifier = modifier
@@ -113,7 +119,12 @@ internal fun SessionsSidebar(
     when (navigation) {
       is SessionNavigationModel.Flat -> Column(verticalArrangement = Arrangement.spacedBy(spaces.spacing50)) {
         navigation.rows.forEach { row ->
-          FlatSessionRow(row = row, onClick = { onEvent(WorkspaceEvent.SelectSession(row.id)) })
+          FlatSessionRow(
+            row = row,
+            menu = menu?.takeIf { it.sessionId == row.id },
+            labels = labels,
+            onEvent = onEvent,
+          )
         }
       }
       is SessionNavigationModel.Tree -> Column {
@@ -121,6 +132,8 @@ internal fun SessionsSidebar(
           TreeSessionRow(
             row = row,
             topGap = if (row.depth == 0 && index > 0) spaces.spacing100 else 0.dp,
+            menu = menu?.takeIf { it.sessionId == row.id },
+            labels = labels,
             onEvent = onEvent,
           )
         }
@@ -132,7 +145,9 @@ internal fun SessionsSidebar(
 @Composable
 private fun FlatSessionRow(
   row: SessionListRowModel,
-  onClick: () -> Unit,
+  menu: SessionMenuModel?,
+  labels: SessionActionLabels,
+  onEvent: (WorkspaceEvent) -> Unit,
 ) {
   val spaces = LemonadeTheme.spaces
   val elbowColor = LemonadeTheme.colors.border.borderNeutralHigh
@@ -159,11 +174,12 @@ private fun FlatSessionRow(
           },
       )
     }
+    val menuAt = remember { mutableStateOf<IntOffset?>(null) }
     SelectableSurface(
       selected = row.selected,
-      onClick = onClick,
+      onClick = { onEvent(WorkspaceEvent.SelectSession(row.id)) },
       shape = LemonadeTheme.shapes.radius300,
-      modifier = Modifier.weight(1f),
+      modifier = Modifier.weight(1f).menuRing(menu != null, LemonadeTheme.shapes.radius300).sessionActions(row.id, labels, menuAt, onEvent),
     ) {
       Row(
         horizontalArrangement = Arrangement.spacedBy(spaces.spacing200),
@@ -175,8 +191,14 @@ private fun FlatSessionRow(
         ),
       ) {
         ComputerIcon(selected = row.selected)
-        SessionRowText(name = row.name, status = row.status, meta = row.meta, modifier = Modifier.weight(1f))
+        SessionRowText(
+          name = row.name,
+          status = row.status,
+          meta = row.meta,
+          modifier = Modifier.weight(1f),
+        )
       }
+      if (menu != null) SessionMenu(menu = menu, offset = menuAt.value, onEvent = onEvent)
     }
   }
 }
@@ -185,6 +207,8 @@ private fun FlatSessionRow(
 private fun TreeSessionRow(
   row: SessionTreeRowModel,
   topGap: androidx.compose.ui.unit.Dp,
+  menu: SessionMenuModel?,
+  labels: SessionActionLabels,
   onEvent: (WorkspaceEvent) -> Unit,
 ) {
   val spaces = LemonadeTheme.spaces
@@ -242,11 +266,12 @@ private fun TreeSessionRow(
           },
       )
     }
+    val menuAt = remember { mutableStateOf<IntOffset?>(null) }
     SelectableSurface(
       selected = row.selected,
       onClick = { onEvent(WorkspaceEvent.SelectSession(row.id)) },
       shape = LemonadeTheme.shapes.radius300,
-      modifier = Modifier.weight(1f),
+      modifier = Modifier.weight(1f).menuRing(menu != null, LemonadeTheme.shapes.radius300).sessionActions(row.id, labels, menuAt, onEvent),
     ) {
       Row(
         horizontalArrangement = Arrangement.spacedBy(spaces.spacing200),
@@ -268,6 +293,7 @@ private fun TreeSessionRow(
           },
         )
       }
+      if (menu != null) SessionMenu(menu = menu, offset = menuAt.value, onEvent = onEvent)
     }
   }
 }
@@ -372,8 +398,10 @@ internal fun SessionRail(
   tiles: List<SessionTileModel>,
   onEvent: (WorkspaceEvent) -> Unit,
   modifier: Modifier = Modifier,
+  menu: SessionMenuModel? = null,
 ) {
   val sessionsLabel = stringResource(Res.string.sessions_title)
+  val labels = sessionActionLabels()
   Column(
     horizontalAlignment = Alignment.CenterHorizontally,
     verticalArrangement = Arrangement.spacedBy(LemonadeTheme.spaces.spacing200),
@@ -392,8 +420,9 @@ internal fun SessionRail(
     )
     Hairline(width = 28.dp, height = 1.dp)
     tiles.forEach { tile ->
-      HoverTooltip(text = tile.name, placement = TooltipPlacement.End) {
-        SessionTile(tile = tile, onClick = { onEvent(WorkspaceEvent.SelectSession(tile.id)) })
+      val tileMenu = menu?.takeIf { it.sessionId == tile.id }
+      HoverTooltip(text = tile.name, placement = TooltipPlacement.End, enabled = tileMenu == null) {
+        SessionTile(tile = tile, menu = tileMenu, labels = labels, onEvent = onEvent)
       }
     }
   }
@@ -402,7 +431,9 @@ internal fun SessionRail(
 @Composable
 private fun SessionTile(
   tile: SessionTileModel,
-  onClick: () -> Unit,
+  menu: SessionMenuModel?,
+  labels: SessionActionLabels,
+  onEvent: (WorkspaceEvent) -> Unit,
 ) {
   val colors = LemonadeTheme.colors
   val shape = LemonadeTheme.shapes.radius300
@@ -413,6 +444,7 @@ private fun SessionTile(
     tile.isSubSession -> Modifier.dashedBorder(1.5.dp, colors.border.borderNeutralHigh, radius)
     else -> Modifier.border(1.dp, colors.border.borderNeutralLow, shape)
   }
+  val menuAt = remember { mutableStateOf<IntOffset?>(null) }
   Box {
     Box(
       contentAlignment = Alignment.Center,
@@ -421,7 +453,9 @@ private fun SessionTile(
         .clip(shape)
         .background(if (tile.selected) colors.background.bgElevatedHigh else colors.background.bgNeutralSubtle)
         .then(outline)
-        .clickable(role = Role.Button, onClick = onClick)
+        .menuRing(menu != null, shape)
+        .sessionActions(tile.id, labels, menuAt, onEvent)
+        .clickable(role = Role.Button, onClick = { onEvent(WorkspaceEvent.SelectSession(tile.id)) })
         .semantics { contentDescription = tile.name },
     ) {
       LemonadeUi.Text(text = tile.initials, textStyle = LemonadeTheme.typography.bodySmallSemiBold)
@@ -434,5 +468,13 @@ private fun SessionTile(
         modifier = Modifier.align(Alignment.BottomEnd).offset(x = 5.dp, y = 5.dp),
       )
     }
+    if (menu != null) SessionMenu(menu = menu, offset = menuAt.value, onEvent = onEvent)
   }
 }
+
+/** While its menu is open, a row or tile holds a selection ring, so it's clear what the menu acts on. */
+@Composable
+private fun Modifier.menuRing(
+  open: Boolean,
+  shape: Shape,
+): Modifier = if (open) border(2.dp, LemonadeTheme.colors.border.borderSelected, shape) else this

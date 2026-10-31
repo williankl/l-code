@@ -1,6 +1,8 @@
 package dev.loupe.review.api
 
 import dev.loupe.domain.review.CommentId
+import dev.loupe.domain.review.FileContent
+import dev.loupe.domain.review.FileVersion
 import dev.loupe.domain.review.NewComment
 import dev.loupe.domain.review.Review
 import dev.loupe.domain.session.SessionId
@@ -33,6 +35,21 @@ public interface ReviewService {
 
   /** Opens a sub-session in the same folder with the unsent comments pasted in. */
   public suspend fun sendToNewSubSession(sessionId: SessionId): LoupeResult<SessionId, ReviewError>
+
+  /**
+   * One side of a changed file in the loaded diff, for previews. The base side of a renamed file
+   * is read from its old path; added files have no base and deleted files no working copy.
+   */
+  public suspend fun fileContent(
+    sessionId: SessionId,
+    path: String,
+    version: FileVersion,
+  ): LoupeResult<FileContent, ReviewError>
+
+  public companion object {
+    /** Files bigger than this aren't read for previews. */
+    public const val MaxPreviewBytes: Long = 64L * 1024 * 1024
+  }
 }
 
 public sealed interface ReviewError {
@@ -41,4 +58,7 @@ public sealed interface ReviewError {
   public data object UnknownSession : ReviewError
 
   public data class DeliveryFailed(val message: String) : ReviewError
+
+  /** A file couldn't be read for a preview. */
+  public data class ReadFailed(val message: String) : ReviewError
 }

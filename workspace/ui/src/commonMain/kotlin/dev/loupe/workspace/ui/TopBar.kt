@@ -21,7 +21,6 @@ import com.teya.lemonade.LemonadeTheme
 import com.teya.lemonade.LemonadeUi
 import com.teya.lemonade.SegmentedControl
 import com.teya.lemonade.Switch
-import com.teya.lemonade.SymbolContainer
 import com.teya.lemonade.Tag
 import com.teya.lemonade.Text
 import com.teya.lemonade.core.LemonadeButtonSize
@@ -29,15 +28,13 @@ import com.teya.lemonade.core.LemonadeButtonType
 import com.teya.lemonade.core.LemonadeButtonVariant
 import com.teya.lemonade.core.LemonadeIcons
 import com.teya.lemonade.core.LemonadeSegmentedControlSize
-import com.teya.lemonade.core.SymbolContainerShape
-import com.teya.lemonade.core.SymbolContainerSize
-import com.teya.lemonade.core.SymbolContainerVoice
 import com.teya.lemonade.core.TabButtonProperties
 import com.teya.lemonade.core.TagVoice
 import dev.loupe.platform.designsystem.AnchoredPopover
 import dev.loupe.platform.designsystem.DotLabel
 import dev.loupe.platform.designsystem.Hairline
 import dev.loupe.platform.designsystem.HoverTooltip
+import dev.loupe.platform.designsystem.LemonadeCodeMark
 import dev.loupe.platform.designsystem.StatusDot
 import dev.loupe.platform.designsystem.TooltipPlacement
 import dev.loupe.platform.localization.resolve
@@ -101,14 +98,12 @@ internal fun TopBar(
       verticalAlignment = Alignment.CenterVertically,
       horizontalArrangement = Arrangement.spacedBy(spaces.spacing200),
     ) {
-      LemonadeUi.SymbolContainer(
-        icon = LemonadeIcons.Search,
-        contentDescription = null,
-        voice = SymbolContainerVoice.Brand,
-        size = SymbolContainerSize.Small,
-        shape = SymbolContainerShape.Rounded,
+      LemonadeCodeMark()
+      LemonadeUi.Text(
+        text = stringResource(Res.string.app_name),
+        textStyle = LemonadeTheme.typography.headingXXSmall,
+        maxLines = 1,
       )
-      LemonadeUi.Text(text = stringResource(Res.string.app_name), textStyle = LemonadeTheme.typography.headingXXSmall)
     }
     Hairline(width = 1.dp, height = 20.dp)
     LemonadeUi.Text(

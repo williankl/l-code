@@ -44,6 +44,12 @@ public interface SessionService {
   public fun close(id: SessionId)
 
   /**
+   * Gives the session a name of the user's own, kept as the shell moves and across launches.
+   * Null or blank goes back to the name Loupe gives it.
+   */
+  public fun rename(id: SessionId, name: String?)
+
+  /**
    * Brings back the sessions open when Loupe last quit, each in a fresh shell in the folder it was
    * in, with the output it showed. An agent that was running is started again where it left off.
    * From then on the sessions are kept up to date on disk. Returns how many came back.

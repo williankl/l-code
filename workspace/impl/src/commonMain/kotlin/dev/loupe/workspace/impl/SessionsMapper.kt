@@ -5,6 +5,7 @@ import dev.loupe.domain.session.SessionId
 import dev.loupe.domain.session.SessionOrigin
 import dev.loupe.domain.session.SessionPlacement
 import dev.loupe.domain.session.SessionStatus
+import dev.loupe.domain.session.SubSessionPlan
 import dev.loupe.platform.localization.LoupeString
 import dev.loupe.platform.localization.asLoupeString
 import dev.loupe.platform.process.abbreviateHome
@@ -19,7 +20,9 @@ import dev.loupe.workspace.uimodel.HeaderTagIcon
 import dev.loupe.workspace.uimodel.HeaderTagModel
 import dev.loupe.workspace.uimodel.SessionHeaderModel
 import dev.loupe.workspace.uimodel.SessionListRowModel
+import dev.loupe.workspace.uimodel.SessionMenuModel
 import dev.loupe.workspace.uimodel.SessionNavigationModel
+import dev.loupe.workspace.uimodel.SessionRenameModel
 import dev.loupe.workspace.uimodel.SessionTileModel
 import dev.loupe.workspace.uimodel.SessionTreeRowModel
 import dev.loupe.workspace.uimodel.TreeConnectorModel
@@ -34,7 +37,7 @@ internal object SessionsMapper {
       sessions.map { session ->
         SessionListRowModel(
           id = session.id.value,
-          name = session.name,
+          name = session.displayName,
           meta = meta(session, home),
           status = session.status.toModel(),
           selected = session.id == selected?.id,
@@ -48,8 +51,8 @@ internal object SessionsMapper {
   fun tiles(sessions: List<Session>, selected: Session?): List<SessionTileModel> = sessions.map { session ->
     SessionTileModel(
       id = session.id.value,
-      name = session.name,
-      initials = initials(session.name),
+      name = session.displayName,
+      initials = initials(session.displayName),
       status = session.status.toModel(),
       selected = session.id == selected?.id,
       isSubSession = session.parentId != null,
@@ -61,19 +64,55 @@ internal object SessionsMapper {
       HeaderTagModel(session.shell.asLoupeString()),
       session.branch?.let { HeaderTagModel(it.asLoupeString()) },
     )
-    if (parent == null) return SessionHeaderModel(session.name, null, shellAndBranch, canStartSubSession = style == NavigationStyle.Tree)
+    if (parent == null) return SessionHeaderModel(session.displayName, null, shellAndBranch, canStartSubSession = style == NavigationStyle.Tree)
     val kind = if (session.placement == SessionPlacement.Worktree) {
       HeaderTagModel(Res.string.tag_sub_session_worktree.asLoupeString(), HeaderTagIcon.SubSession)
     } else {
       HeaderTagModel(Res.string.tag_sub_session_same_folder.asLoupeString(), HeaderTagIcon.SubSession)
     }
     return when (style) {
-      NavigationStyle.Flat -> SessionHeaderModel(session.name, parent.name, listOf(kind), canStartSubSession = false)
+      NavigationStyle.Flat -> SessionHeaderModel(session.displayName, parent.displayName, listOf(kind), canStartSubSession = false)
       NavigationStyle.Tree -> {
         val branch = session.branch?.takeIf { session.placement == SessionPlacement.Worktree }?.let { HeaderTagModel(it.asLoupeString()) }
-        SessionHeaderModel(session.name, null, listOfNotNull(kind, branch), canStartSubSession = true)
+        SessionHeaderModel(session.displayName, null, listOfNotNull(kind, branch), canStartSubSession = true)
       }
     }
+  }
+
+  /**
+   * The right-click menu of [session]. Sub-sessions can be started from it where the list nests
+   * them; [worktreePlan] names the branch a new worktree would get. [renaming] shows the name field.
+   */
+  fun menu(
+    session: Session,
+    style: NavigationStyle,
+    home: String,
+    worktreePlan: SubSessionPlan?,
+    renaming: Boolean,
+  ): SessionMenuModel {
+    val folder = abbreviateHome(session.workingDirectory, home)
+    return SessionMenuModel(
+      sessionId = session.id.value,
+      title = session.displayName,
+      location = listOfNotNull(folder, session.branch).joinToString(" · "),
+      folderPath = session.workingDirectory,
+      canStartSubSession = style == NavigationStyle.Tree,
+      branch = session.branch,
+      worktreeAvailable = session.repositoryRoot != null,
+      worktreeBranch = worktreePlan?.takeIf { it.createsBranch }?.branch,
+      rename = if (renaming) SessionRenameModel(name = session.displayName, automaticName = session.name) else null,
+    )
+  }
+
+  /** [id] and every session nested under it, at any depth. */
+  fun subtree(sessions: List<Session>, id: SessionId): Set<SessionId> {
+    val result = mutableSetOf(id)
+    var grew = true
+    while (grew) {
+      grew = false
+      sessions.forEach { if (it.parentId in result && result.add(it.id)) grew = true }
+    }
+    return result
   }
 
   /** The second line of a session row: what it is for, or where it is. */
@@ -155,7 +194,7 @@ internal object SessionsMapper {
       val hidden = descendants(session.id)
       SessionTreeRowModel(
         id = session.id.value,
-        name = session.name,
+        name = session.displayName,
         meta = meta(session, home),
         status = session.status.toModel(),
         selected = session.id == selected?.id,

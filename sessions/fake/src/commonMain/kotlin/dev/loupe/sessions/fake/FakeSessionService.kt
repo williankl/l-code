@@ -23,6 +23,9 @@ public class FakeSessionService(initial: List<Session> = emptyList()) : SessionS
   public val started: MutableList<StartCall> = mutableListOf()
   public val pasted: MutableList<Pair<SessionId, String>> = mutableListOf()
   public val closed: MutableList<SessionId> = mutableListOf()
+
+  /** Every rename, with the name kept: trimmed, or null for back to the automatic one. */
+  public val renamed: MutableList<Pair<SessionId, String?>> = mutableListOf()
   public var openResult: LoupeResult<SessionId, SessionError>? = null
 
   /** Sessions [restore] brings back; recorded as restored once it runs. */
@@ -119,7 +122,18 @@ public class FakeSessionService(initial: List<Session> = emptyList()) : SessionS
 
   override fun close(id: SessionId) {
     closed += id
-    state.update { list -> list.filterNot { it.id == id || it.parentId == id } }
+    state.update { list ->
+      // Sub-sessions always come after their parent, so one pass finds every level.
+      val doomed = mutableSetOf(id)
+      list.forEach { if (it.parentId in doomed) doomed += it.id }
+      list.filterNot { it.id in doomed }
+    }
+  }
+
+  override fun rename(id: SessionId, name: String?) {
+    val custom = name?.trim()?.takeIf { it.isNotEmpty() }
+    renamed += id to custom
+    state.update { list -> list.map { if (it.id == id) it.copy(customName = custom) else it } }
   }
 
   override suspend fun restore(): Int {

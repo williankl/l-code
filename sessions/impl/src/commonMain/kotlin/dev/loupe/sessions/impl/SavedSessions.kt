@@ -24,6 +24,8 @@ internal data class SavedSession(
   val reviewCommentCount: Int? = null,
   val resume: String? = null,
   val output: List<String>? = null,
+  /** The name the user gave it, if any. */
+  val customName: String? = null,
 ) {
   fun placement(): SessionPlacement = SessionPlacement.entries.firstOrNull { it.name == placement } ?: SessionPlacement.Root
 

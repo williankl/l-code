@@ -48,10 +48,11 @@ internal class LoadDiffUseCase(
       )
     }
     val uncommitted = git.hasUncommittedChanges(repositoryRoot).getOrElse { false }
+    val mergeBase = git.mergeBase(repositoryRoot, base).getOrNull()
     val files = withContext(dispatchers.default) {
       (UnifiedDiffParser.parse(diff) + untrackedFiles).map { it.toFileDiff() }
     }
-    return DiffState.Ready(DiffSnapshot(baseRef = base, files = files, hasUncommittedChanges = uncommitted))
+    return DiffState.Ready(DiffSnapshot(baseRef = base, files = files, hasUncommittedChanges = uncommitted, mergeBase = mergeBase))
   }
 
   private fun ParsedFile.toFileDiff(): FileDiff {

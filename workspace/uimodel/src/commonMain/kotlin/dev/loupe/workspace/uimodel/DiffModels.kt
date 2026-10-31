@@ -30,9 +30,63 @@ public data class DiffFileModel(
   /** Only modified files can switch between hunks and the full file. */
   val canShowFullFile: Boolean,
   val rows: List<DiffRowModel>,
+  /** The rendered view of the file; null when Loupe can't draw this kind of file. */
+  val preview: FilePreviewModel? = null,
 )
 
 public enum class FileChangeKind { Added, Modified, Deleted, Renamed }
+
+/** A file drawn as what it is (picture, model, document, table) instead of its text diff. */
+@Immutable
+public data class FilePreviewModel(
+  val kind: PreviewKindModel,
+  /** The preview replaces the diff rows while this is on. */
+  val showing: Boolean,
+  /** Which sides are shown; null when the file only has one, like an added or deleted file. */
+  val layout: PreviewLayout?,
+  val content: FilePreviewContentModel,
+)
+
+public enum class PreviewKindModel { Image, Vector, Model, Markdown, Table }
+
+public enum class PreviewLayout { Before, After, SideBySide }
+
+@Immutable
+public sealed interface FilePreviewContentModel {
+  @Immutable
+  public data object Loading : FilePreviewContentModel
+
+  @Immutable
+  public data class Failed(val message: LoupeString) : FilePreviewContentModel
+
+  /** Each side is null when the file doesn't exist there. */
+  @Immutable
+  public data class Ready(
+    val before: PreviewSideModel?,
+    val after: PreviewSideModel?,
+  ) : FilePreviewContentModel
+}
+
+@Immutable
+public sealed interface PreviewSideModel {
+  public val sizeBytes: Long
+
+  /** The file's bytes; [extension] (lowercase, no dot) tells the format apart, e.g. `stl`. */
+  @Immutable
+  public class Content(
+    public val bytes: ByteArray,
+    public val extension: String,
+  ) : PreviewSideModel {
+    override val sizeBytes: Long get() = bytes.size.toLong()
+
+    override fun equals(other: Any?): Boolean = other is Content && other.bytes === bytes && other.extension == extension
+
+    override fun hashCode(): Int = 31 * bytes.hashCode() + extension.hashCode()
+  }
+
+  @Immutable
+  public data class TooLarge(override val sizeBytes: Long) : PreviewSideModel
+}
 
 @Immutable
 public sealed interface DiffRowModel {

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
   <!-- Top bar and settings -->
-  <string name="app_name">loupe</string>
+  <string name="app_name">Lemonade Code</string>
   <string name="sessions_collapse">Collapse sessions</string>
   <string name="sessions_expand">Expand sessions</string>
   <string name="settings_title">Settings</string>
@@ -42,6 +42,21 @@
   </plurals>
   <string name="meta_split_same_folder">%1$s · same folder</string>
   <string name="meta_split_worktree">%1$s · worktree</string>
+
+  <!-- Session menu (right click) and rename -->
+  <string name="session_options">Session options</string>
+  <string name="session_new_sub_same_folder">New sub-session in current worktree</string>
+  <string name="session_new_sub_worktree">New sub-session in new worktree</string>
+  <string name="session_sub_same_folder">Same folder</string>
+  <string name="session_sub_same_folder_branch">Same folder · %1$s</string>
+  <string name="session_sub_new_branch">New branch %1$s</string>
+  <string name="session_worktree_needs_repo">Needs a git checkout</string>
+  <string name="session_rename">Rename</string>
+  <string name="session_rename_action">Rename session</string>
+  <string name="session_name_field">Session name</string>
+  <string name="session_copy_path">Copy folder path</string>
+  <string name="session_path_copied">Copied %1$s</string>
+  <string name="session_close">Close session</string>
 
   <!-- New session -->
   <string name="action_new_terminal">New terminal</string>
@@ -115,7 +130,7 @@
   <string name="message_loading_diff">Reading the diff…</string>
   <string name="message_no_changes">No changes against %1$s</string>
   <string name="message_not_repo">Not a git checkout</string>
-  <string name="message_not_repo_detail">Loupe reviews the changes in a git checkout.</string>
+  <string name="message_not_repo_detail">Lemonade Code reviews the changes in a git checkout.</string>
   <string name="message_no_base">No %1$s branch to compare with</string>
   <string name="message_no_base_detail">Fetch it or create it, then refresh.</string>
   <string name="message_diff_failed">Couldn’t read the diff</string>
@@ -147,4 +162,32 @@
   <string name="error_worktree">Couldn’t create the worktree: %1$s</string>
   <string name="error_launch">Couldn’t start the session: %1$s</string>
   <string name="error_send">Couldn’t send the comments: %1$s</string>
+
+  <!-- File previews -->
+  <string name="file_preview">Preview</string>
+  <string name="file_preview_hide">Show diff</string>
+  <string name="preview_before">Before</string>
+  <string name="preview_after">After</string>
+  <string name="preview_side_by_side">Side by side</string>
+  <string name="preview_loading">Loading preview…</string>
+  <string name="preview_too_large">Too large to preview (%1$s)</string>
+  <string name="preview_unreadable">Couldn’t draw this file: %1$s</string>
+  <string name="preview_empty">Empty file</string>
+  <string name="preview_image_info">%1$d × %2$d · %3$s</string>
+  <string name="preview_model_hint">Drag to turn · ⌘ or Ctrl + scroll to zoom · double-click to reset</string>
+  <string name="preview_model_partial">Showing %1$s of %2$s triangles</string>
+  <string name="preview_reset_view">Reset view</string>
+  <string name="preview_zoom_in">Zoom in</string>
+  <string name="preview_zoom_out">Zoom out</string>
+  <string name="preview_markdown_image">Image: %1$s</string>
+  <string name="preview_markdown_truncated">The preview stops here. Show the diff for the rest of the file.</string>
+  <string name="error_preview">Couldn’t read the file: %1$s</string>
+  <plurals name="preview_model_triangles">
+    <item quantity="one">%1$s triangle</item>
+    <item quantity="other">%1$s triangles</item>
+  </plurals>
+  <plurals name="preview_table_more_rows">
+    <item quantity="one">%1$d more row not shown</item>
+    <item quantity="other">%1$d more rows not shown</item>
+  </plurals>
 </resources>

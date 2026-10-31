@@ -16,6 +16,41 @@ public data class SessionsPanelModel(
   val drawerOpen: Boolean,
   val navigation: SessionNavigationModel,
   val tiles: List<SessionTileModel>,
+  /** The right-click menu, on the row or tile of its session; null when closed. */
+  val menu: SessionMenuModel? = null,
+)
+
+/**
+ * A session's right-click menu. It names the session and where it is, so it's clear what the
+ * actions apply to; Rename turns the same panel into a name field ([rename]).
+ */
+@Immutable
+public data class SessionMenuModel(
+  val sessionId: String,
+  /** The session's name, as shown in the list. */
+  val title: String,
+  /** Its folder with `~` for home, and its branch: `~/code/storefront · feat/rate-limit`. */
+  val location: String,
+  /** The folder, absolute, for "Copy folder path". */
+  val folderPath: String,
+  /** False where sub-sessions can't nest (the flat list): the sub-session items are left out. */
+  val canStartSubSession: Boolean,
+  /** The branch a same-folder sub-session shares; null outside a git checkout. */
+  val branch: String?,
+  /** False outside a git checkout, where a sub-session can only share the folder. */
+  val worktreeAvailable: Boolean,
+  /** The branch a new worktree would be created on, e.g. `feat/rate-limit-sub-1`. */
+  val worktreeBranch: String?,
+  /** Set while the menu shows the rename field instead of its items. */
+  val rename: SessionRenameModel? = null,
+)
+
+@Immutable
+public data class SessionRenameModel(
+  /** What the field starts with: the name shown now. */
+  val name: String,
+  /** The name the app gives it; saving it goes back to following the folder. */
+  val automaticName: String,
 )
 
 @Immutable

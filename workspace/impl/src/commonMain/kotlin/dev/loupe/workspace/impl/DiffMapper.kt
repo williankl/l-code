@@ -7,9 +7,11 @@ import dev.loupe.domain.review.DiffLineKind
 import dev.loupe.domain.review.DiffSnapshot
 import dev.loupe.domain.review.DiffState
 import dev.loupe.domain.review.FileChange
+import dev.loupe.domain.review.FileContent
 import dev.loupe.domain.review.FileDiff
 import dev.loupe.domain.review.LineAnchor
 import dev.loupe.domain.review.LineSide
+import dev.loupe.domain.review.PreviewKind
 import dev.loupe.domain.review.Review
 import dev.loupe.domain.review.ReviewComment
 import dev.loupe.platform.localization.asLoupeString
@@ -34,6 +36,11 @@ import dev.loupe.workspace.uimodel.DiffReviewModel
 import dev.loupe.workspace.uimodel.DiffRowModel
 import dev.loupe.workspace.uimodel.DiffStatModel
 import dev.loupe.workspace.uimodel.FileChangeKind
+import dev.loupe.workspace.uimodel.FilePreviewContentModel
+import dev.loupe.workspace.uimodel.FilePreviewModel
+import dev.loupe.workspace.uimodel.PreviewKindModel
+import dev.loupe.workspace.uimodel.PreviewLayout
+import dev.loupe.workspace.uimodel.PreviewSideModel
 import dev.loupe.workspace.uimodel.ReviewCommentModel
 import dev.loupe.workspace.uimodel.SendBarModel
 import dev.loupe.workspace.uimodel.SendBarSummary
@@ -50,7 +57,12 @@ internal object DiffMapper {
 
   private val hunkContext = Regex("^(export |function |class |interface |fun |def |func |public |private |internal |#)")
 
-  fun content(review: Review?, view: WorkspaceViewState, pendingMessage: String?): WorkspaceContentModel = when (val diff = review?.diff ?: DiffState.Loading) {
+  fun content(
+    review: Review?,
+    view: WorkspaceViewState,
+    pendingMessage: String?,
+    previews: Map<String, PreviewLoad> = emptyMap(),
+  ): WorkspaceContentModel = when (val diff = review?.diff ?: DiffState.Loading) {
     DiffState.Loading -> WorkspaceContentModel.Message(Res.string.message_loading_diff.asLoupeString(), loading = true)
     DiffState.NotARepository -> WorkspaceContentModel.Message(
       Res.string.message_not_repo.asLoupeString(),
@@ -64,7 +76,7 @@ internal object DiffMapper {
     is DiffState.Ready -> if (diff.snapshot.files.isEmpty()) {
       WorkspaceContentModel.Message(Res.string.message_no_changes.asLoupeString(diff.snapshot.baseRef))
     } else {
-      WorkspaceContentModel.Diff(review(diff.snapshot, review?.comments.orEmpty(), view, pendingMessage))
+      WorkspaceContentModel.Diff(review(diff.snapshot, review?.comments.orEmpty(), view, pendingMessage, previews))
     }
   }
 
@@ -78,6 +90,17 @@ internal object DiffMapper {
 
   fun isExpanded(file: FileDiff, view: WorkspaceViewState): Boolean = view.fileExpansion[file.path] ?: (file.change != FileChange.Deleted && !file.isBinary && file.lines.size <= AutoExpandLimit)
 
+  fun isShowingPreview(file: FileDiff, view: WorkspaceViewState): Boolean = file.previewKind != null && file.path in view.previews
+
+  /** Whether the file's body shows: a binary file only has one when its preview is on. */
+  fun isBodyVisible(file: FileDiff, view: WorkspaceViewState): Boolean = isExpanded(file, view) && (!file.isBinary || isShowingPreview(file, view))
+
+  /** Images and models compare best next to each other; documents and tables read best alone. */
+  fun defaultLayout(kind: PreviewKind): PreviewLayout = when (kind) {
+    PreviewKind.Image, PreviewKind.Vector, PreviewKind.Model -> PreviewLayout.SideBySide
+    PreviewKind.Markdown, PreviewKind.Table -> PreviewLayout.After
+  }
+
   fun rangeText(start: LineAnchor, end: LineAnchor): String = if (start.line == end.line) "${start.line}" else "${start.line}–${end.line}"
 
   fun anchorOf(line: DiffLine): LineAnchor = line.newNumber?.let { LineAnchor(LineSide.New, it) } ?: LineAnchor(LineSide.Old, line.oldNumber ?: 0)
@@ -87,6 +110,7 @@ internal object DiffMapper {
     comments: List<ReviewComment>,
     view: WorkspaceViewState,
     pendingMessage: String?,
+    previews: Map<String, PreviewLoad>,
   ): DiffReviewModel {
     val unsent = comments.filter { it.status == CommentStatus.Unsent }
     val fileCount = snapshot.files.size
@@ -98,7 +122,7 @@ internal object DiffMapper {
       } else {
         Res.plurals.diff_summary.asLoupeString(fileCount)
       },
-      files = snapshot.files.map { file(it, comments.filter { comment -> comment.filePath == it.path }, view) },
+      files = snapshot.files.map { file(it, comments.filter { comment -> comment.filePath == it.path }, view, previews[it.path]) },
       sendBar = SendBarModel(
         summary = when {
           unsent.isNotEmpty() -> SendBarSummary.Unsent(unsent.size, unsent.map { it.filePath }.distinct().size)
@@ -111,8 +135,14 @@ internal object DiffMapper {
     )
   }
 
-  private fun file(file: FileDiff, comments: List<ReviewComment>, view: WorkspaceViewState): DiffFileModel {
-    val expanded = isExpanded(file, view)
+  private fun file(
+    file: FileDiff,
+    comments: List<ReviewComment>,
+    view: WorkspaceViewState,
+    preview: PreviewLoad?,
+  ): DiffFileModel {
+    val expanded = isBodyVisible(file, view)
+    val showingPreview = isShowingPreview(file, view)
     val full = file.path in view.fullFiles
     val fileName = file.path.substringAfterLast('/')
     val selection = (view.dragging ?: view.composer?.range)?.takeIf { it.filePath == file.path }
@@ -141,7 +171,7 @@ internal object DiffMapper {
       )
     }
     val rows = when {
-      !expanded || file.isBinary -> emptyList()
+      !expanded || file.isBinary || showingPreview -> emptyList()
       full -> file.lines.indices.map(::line)
       else -> hunkedRows(file, ::line)
     }
@@ -160,11 +190,51 @@ internal object DiffMapper {
       additions = file.additions,
       deletions = file.deletions,
       commentCount = comments.size,
-      expanded = expanded && !file.isBinary,
+      expanded = expanded,
       showingFullFile = full,
-      canShowFullFile = file.change == FileChange.Modified || file.change == FileChange.Renamed,
+      canShowFullFile = !showingPreview && !file.isBinary && (file.change == FileChange.Modified || file.change == FileChange.Renamed),
       rows = rows,
+      preview = file.previewKind?.let { kind -> preview(file, kind, showingPreview, view, preview) },
     )
+  }
+
+  private fun preview(
+    file: FileDiff,
+    kind: PreviewKind,
+    showing: Boolean,
+    view: WorkspaceViewState,
+    load: PreviewLoad?,
+  ): FilePreviewModel {
+    val bothSides = file.change != FileChange.Added && file.change != FileChange.Deleted
+    val before = load?.before
+    val after = load?.after
+    val content = when {
+      !showing -> FilePreviewContentModel.Loading
+      before != null && after != null -> FilePreviewContentModel.Ready(
+        before = before.toSide(file.previousPath ?: file.path),
+        after = after.toSide(file.path),
+      )
+      load?.error != null -> FilePreviewContentModel.Failed(load.error)
+      else -> FilePreviewContentModel.Loading
+    }
+    return FilePreviewModel(
+      kind = when (kind) {
+        PreviewKind.Image -> PreviewKindModel.Image
+        PreviewKind.Vector -> PreviewKindModel.Vector
+        PreviewKind.Model -> PreviewKindModel.Model
+        PreviewKind.Markdown -> PreviewKindModel.Markdown
+        PreviewKind.Table -> PreviewKindModel.Table
+      },
+      showing = showing,
+      layout = if (bothSides) view.previewLayouts[file.path] ?: defaultLayout(kind) else null,
+      content = content,
+    )
+  }
+
+  private fun FileContent.toSide(path: String): PreviewSideModel? = when (this) {
+    FileContent.Missing -> null
+    is FileContent.TooLarge -> PreviewSideModel.TooLarge(sizeBytes)
+    is FileContent.Bytes -> PreviewSideModel.Content(bytes, path.substringAfterLast('/').substringAfterLast('.', "").lowercase())
   }
 
   /** Changed lines with three lines of context, merged where they touch, like `git diff`. */

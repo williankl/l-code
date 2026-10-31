@@ -1,8 +1,14 @@
 package dev.loupe.review.impl
 
+import dev.loupe.data.git.GitBlob
+import dev.loupe.data.git.GitDataSource
+import dev.loupe.data.git.GitError
 import dev.loupe.domain.review.CommentId
 import dev.loupe.domain.review.CommentStatus
 import dev.loupe.domain.review.DiffState
+import dev.loupe.domain.review.FileChange
+import dev.loupe.domain.review.FileContent
+import dev.loupe.domain.review.FileVersion
 import dev.loupe.domain.review.NewComment
 import dev.loupe.domain.review.Review
 import dev.loupe.domain.review.ReviewComment
@@ -11,6 +17,8 @@ import dev.loupe.domain.session.SessionId
 import dev.loupe.domain.session.SessionOrigin
 import dev.loupe.domain.session.SubSessionLocation
 import dev.loupe.platform.core.LoupeResult
+import dev.loupe.platform.core.map
+import dev.loupe.platform.core.mapError
 import dev.loupe.platform.di.AppScope
 import dev.loupe.review.api.ReviewError
 import dev.loupe.review.api.ReviewService
@@ -43,6 +51,7 @@ import kotlin.concurrent.atomics.incrementAndFetch
 internal class ReviewServiceImpl(
   private val sessions: SessionService,
   private val loadDiff: LoadDiffUseCase,
+  private val git: GitDataSource,
   private val scope: CoroutineScope,
 ) : ReviewService {
   private val reviews = MutableStateFlow<Map<String, Review>>(emptyMap())
@@ -100,7 +109,7 @@ internal class ReviewServiceImpl(
     return when (val delivered = sessions.paste(sessionId, message)) {
       is LoupeResult.Failure -> LoupeResult.failure(ReviewError.DeliveryFailed(delivered.error.toString()))
       is LoupeResult.Success -> {
-        markDelivered(key, unsent.map { it.id }.toSet(), CommentStatus.Sent(session.name))
+        markDelivered(key, unsent.map { it.id }.toSet(), CommentStatus.Sent(session.displayName))
         LoupeResult.success(unsent.size)
       }
     }
@@ -123,11 +132,54 @@ internal class ReviewServiceImpl(
     return when (started) {
       is LoupeResult.Failure -> LoupeResult.failure(ReviewError.DeliveryFailed(started.error.toString()))
       is LoupeResult.Success -> {
-        val name = sessions.sessions.value.firstOrNull { it.id == started.value }?.name ?: SessionService.ReviewPrefix
+        val name = sessions.sessions.value.firstOrNull { it.id == started.value }?.displayName ?: SessionService.ReviewPrefix
         markDelivered(key, unsent.map { it.id }.toSet(), CommentStatus.InSubSession(started.value, name))
         LoupeResult.success(started.value)
       }
     }
+  }
+
+  override suspend fun fileContent(
+    sessionId: SessionId,
+    path: String,
+    version: FileVersion,
+  ): LoupeResult<FileContent, ReviewError> {
+    val key = session(sessionId)?.reviewKey() ?: return LoupeResult.failure(ReviewError.UnknownSession)
+    val snapshot = (reviews.value[key]?.diff as? DiffState.Ready)?.snapshot
+    val file = snapshot?.files?.firstOrNull { it.path == path }
+      ?: return LoupeResult.failure(ReviewError.ReadFailed("$path isn't in the diff"))
+    val read = when (version) {
+      FileVersion.Base -> {
+        val mergeBase = snapshot.mergeBase
+        when {
+          file.change == FileChange.Added -> return LoupeResult.success(FileContent.Missing)
+          mergeBase == null -> return LoupeResult.failure(ReviewError.ReadFailed("The merge base with ${snapshot.baseRef} isn't known"))
+          else -> git.readFileAt(key, mergeBase, file.previousPath ?: file.path, ReviewService.MaxPreviewBytes)
+        }
+      }
+      FileVersion.WorkingTree -> {
+        if (file.change == FileChange.Deleted) return LoupeResult.success(FileContent.Missing)
+        git.readWorkingFile(key, file.path, ReviewService.MaxPreviewBytes)
+      }
+    }
+    return read
+      .map { blob ->
+        when (blob) {
+          GitBlob.Missing -> FileContent.Missing
+          is GitBlob.TooLarge -> FileContent.TooLarge(blob.sizeBytes)
+          is GitBlob.Content -> FileContent.Bytes(blob.bytes)
+        }
+      }
+      .mapError { error ->
+        ReviewError.ReadFailed(
+          when (error) {
+            GitError.NotARepository -> "Not a git repository"
+            is GitError.RefNotFound -> "${error.ref} wasn't found"
+            is GitError.CommandFailed -> error.message
+            is GitError.Unavailable -> error.message
+          },
+        )
+      }
   }
 
   private suspend fun refreshKey(key: String) {

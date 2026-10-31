@@ -5,6 +5,7 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.DesktopComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.MouseButton
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
@@ -17,6 +18,7 @@ import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performMouseInput
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.pressKey
+import androidx.compose.ui.test.rightClick
 import androidx.compose.ui.test.runDesktopComposeUiTest
 import androidx.compose.ui.test.withKeyDown
 import dev.loupe.domain.review.CommentStatus
@@ -157,6 +159,32 @@ class WorkspaceFlowUiTest {
       onAllNodes(isRoot())[0].performKeyInput { withKeyDown(Key.MetaLeft) { pressKey(Key.W) } }
       waitFor(hasText("No sessions yet"))
       assertEquals(listOf(ar), sessions.closed)
+    }
+  }
+
+  @Test
+  fun `right click renames a session in place, middle click closes one that isn't selected`() {
+    sessions.setSessions(listOf(ShowcaseFixtures.session("ar", "api-ratelimit"), ShowcaseFixtures.session("cf", "checkout-flake")))
+    flow {
+      onNodeWithText("checkout-flake").performMouseInput { rightClick(center) }
+      waitFor(hasText("Rename"))
+      onNodeWithText("Rename").performClick()
+      waitFor(hasSetTextAction())
+      // The whole name starts selected, so typing replaces it.
+      onNode(hasSetTextAction()).performTextInput("flaky checkout")
+      onNode(hasSetTextAction()).performKeyInput { pressKey(Key.Enter) }
+      waitFor(hasText("flaky checkout"))
+      onNode(hasSetTextAction()).assertDoesNotExist()
+      assertEquals(listOf<Pair<SessionId, String?>>(SessionId("cf") to "flaky checkout"), sessions.renamed)
+
+      onNodeWithText("flaky checkout").performMouseInput {
+        moveTo(center)
+        press(MouseButton.Tertiary)
+        release(MouseButton.Tertiary)
+      }
+      waitFor(hasText("api-ratelimit"))
+      waitUntil(timeoutMillis = 5_000) { onAllNodes(hasText("flaky checkout")).fetchSemanticsNodes().isEmpty() }
+      assertEquals(listOf(SessionId("cf")), sessions.closed)
     }
   }
 }

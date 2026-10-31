@@ -9,6 +9,31 @@ public sealed interface WorkspaceEvent {
   public data class ToggleSessionFold(val sessionId: String) : WorkspaceEvent
   public data object CloseSelectedSession : WorkspaceEvent
 
+  /** Closes any session, selected or not, and its sub-sessions. Middle click does this. */
+  public data class CloseSession(val sessionId: String) : WorkspaceEvent
+
+  /** Right-clicked a session: opens its menu. */
+  public data class OpenSessionMenu(val sessionId: String) : WorkspaceEvent
+  public data object DismissSessionMenu : WorkspaceEvent
+
+  /** Starts a sub-session of any session, straight away, and selects it. */
+  public data class CreateSubSessionFrom(val sessionId: String, val location: SubSessionLocation) : WorkspaceEvent
+
+  /** Turns the session's menu into a name field. */
+  public data class StartRenamingSession(val sessionId: String) : WorkspaceEvent
+
+  /**
+   * Keeps [name] for the session. Blank, or the name the app gives it, goes back to following the
+   * folder.
+   */
+  public data class RenameSession(val sessionId: String, val name: String) : WorkspaceEvent
+
+  /** Closes the name field and the menu it is in, renaming nothing. */
+  public data object CancelRenamingSession : WorkspaceEvent
+
+  /** The session's folder path is on the clipboard: confirms it with a toast. */
+  public data class CopiedSessionPath(val path: String) : WorkspaceEvent
+
   /** Opens a new terminal at home. */
   public data object NewSession : WorkspaceEvent
 
@@ -28,6 +53,12 @@ public sealed interface WorkspaceEvent {
   public data class ToggleFileExpanded(val fileId: String) : WorkspaceEvent
   public data class ToggleFullFile(val fileId: String) : WorkspaceEvent
   public data class ShowFullFile(val fileId: String) : WorkspaceEvent
+
+  /** Switches a file between its text diff and its rendered preview. */
+  public data class ToggleFilePreview(val fileId: String) : WorkspaceEvent
+
+  /** Shows the before side, the after side or both in a file's preview. */
+  public data class SetPreviewLayout(val fileId: String, val layout: PreviewLayout) : WorkspaceEvent
 
   /** Pressed + on a line: starts a range there. */
   public data class StartCommentRange(val fileId: String, val lineIndex: Int) : WorkspaceEvent

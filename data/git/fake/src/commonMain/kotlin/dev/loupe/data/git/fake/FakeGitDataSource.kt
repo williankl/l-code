@@ -1,5 +1,6 @@
 package dev.loupe.data.git.fake
 
+import dev.loupe.data.git.GitBlob
 import dev.loupe.data.git.GitCheckout
 import dev.loupe.data.git.GitDataSource
 import dev.loupe.data.git.GitError
@@ -13,6 +14,13 @@ public class FakeGitDataSource : GitDataSource {
   public var untrackedResult: LoupeResult<List<String>, GitError> = LoupeResult.success(emptyList())
   public var uncommittedResult: LoupeResult<Boolean, GitError> = LoupeResult.success(false)
   public var fileContents: Map<String, String> = emptyMap()
+  public var mergeBaseResult: LoupeResult<String, GitError> = LoupeResult.success("base0000")
+
+  /** Committed files by `revision:path`. */
+  public var committedFiles: Map<String, ByteArray> = emptyMap()
+
+  /** Files on disk by path. */
+  public var workingFiles: Map<String, ByteArray> = emptyMap()
   public var addWorktreeResult: LoupeResult<Unit, GitError> = LoupeResult.success(Unit)
 
   public val diffCalls: MutableList<Pair<String, String>> = mutableListOf()
@@ -27,6 +35,23 @@ public class FakeGitDataSource : GitDataSource {
   override suspend fun diffAgainst(repositoryRoot: String, baseRef: String): LoupeResult<String, GitError> {
     diffCalls += repositoryRoot to baseRef
     return diffResult
+  }
+
+  override suspend fun mergeBase(repositoryRoot: String, baseRef: String): LoupeResult<String, GitError> = mergeBaseResult
+
+  override suspend fun readFileAt(
+    repositoryRoot: String,
+    revision: String,
+    path: String,
+    maxBytes: Long,
+  ): LoupeResult<GitBlob, GitError> = LoupeResult.success(committedFiles["$revision:$path"].toBlob(maxBytes))
+
+  override suspend fun readWorkingFile(repositoryRoot: String, path: String, maxBytes: Long): LoupeResult<GitBlob, GitError> = LoupeResult.success(workingFiles[path].toBlob(maxBytes))
+
+  private fun ByteArray?.toBlob(maxBytes: Long): GitBlob = when {
+    this == null -> GitBlob.Missing
+    size > maxBytes -> GitBlob.TooLarge(size.toLong())
+    else -> GitBlob.Content(this)
   }
 
   override suspend fun untrackedFiles(repositoryRoot: String): LoupeResult<List<String>, GitError> = untrackedResult

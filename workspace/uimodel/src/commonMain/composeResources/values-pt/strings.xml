@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
   <!-- Top bar and settings -->
-  <string name="app_name">loupe</string>
+  <string name="app_name">Lemonade Code</string>
   <string name="sessions_collapse">Recolher sessões</string>
   <string name="sessions_expand">Expandir sessões</string>
   <string name="settings_title">Definições</string>
@@ -42,6 +42,21 @@
   </plurals>
   <string name="meta_split_same_folder">%1$s · mesma pasta</string>
   <string name="meta_split_worktree">%1$s · worktree</string>
+
+  <!-- Session menu (right click) and rename -->
+  <string name="session_options">Opções da sessão</string>
+  <string name="session_new_sub_same_folder">Nova subsessão na worktree atual</string>
+  <string name="session_new_sub_worktree">Nova subsessão numa nova worktree</string>
+  <string name="session_sub_same_folder">Mesma pasta</string>
+  <string name="session_sub_same_folder_branch">Mesma pasta · %1$s</string>
+  <string name="session_sub_new_branch">Novo branch %1$s</string>
+  <string name="session_worktree_needs_repo">Precisa de um checkout git</string>
+  <string name="session_rename">Renomear</string>
+  <string name="session_rename_action">Renomear sessão</string>
+  <string name="session_name_field">Nome da sessão</string>
+  <string name="session_copy_path">Copiar caminho da pasta</string>
+  <string name="session_path_copied">Copiado: %1$s</string>
+  <string name="session_close">Fechar sessão</string>
 
   <!-- New session -->
   <string name="action_new_terminal">Novo terminal</string>
@@ -115,7 +130,7 @@
   <string name="message_loading_diff">A ler o diff…</string>
   <string name="message_no_changes">Sem alterações face a %1$s</string>
   <string name="message_not_repo">Não é um checkout git</string>
-  <string name="message_not_repo_detail">O Loupe revê as alterações de um checkout git.</string>
+  <string name="message_not_repo_detail">O Lemonade Code revê as alterações de um checkout git.</string>
   <string name="message_no_base">Não há branch %1$s para comparar</string>
   <string name="message_no_base_detail">Faz fetch ou cria-o e depois atualiza.</string>
   <string name="message_diff_failed">Não foi possível ler o diff</string>
@@ -147,4 +162,32 @@
   <string name="error_worktree">Não foi possível criar a worktree: %1$s</string>
   <string name="error_launch">Não foi possível iniciar a sessão: %1$s</string>
   <string name="error_send">Não foi possível enviar os comentários: %1$s</string>
+
+  <!-- File previews -->
+  <string name="file_preview">Pré-visualizar</string>
+  <string name="file_preview_hide">Mostrar diff</string>
+  <string name="preview_before">Antes</string>
+  <string name="preview_after">Depois</string>
+  <string name="preview_side_by_side">Lado a lado</string>
+  <string name="preview_loading">Carregando pré-visualização…</string>
+  <string name="preview_too_large">Grande demais para pré-visualizar (%1$s)</string>
+  <string name="preview_unreadable">Não foi possível desenhar este arquivo: %1$s</string>
+  <string name="preview_empty">Arquivo vazio</string>
+  <string name="preview_image_info">%1$d × %2$d · %3$s</string>
+  <string name="preview_model_hint">Arraste para girar · ⌘ ou Ctrl + rolagem para zoom · clique duplo para redefinir</string>
+  <string name="preview_model_partial">Mostrando %1$s de %2$s triângulos</string>
+  <string name="preview_reset_view">Redefinir visualização</string>
+  <string name="preview_zoom_in">Aumentar zoom</string>
+  <string name="preview_zoom_out">Diminuir zoom</string>
+  <string name="preview_markdown_image">Imagem: %1$s</string>
+  <string name="preview_markdown_truncated">A pré-visualização para aqui. Mostre o diff para ver o resto do arquivo.</string>
+  <string name="error_preview">Não foi possível ler o arquivo: %1$s</string>
+  <plurals name="preview_model_triangles">
+    <item quantity="one">%1$s triângulo</item>
+    <item quantity="other">%1$s triângulos</item>
+  </plurals>
+  <plurals name="preview_table_more_rows">
+    <item quantity="one">Mais %1$d linha não mostrada</item>
+    <item quantity="other">Mais %1$d linhas não mostradas</item>
+  </plurals>
 </resources>

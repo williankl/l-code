@@ -172,6 +172,30 @@ class SessionServiceImplTest {
   }
 
   @Test
+  fun `a renamed session keeps its name as the shell moves and on the next launch`() = runBlocking<Unit> {
+    val repo = File(home, "storefront").apply { mkdirs() }
+    git.checkoutResult = LoupeResult.success(GitCheckout(root = repo.path, branch = "main"))
+    val id = service.openTerminal().getOrNull()!!
+    service.rename(id, "  rate limits ")
+    assertEquals("rate limits", service.sessions.value.single().displayName)
+
+    registry.terminal(id)!!.send("cd storefront\r")
+    val moved = withTimeout(10_000) { service.sessions.first { it.single().name == "storefront" }.single() }
+    assertEquals("rate limits", moved.displayName, "the folder changes the automatic name only")
+
+    service.shutdown()
+    assertEquals("rate limits", store.saved!!.sessions.single().customName)
+    val next = newService(SessionRegistry())
+    assertEquals(1, next.restore())
+    assertEquals("rate limits", next.sessions.value.single().displayName)
+
+    next.rename(id, " ")
+    val reset = next.sessions.value.single()
+    assertEquals(null, reset.customName)
+    assertEquals("storefront", reset.displayName)
+  }
+
+  @Test
   fun `an agent running at quit is resumed on the next launch, one you quit isn't`() = runBlocking<Unit> {
     assertEquals(0, service.restore())
     val running = service.openTerminal().getOrNull()!!

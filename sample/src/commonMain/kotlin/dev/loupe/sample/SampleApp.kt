@@ -209,7 +209,7 @@ private fun ControlPanel(
       .padding(spaces.spacing400),
   ) {
     Column(verticalArrangement = Arrangement.spacedBy(spaces.spacing100)) {
-      LemonadeUi.Text(text = "Loupe UI sample", textStyle = LemonadeTheme.typography.headingXSmall)
+      LemonadeUi.Text(text = "Lemonade Code UI sample", textStyle = LemonadeTheme.typography.headingXSmall)
       LemonadeUi.Text(
         text = "Static screens from the design. Nothing reacts; every action is logged below. ⌘↑ ⌘↓ switch screens.",
         textStyle = LemonadeTheme.typography.bodyXSmallRegular,

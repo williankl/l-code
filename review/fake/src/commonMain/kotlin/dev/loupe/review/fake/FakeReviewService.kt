@@ -3,6 +3,8 @@ package dev.loupe.review.fake
 import dev.loupe.domain.review.CommentId
 import dev.loupe.domain.review.CommentStatus
 import dev.loupe.domain.review.DiffState
+import dev.loupe.domain.review.FileContent
+import dev.loupe.domain.review.FileVersion
 import dev.loupe.domain.review.NewComment
 import dev.loupe.domain.review.Review
 import dev.loupe.domain.review.ReviewComment
@@ -24,6 +26,10 @@ public class FakeReviewService : ReviewService {
   public val sentToSubSession: MutableList<SessionId> = mutableListOf()
   public var subSessionResult: LoupeResult<SessionId, ReviewError> = LoupeResult.success(SessionId("review-sub"))
   private var nextId = 0
+
+  /** What [fileContent] returns per path and side; anything not listed is [FileContent.Missing]. */
+  public var fileContents: Map<Pair<String, FileVersion>, LoupeResult<FileContent, ReviewError>> = emptyMap()
+  public val fileContentCalls: MutableList<Pair<String, FileVersion>> = mutableListOf()
 
   public fun setReview(sessionId: SessionId, review: Review) {
     reviews.update { it + (sessionId to review) }
@@ -61,5 +67,14 @@ public class FakeReviewService : ReviewService {
   override suspend fun sendToNewSubSession(sessionId: SessionId): LoupeResult<SessionId, ReviewError> {
     sentToSubSession += sessionId
     return subSessionResult
+  }
+
+  override suspend fun fileContent(
+    sessionId: SessionId,
+    path: String,
+    version: FileVersion,
+  ): LoupeResult<FileContent, ReviewError> {
+    fileContentCalls += path to version
+    return fileContents[path to version] ?: LoupeResult.success(FileContent.Missing)
   }
 }

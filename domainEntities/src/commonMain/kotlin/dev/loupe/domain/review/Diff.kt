@@ -5,6 +5,8 @@ public data class DiffSnapshot(
   val baseRef: String,
   val files: List<FileDiff>,
   val hasUncommittedChanges: Boolean,
+  /** The commit the "before" side is read from; null when it isn't known. */
+  val mergeBase: String? = null,
 ) {
   val additions: Int get() = files.sumOf { it.additions }
   val deletions: Int get() = files.sumOf { it.deletions }
@@ -21,6 +23,9 @@ public data class FileDiff(
 ) {
   val additions: Int get() = lines.count { it.kind == DiffLineKind.Added }
   val deletions: Int get() = lines.count { it.kind == DiffLineKind.Removed }
+
+  /** How the file can be drawn besides its text, or null when only the diff applies. */
+  val previewKind: PreviewKind? get() = PreviewKind.of(path)
 }
 
 public enum class FileChange { Added, Modified, Deleted, Renamed }

@@ -20,6 +20,15 @@ public sealed interface GitError {
   public data class Unavailable(val message: String) : GitError
 }
 
+/** A file's bytes as read by [GitDataSource.readFileAt] and [GitDataSource.readWorkingFile]. */
+public sealed interface GitBlob {
+  public data object Missing : GitBlob
+
+  public data class TooLarge(val sizeBytes: Long) : GitBlob
+
+  public class Content(public val bytes: ByteArray) : GitBlob
+}
+
 /** Read and write access to git checkouts through the `git` command. */
 public interface GitDataSource {
   public suspend fun checkout(directory: String): LoupeResult<GitCheckout, GitError>
@@ -32,6 +41,24 @@ public interface GitDataSource {
    * and HEAD. Every line of each changed file is included as context.
    */
   public suspend fun diffAgainst(repositoryRoot: String, baseRef: String): LoupeResult<String, GitError>
+
+  /** The commit HEAD and [baseRef] last had in common; the diff's "before" side. */
+  public suspend fun mergeBase(repositoryRoot: String, baseRef: String): LoupeResult<String, GitError>
+
+  /**
+   * The bytes of [path] as committed in [revision], whatever is on disk now. [GitBlob.Missing] when
+   * [revision] has no such file; [GitBlob.TooLarge] when it is bigger than [maxBytes], which is
+   * checked before anything is read.
+   */
+  public suspend fun readFileAt(
+    repositoryRoot: String,
+    revision: String,
+    path: String,
+    maxBytes: Long,
+  ): LoupeResult<GitBlob, GitError>
+
+  /** [path] as it is on disk now; [GitBlob.Missing] when there's no such file. */
+  public suspend fun readWorkingFile(repositoryRoot: String, path: String, maxBytes: Long): LoupeResult<GitBlob, GitError>
 
   /** Paths of untracked files that aren't ignored, relative to the root. */
   public suspend fun untrackedFiles(repositoryRoot: String): LoupeResult<List<String>, GitError>

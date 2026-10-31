@@ -11,7 +11,7 @@ import androidx.compose.ui.window.rememberWindowState
 public fun main(): Unit = application {
   Window(
     onCloseRequest = ::exitApplication,
-    title = "Loupe · UI sample",
+    title = "Lemonade Code · UI sample",
     state = rememberWindowState(
       size = DpSize(1820.dp, 1080.dp),
       position = WindowPosition(Alignment.Center),

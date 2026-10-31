@@ -19,7 +19,7 @@ import com.teya.lemonade.LemonadeTheme
 import com.teya.lemonade.core.LemonadeShadow
 import com.teya.lemonade.lemonadeShadow
 
-private val PopoverShadowRoom = 24.dp
+internal val PopoverShadowRoom = 24.dp
 
 /**
  * Panel that opens under its anchor, aligned to the anchor's start or end edge. Place it inside the same

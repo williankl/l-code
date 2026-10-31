@@ -40,6 +40,8 @@ import com.teya.lemonade.LemonadeTheme
 import com.teya.lemonade.LemonadeUi
 import com.teya.lemonade.Link
 import com.teya.lemonade.Text
+import com.teya.lemonade.Toast
+import com.teya.lemonade.ToastVoice
 import com.teya.lemonade.core.LemonadeButtonSize
 import com.teya.lemonade.core.LemonadeButtonType
 import com.teya.lemonade.core.LemonadeButtonVariant
@@ -140,12 +142,14 @@ public fun WorkspaceContent(
                 navigation = panel.navigation,
                 onEvent = onEvent,
                 modifier = Modifier.width(SidebarWidth).fillMaxHeight(),
+                menu = panel.menu,
               )
             } else {
               SessionRail(
                 tiles = panel.tiles,
                 onEvent = onEvent,
                 modifier = Modifier.width(RailWidth).fillMaxHeight(),
+                menu = panel.menu,
               )
             }
           }
@@ -165,6 +169,16 @@ public fun WorkspaceContent(
             onDismiss = { onEvent(WorkspaceEvent.DismissError) },
             modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = LemonadeTheme.spaces.spacing800),
           )
+        }
+        // A problem report outranks a confirmation; the toast waits under it.
+        if (model.error == null) {
+          model.toast?.let { message ->
+            LemonadeUi.Toast(
+              label = message.resolve(),
+              voice = ToastVoice.Success,
+              modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = LemonadeTheme.spaces.spacing800),
+            )
+          }
         }
       }
     }
@@ -193,6 +207,7 @@ private fun SessionsDrawer(
   SessionsSidebar(
     navigation = model.sessions.navigation,
     onEvent = onEvent,
+    menu = model.sessions.menu,
     modifier = Modifier
       .padding(start = LemonadeTheme.spaces.spacing200, bottom = LemonadeTheme.spaces.spacing200)
       .width(width)
@@ -295,6 +310,8 @@ private fun ErrorBanner(
 }
 
 private fun shortcutFor(model: WorkspaceModel, key: Key, command: Boolean): WorkspaceEvent? = when {
+  key == Key.Escape && model.sessions.menu?.rename != null -> WorkspaceEvent.CancelRenamingSession
+  key == Key.Escape && model.sessions.menu != null -> WorkspaceEvent.DismissSessionMenu
   key == Key.Escape && model.settings.open -> WorkspaceEvent.DismissSettings
   key == Key.Escape && model.newSubSession.open -> WorkspaceEvent.DismissNewSubSessionMenu
   key == Key.Escape && model.sessions.drawerOpen -> WorkspaceEvent.CloseDrawer

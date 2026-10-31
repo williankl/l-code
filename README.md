@@ -23,7 +23,12 @@ Lemonade dark theme* (`Loupe.dc.html`).
 ```
 
 Shortcuts: ⌘T new terminal, ⌘W close the selected session (and its sub-sessions), ⌘↵ paste the
-unsent comments into the terminal, Esc closes popovers. In the terminal: drag to select (double click
+unsent comments into the terminal, Esc closes popovers. Right-click a session to rename it, copy
+its folder path or start a sub-session from it; middle-click closes it.
+
+In the diff, images, SVGs, 3D models (STL, OBJ, PLY, glTF, GLB), Markdown and CSV/TSV files get a
+Preview chip that draws the file instead of its text, before and after side by side or one at a
+time. In the terminal: drag to select (double click
 for a word, triple click for a line, shift-click to extend), ⌘C copies, ⌘A selects all, ⌘V pastes,
 the wheel scrolls back. Links underline under the mouse; Ctrl-click (or ⌘-click) opens them. That
 covers URLs written out (a bare `www.` address opens over https), even when they wrap, and links

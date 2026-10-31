@@ -34,14 +34,29 @@ tasks.withType<Test>().configureEach {
 compose.desktop {
   application {
     mainClass = "dev.loupe.app.MainKt"
-    jvmArgs("--enable-native-access=ALL-UNNAMED")
+    jvmArgs("--enable-native-access=ALL-UNNAMED", "--add-opens=java.desktop/sun.awt.X11=ALL-UNNAMED")
 
     nativeDistributions {
       targetFormats(TargetFormat.Dmg, TargetFormat.Deb, TargetFormat.Msi)
-      packageName = "Loupe"
+      packageName = "Lemonade Code"
       packageVersion = "1.0.0"
+      description = "A terminal IDE for reviewing work"
+      // Drawn by icons/make_icons.py.
       macOS {
-        bundleID = "dev.loupe.app"
+        bundleID = "dev.lemonadecode.app"
+        iconFile.set(project.file("icons/lemonade-code.icns"))
+      }
+      linux {
+        packageName = "lemonade-code"
+        iconFile.set(project.file("icons/lemonade-code.png"))
+        shortcut = true
+        menuGroup = "Development"
+        appCategory = "Development"
+      }
+      windows {
+        iconFile.set(project.file("icons/lemonade-code.ico"))
+        shortcut = true
+        menuGroup = "Lemonade Code"
       }
     }
   }

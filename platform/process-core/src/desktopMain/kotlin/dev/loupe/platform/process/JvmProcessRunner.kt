@@ -23,18 +23,36 @@ internal class JvmProcessRunner(
     workingDirectory: String,
     timeout: Duration,
   ): LoupeResult<ProcessOutput, Throwable> = safeSuspendRunCatchingOn(dispatchers.io) {
+    val (exitCode, stdout, stderr) = execute(command, workingDirectory, timeout)
+    ProcessOutput(exitCode = exitCode, stdout = stdout.decodeToString(), stderr = stderr)
+  }
+
+  override suspend fun runForBytes(
+    command: List<String>,
+    workingDirectory: String,
+    timeout: Duration,
+  ): LoupeResult<BinaryProcessOutput, Throwable> = safeSuspendRunCatchingOn(dispatchers.io) {
+    val (exitCode, stdout, stderr) = execute(command, workingDirectory, timeout)
+    BinaryProcessOutput(exitCode = exitCode, stdout = stdout, stderr = stderr)
+  }
+
+  private suspend fun execute(
+    command: List<String>,
+    workingDirectory: String,
+    timeout: Duration,
+  ): Triple<Int, ByteArray, String> {
     val process = ProcessBuilder(command)
       .directory(File(workingDirectory))
       .redirectInput(ProcessBuilder.Redirect.from(File(NullDevice)))
       .start()
-    coroutineScope {
-      val stdout = async(dispatchers.io) { process.inputStream.bufferedReader().readText() }
+    return coroutineScope {
+      val stdout = async(dispatchers.io) { process.inputStream.readBytes() }
       val stderr = async(dispatchers.io) { process.errorStream.bufferedReader().readText() }
       if (!process.waitFor(timeout.inWholeMilliseconds, TimeUnit.MILLISECONDS)) {
         process.destroyForcibly()
         throw TimeoutException("${command.first()} took longer than $timeout")
       }
-      ProcessOutput(exitCode = process.exitValue(), stdout = stdout.await(), stderr = stderr.await())
+      Triple(process.exitValue(), stdout.await(), stderr.await())
     }
   }
 

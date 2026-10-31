@@ -73,7 +73,7 @@ public class WorkspacePresenter internal constructor(
     // image still diffs as "Binary files differ", so the diff alone can't tell it changed.
     var previewGeneration by remember { mutableIntStateOf(0) }
     val previewLoads = remember(selectedId) { mutableStateMapOf<String, PreviewLoad>() }
-    LoadPreviews(selectedId, review, view.previews, previewGeneration, previewLoads)
+    LoadPreviews(selectedId, review, DiffMapper.openPreviews(review, view), previewGeneration, previewLoads)
 
     RefreshWhenTerminalSettles(selected, onRefresh = { previewGeneration++ })
 
@@ -85,6 +85,7 @@ public class WorkspacePresenter internal constructor(
         }
         fun fail(message: LoupeString) = update { it.copy(error = message) }
         fun fileOf(path: String?): FileDiff? = (review?.diff as? DiffState.Ready)?.snapshot?.files?.firstOrNull { it.path == path }
+        fun commented(path: String): Boolean = review?.comments.orEmpty().any { it.filePath == path }
         fun sessionOf(id: String): Session? = sessionService.sessions.value.firstOrNull { it.id.value == id }
         fun close(id: SessionId) {
           val closing = SessionsMapper.subtree(sessionService.sessions.value, id)
@@ -188,11 +189,11 @@ public class WorkspacePresenter internal constructor(
             }
           }
           is WorkspaceEvent.SelectView -> {
+            val refresh = event.view == WorkspaceView.Diff && current != null
+            // Before the view changes: the other order can read every open preview twice.
+            if (refresh) previewGeneration++
             update { it.copy(view = event.view, previewOpen = false, dragging = null) }
-            if (event.view == WorkspaceView.Diff && current != null) {
-              previewGeneration++
-              scope.launch { reviewService.refresh(current.id) }
-            }
+            if (refresh && current != null) scope.launch { reviewService.refresh(current.id) }
           }
 
           WorkspaceEvent.RefreshDiff -> current?.let {
@@ -203,10 +204,10 @@ public class WorkspacePresenter internal constructor(
             val file = fileOf(event.fileId)
             if (file != null) {
               update { state ->
-                val expand = !DiffMapper.isBodyVisible(file, state)
+                val expand = !DiffMapper.isBodyVisible(file, state, commented(file.path))
                 // A binary file has nothing to show but its preview, so opening it shows that.
-                val previews = if (expand && file.isBinary && file.previewKind != null) state.previews + file.path else state.previews
-                state.copy(fileExpansion = state.fileExpansion + (file.path to expand), previews = previews)
+                val choices = if (expand && file.isBinary && file.previewKind != null) state.previewChoices + (file.path to true) else state.previewChoices
+                state.copy(fileExpansion = state.fileExpansion + (file.path to expand), previewChoices = choices)
               }
             }
           }
@@ -214,11 +215,15 @@ public class WorkspacePresenter internal constructor(
             val file = fileOf(event.fileId)
             if (file?.previewKind != null) {
               update { state ->
-                if (file.path in state.previews) {
-                  state.copy(previews = state.previews - file.path)
+                if (DiffMapper.isShowingPreview(file, state, commented(file.path))) {
+                  state.copy(previewChoices = state.previewChoices + (file.path to false))
                 } else {
                   val composer = state.composer?.takeUnless { it.range.filePath == file.path }
-                  state.copy(previews = state.previews + file.path, fileExpansion = state.fileExpansion + (file.path to true), composer = composer)
+                  state.copy(
+                    previewChoices = state.previewChoices + (file.path to true),
+                    fileExpansion = state.fileExpansion + (file.path to true),
+                    composer = composer,
+                  )
                 }
               }
             }
@@ -368,7 +373,7 @@ private fun WorkspaceViewState.selecting(id: SessionId): WorkspaceViewState = co
   previewOpen = false,
   fileExpansion = emptyMap(),
   fullFiles = emptySet(),
-  previews = emptySet(),
+  previewChoices = emptyMap(),
   previewLayouts = emptyMap(),
   sessionMenu = null,
 )

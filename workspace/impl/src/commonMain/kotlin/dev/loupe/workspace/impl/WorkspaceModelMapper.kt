@@ -45,7 +45,7 @@ internal data class WorkspaceInput(
   val subSessionPlan: SubSessionPlan?,
   val pendingMessage: String?,
   val homeDirectory: String,
-  /** What has loaded for the files in [WorkspaceViewState.previews], by path. */
+  /** What has loaded for the files whose preview is on screen, by path. */
   val previews: Map<String, PreviewLoad> = emptyMap(),
   /** The worktree a sub-session started from the open session menu would get. */
   val menuWorktreePlan: SubSessionPlan? = null,

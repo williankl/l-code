@@ -35,8 +35,11 @@ internal data class WorkspaceViewState(
   /** Files the user expanded or collapsed by hand; the rest follow the default. */
   val fileExpansion: Map<String, Boolean> = emptyMap(),
   val fullFiles: Set<String> = emptySet(),
-  /** Files showing their rendered preview instead of the diff. */
-  val previews: Set<String> = emptySet(),
+  /**
+   * Preview (true) or text diff (false) picked by hand, by path. The rest show their preview when
+   * Loupe can draw them, unless they have comments, which only the text diff shows.
+   */
+  val previewChoices: Map<String, Boolean> = emptyMap(),
   /** Preview sides picked by hand; the rest follow the default for their kind. */
   val previewLayouts: Map<String, PreviewLayout> = emptyMap(),
   val dragging: LineRange? = null,

@@ -45,6 +45,7 @@ import dev.loupe.workspace.uimodel.ReviewCommentModel
 import dev.loupe.workspace.uimodel.SendBarModel
 import dev.loupe.workspace.uimodel.SendBarSummary
 import dev.loupe.workspace.uimodel.WorkspaceContentModel
+import dev.loupe.workspace.uimodel.WorkspaceView
 import dev.loupe.workspace.uimodel.CodeTokenKind as TokenKindModel
 import dev.loupe.workspace.uimodel.DiffLineKind as LineKindModel
 
@@ -88,12 +89,28 @@ internal object DiffMapper {
 
   fun baseRef(review: Review?): String = (review?.diff as? DiffState.Ready)?.snapshot?.baseRef ?: "main"
 
-  fun isExpanded(file: FileDiff, view: WorkspaceViewState): Boolean = view.fileExpansion[file.path] ?: (file.change != FileChange.Deleted && !file.isBinary && file.lines.size <= AutoExpandLimit)
+  /**
+   * Files Loupe can draw show their preview unless the user picked the text diff, or they have
+   * [commented] lines: comments sit on lines, which only the text diff shows.
+   */
+  fun isShowingPreview(file: FileDiff, view: WorkspaceViewState, commented: Boolean): Boolean = file.previewKind != null && (view.previewChoices[file.path] ?: !commented)
 
-  fun isShowingPreview(file: FileDiff, view: WorkspaceViewState): Boolean = file.previewKind != null && file.path in view.previews
+  /** Open by default: a preview, or a text diff that isn't too long to read. */
+  fun isExpanded(file: FileDiff, view: WorkspaceViewState, commented: Boolean): Boolean = view.fileExpansion[file.path]
+    ?: (isShowingPreview(file, view, commented) || (file.change != FileChange.Deleted && !file.isBinary && file.lines.size <= AutoExpandLimit))
 
   /** Whether the file's body shows: a binary file only has one when its preview is on. */
-  fun isBodyVisible(file: FileDiff, view: WorkspaceViewState): Boolean = isExpanded(file, view) && (!file.isBinary || isShowingPreview(file, view))
+  fun isBodyVisible(file: FileDiff, view: WorkspaceViewState, commented: Boolean): Boolean = isExpanded(file, view, commented) && (!file.isBinary || isShowingPreview(file, view, commented))
+
+  /** Files whose preview is on screen in the diff, so their contents are needed. */
+  fun openPreviews(review: Review?, view: WorkspaceViewState): Set<String> {
+    if (view.view != WorkspaceView.Diff) return emptySet()
+    val snapshot = (review?.diff as? DiffState.Ready)?.snapshot ?: return emptySet()
+    val commented = review.comments.mapTo(HashSet()) { it.filePath }
+    return snapshot.files
+      .filter { file -> (file.path in commented).let { isShowingPreview(file, view, it) && isBodyVisible(file, view, it) } }
+      .mapTo(HashSet()) { it.path }
+  }
 
   /** Images and models compare best next to each other; documents and tables read best alone. */
   fun defaultLayout(kind: PreviewKind): PreviewLayout = when (kind) {
@@ -141,8 +158,9 @@ internal object DiffMapper {
     view: WorkspaceViewState,
     preview: PreviewLoad?,
   ): DiffFileModel {
-    val expanded = isBodyVisible(file, view)
-    val showingPreview = isShowingPreview(file, view)
+    val commented = comments.isNotEmpty()
+    val expanded = isBodyVisible(file, view, commented)
+    val showingPreview = isShowingPreview(file, view, commented)
     val full = file.path in view.fullFiles
     val fileName = file.path.substringAfterLast('/')
     val selection = (view.dragging ?: view.composer?.range)?.takeIf { it.filePath == file.path }

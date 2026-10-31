@@ -1,5 +1,7 @@
 package dev.loupe.workspace.impl
 
+import dev.loupe.domain.review.CommentId
+import dev.loupe.domain.review.CommentStatus
 import dev.loupe.domain.review.DiffLine
 import dev.loupe.domain.review.DiffLineKind
 import dev.loupe.domain.review.DiffSnapshot
@@ -8,7 +10,10 @@ import dev.loupe.domain.review.FileChange
 import dev.loupe.domain.review.FileContent
 import dev.loupe.domain.review.FileDiff
 import dev.loupe.domain.review.FileVersion
+import dev.loupe.domain.review.LineAnchor
+import dev.loupe.domain.review.LineSide
 import dev.loupe.domain.review.Review
+import dev.loupe.domain.review.ReviewComment
 import dev.loupe.domain.session.SessionId
 import dev.loupe.platform.core.LoupeResult
 import dev.loupe.platform.presenter.testing.awaitItemWhere
@@ -73,7 +78,7 @@ class WorkspacePreviewTest {
   private fun bytes(vararg values: Int): LoupeResult<FileContent, ReviewError> = LoupeResult.success(FileContent.Bytes(ByteArray(values.size) { values[it].toByte() }))
 
   @Test
-  fun `opening a binary image shows its preview with both sides side by side`() = runTest {
+  fun `a binary image opens on its preview with both sides side by side, and folds away`() = runTest {
     withSession()
     reviews.fileContents = mapOf(
       (logo.path to FileVersion.Base) to bytes(1, 2),
@@ -81,11 +86,8 @@ class WorkspacePreviewTest {
     )
     presenter.test {
       awaitItem().eventSink(WorkspaceEvent.SelectView(WorkspaceView.Diff))
-      val closed = awaitItemWhere { it.file(logo.path) != null }.file(logo.path)!!
-      assertTrue(!closed.expanded && closed.preview?.showing == false)
-
-      awaitItem().eventSink(WorkspaceEvent.ToggleFileExpanded(logo.path))
-      val open = awaitItemWhere { it.file(logo.path)?.preview?.content is FilePreviewContentModel.Ready }.file(logo.path)!!
+      val model = awaitItemWhere { it.file(logo.path)?.preview?.content is FilePreviewContentModel.Ready }
+      val open = model.file(logo.path)!!
       val preview = open.preview!!
       assertTrue(open.expanded && preview.showing)
       assertEquals(PreviewKindModel.Image, preview.kind)
@@ -93,18 +95,19 @@ class WorkspacePreviewTest {
       val ready = assertIs<FilePreviewContentModel.Ready>(preview.content)
       assertContentEquals(byteArrayOf(1, 2), assertIs<PreviewSideModel.Content>(ready.before).bytes)
       assertEquals("png", assertIs<PreviewSideModel.Content>(ready.after).extension)
+
+      model.eventSink(WorkspaceEvent.ToggleFileExpanded(logo.path))
+      awaitItemWhere { it.file(logo.path)?.expanded == false }.eventSink(WorkspaceEvent.ToggleFileExpanded(logo.path))
+      awaitItemWhere { it.file(logo.path)?.let { file -> file.expanded && file.preview?.showing == true } == true }
     }
   }
 
   @Test
-  fun `a document previews alone, can switch sides, and toggles back to its diff`() = runTest {
+  fun `a document opens on its preview, can switch sides, and toggles to its diff and back`() = runTest {
     withSession()
     reviews.fileContents = mapOf((readme.path to FileVersion.WorkingTree) to bytes(35))
     presenter.test {
       awaitItem().eventSink(WorkspaceEvent.SelectView(WorkspaceView.Diff))
-      val diff = awaitItemWhere { it.file(readme.path)?.rows?.isNotEmpty() == true }
-      diff.eventSink(WorkspaceEvent.ToggleFilePreview(readme.path))
-
       val previewing = awaitItemWhere { it.file(readme.path)?.preview?.content is FilePreviewContentModel.Ready }
       val file = previewing.file(readme.path)!!
       assertEquals(PreviewLayout.After, file.preview?.layout)
@@ -117,8 +120,25 @@ class WorkspacePreviewTest {
       assertNull(assertIs<FilePreviewContentModel.Ready>(switched.file(readme.path)!!.preview!!.content).before)
 
       switched.eventSink(WorkspaceEvent.ToggleFilePreview(readme.path))
-      val back = awaitItemWhere { it.file(readme.path)?.preview?.showing == false }
-      assertTrue(back.file(readme.path)!!.rows.isNotEmpty())
+      val text = awaitItemWhere { it.file(readme.path)?.preview?.showing == false }
+      assertTrue(text.file(readme.path)!!.rows.isNotEmpty())
+      text.eventSink(WorkspaceEvent.ToggleFilePreview(readme.path))
+      awaitItemWhere { it.file(readme.path)?.preview?.content is FilePreviewContentModel.Ready }
+    }
+  }
+
+  @Test
+  fun `a file with comments shows its diff, where the comments are, until its preview is asked for`() = runTest {
+    withSession()
+    val comment = ReviewComment(CommentId("c1"), readme.path, LineAnchor(LineSide.New, 1), LineAnchor(LineSide.New, 1), "Title case?", CommentStatus.Unsent)
+    reviews.setReview(ar, reviews.reviewOf(ar).copy(comments = listOf(comment)))
+    reviews.fileContents = mapOf((readme.path to FileVersion.WorkingTree) to bytes(35))
+    presenter.test {
+      awaitItem().eventSink(WorkspaceEvent.SelectView(WorkspaceView.Diff))
+      val diff = awaitItemWhere { it.file(readme.path)?.rows?.isNotEmpty() == true }
+      assertEquals(false, diff.file(readme.path)!!.preview?.showing)
+      diff.eventSink(WorkspaceEvent.ToggleFilePreview(readme.path))
+      awaitItemWhere { it.file(readme.path)?.preview?.content is FilePreviewContentModel.Ready }
     }
   }
 
@@ -128,7 +148,6 @@ class WorkspacePreviewTest {
     reviews.fileContents = mapOf((chart.path to FileVersion.WorkingTree) to bytes(97))
     presenter.test {
       awaitItem().eventSink(WorkspaceEvent.SelectView(WorkspaceView.Diff))
-      awaitItemWhere { it.file(chart.path) != null }.eventSink(WorkspaceEvent.ToggleFilePreview(chart.path))
       val preview = awaitItemWhere { it.file(chart.path)?.preview?.content is FilePreviewContentModel.Ready }.file(chart.path)!!.preview!!
       assertNull(preview.layout)
       assertEquals(PreviewKindModel.Table, preview.kind)
@@ -136,18 +155,20 @@ class WorkspacePreviewTest {
   }
 
   @Test
-  fun `refreshing the diff reads open previews again`() = runTest {
+  fun `previews are read only in the diff view, and again when it refreshes`() = runTest {
     withSession()
     reviews.fileContents = mapOf((logo.path to FileVersion.WorkingTree) to bytes(3))
+    fun logoReads() = reviews.fileContentCalls.count { it.first == logo.path }
     presenter.test {
-      awaitItem().eventSink(WorkspaceEvent.SelectView(WorkspaceView.Diff))
-      awaitItemWhere { it.file(logo.path) != null }.eventSink(WorkspaceEvent.ToggleFilePreview(logo.path))
+      val terminal = awaitItem()
+      assertEquals(0, reviews.fileContentCalls.size, "nothing is read while the terminal shows")
+      terminal.eventSink(WorkspaceEvent.SelectView(WorkspaceView.Diff))
       val ready = awaitItemWhere { it.file(logo.path)?.preview?.content is FilePreviewContentModel.Ready }
-      yieldUntil { reviews.fileContentCalls.size == 2 }
+      yieldUntil { logoReads() == 2 }
 
       ready.eventSink(WorkspaceEvent.RefreshDiff)
-      yieldUntil { reviews.fileContentCalls.size == 4 }
-      assertEquals(listOf(FileVersion.Base, FileVersion.WorkingTree), reviews.fileContentCalls.drop(2).map { it.second }.sorted())
+      yieldUntil { logoReads() == 4 }
+      assertEquals(listOf(FileVersion.Base, FileVersion.WorkingTree), reviews.fileContentCalls.filter { it.first == logo.path }.drop(2).map { it.second }.sorted())
     }
   }
 
@@ -157,7 +178,6 @@ class WorkspacePreviewTest {
     reviews.fileContents = mapOf((logo.path to FileVersion.Base) to LoupeResult.failure(ReviewError.ReadFailed("disk on fire")))
     presenter.test {
       awaitItem().eventSink(WorkspaceEvent.SelectView(WorkspaceView.Diff))
-      awaitItemWhere { it.file(logo.path) != null }.eventSink(WorkspaceEvent.ToggleFilePreview(logo.path))
       awaitItemWhere { it.file(logo.path)?.preview?.content is FilePreviewContentModel.Failed }
     }
   }

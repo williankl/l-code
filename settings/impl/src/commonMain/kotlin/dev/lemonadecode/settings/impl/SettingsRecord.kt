@@ -12,6 +12,7 @@ internal data class SettingsRecord(
   val keepAwake: Boolean? = null,
   val subSessionLocation: String? = null,
   val sidebarExpanded: Boolean? = null,
+  val sidebarWidth: Int? = null,
 )
 
 internal fun SettingsRecord.toDomain(): AppSettings {
@@ -21,6 +22,7 @@ internal fun SettingsRecord.toDomain(): AppSettings {
     keepAwake = keepAwake ?: defaults.keepAwake,
     subSessionLocation = SubSessionLocation.entries.firstOrNull { it.name == subSessionLocation } ?: defaults.subSessionLocation,
     sidebarExpanded = sidebarExpanded ?: defaults.sidebarExpanded,
+    sidebarWidth = sidebarWidth?.takeIf { it > 0 } ?: defaults.sidebarWidth,
   )
 }
 
@@ -29,4 +31,5 @@ internal fun AppSettings.toRecord(): SettingsRecord = SettingsRecord(
   keepAwake = keepAwake,
   subSessionLocation = subSessionLocation.name,
   sidebarExpanded = sidebarExpanded,
+  sidebarWidth = sidebarWidth,
 )

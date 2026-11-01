@@ -105,6 +105,10 @@ public class WorkspacePresenter internal constructor(
             scope.launch { settingsService.update { it.copy(sidebarExpanded = !it.sidebarExpanded) } }
           }
           WorkspaceEvent.CloseDrawer -> update { it.copy(drawerOpen = false) }
+          is WorkspaceEvent.ResizeSessionsSidebar -> {
+            val width = WorkspaceModelMapper.clampSidebarWidth(event.width)
+            scope.launch { settingsService.update { it.copy(sidebarWidth = width) } }
+          }
           is WorkspaceEvent.SelectSession -> update { it.selecting(SessionId(event.sessionId)) }
           is WorkspaceEvent.ToggleSessionFold -> update {
             val id = SessionId(event.sessionId)

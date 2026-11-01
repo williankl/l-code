@@ -11,6 +11,8 @@ import androidx.compose.ui.test.DesktopComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.MouseButton
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertWidthIsEqualTo
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasScrollToIndexAction
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
@@ -28,6 +30,8 @@ import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.rightClick
 import androidx.compose.ui.test.runDesktopComposeUiTest
 import androidx.compose.ui.test.withKeyDown
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.width
 import dev.lemonadecode.platform.designsystem.LemonadeCodeTheme
 import dev.lemonadecode.workspace.impl.showcase.ShowcaseFixtures
 import dev.lemonadecode.workspace.impl.showcase.WorkspaceShowcase
@@ -35,6 +39,7 @@ import dev.lemonadecode.workspace.impl.showcase.WorkspaceShowcaseContent
 import dev.lemonadecode.workspace.ui.TerminalTranscript
 import dev.lemonadecode.workspace.ui.WorkspaceContent
 import dev.lemonadecode.workspace.uimodel.SessionMenuModel
+import dev.lemonadecode.workspace.uimodel.SessionsPanelModel
 import dev.lemonadecode.workspace.uimodel.SubSessionLocation
 import dev.lemonadecode.workspace.uimodel.ThemeOption
 import dev.lemonadecode.workspace.uimodel.WorkspaceContentModel
@@ -46,6 +51,7 @@ import java.awt.datatransfer.Transferable
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 /** The workspace UI on every design screen: each control raises the event the presenter expects. */
 @OptIn(ExperimentalTestApi::class)
@@ -97,6 +103,43 @@ class WorkspaceContentUiTest {
     expect(WorkspaceEvent.SelectView(WorkspaceView.Diff)) { onNodeWithText("Diff").performClick() }
     expect(WorkspaceEvent.ToggleSettings) { onNodeWithContentDescription("Settings").performClick() }
     expect(WorkspaceEvent.ToggleSessionsPanel(narrowLayout = false)) { onNodeWithContentDescription("Collapse sessions").performClick() }
+  }
+
+  @Test
+  fun `dragging the sidebar's edge resizes it and reports the width once let go`() = show(
+    WorkspaceShowcase.AgentFinishes,
+    edit = { model -> model.copy(sessions = model.sessions.copy(sidebarWidth = 300)) },
+  ) {
+    val sidebar = onNodeWithContentDescription("Sessions")
+    val handle = onNodeWithContentDescription("Resize sessions")
+    sidebar.assertWidthIsEqualTo(300.dp)
+
+    events.clear()
+    handle.performMouseInput {
+      moveTo(center)
+      press()
+      moveBy(Offset(40f, 0f))
+      moveBy(Offset(40f, 0f))
+    }
+    waitForIdle()
+    // The edge follows the pointer, but nothing is saved until the drag ends.
+    assertTrue(sidebar.getUnclippedBoundsInRoot().width > 300.dp)
+    assertTrue(events.none { it is WorkspaceEvent.ResizeSessionsSidebar })
+    handle.performMouseInput { release() }
+    waitForIdle()
+    val widened = events.filterIsInstance<WorkspaceEvent.ResizeSessionsSidebar>().single()
+    assertTrue(widened.width in 301..380, "width was ${widened.width}")
+
+    // Past the limit, the narrowest width is kept.
+    expect(WorkspaceEvent.ResizeSessionsSidebar(SessionsPanelModel.MinSidebarWidth)) {
+      handle.performMouseInput {
+        moveTo(center)
+        press()
+        moveBy(Offset(-1_000f, 0f))
+        release()
+      }
+    }
+    sidebar.assertWidthIsEqualTo(SessionsPanelModel.MinSidebarWidth.dp)
   }
 
   @Test

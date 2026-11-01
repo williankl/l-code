@@ -21,6 +21,7 @@
 
   <!-- Sessions -->
   <string name="sessions_title">Sessions</string>
+  <string name="sessions_resize">Resize sessions</string>
   <string name="action_new_session">New session</string>
   <string name="status_working">working</string>
   <string name="status_needs_input">needs input</string>

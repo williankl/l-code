@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -18,8 +19,10 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -58,18 +61,22 @@ import dev.lemonadecode.workspace.strings.action_dismiss
 import dev.lemonadecode.workspace.strings.action_new_terminal
 import dev.lemonadecode.workspace.strings.no_sessions_detail
 import dev.lemonadecode.workspace.strings.no_sessions_title
+import dev.lemonadecode.workspace.uimodel.SessionsPanelModel
 import dev.lemonadecode.workspace.uimodel.ThemeOption
 import dev.lemonadecode.workspace.uimodel.WorkspaceContentModel
 import dev.lemonadecode.workspace.uimodel.WorkspaceEvent
 import dev.lemonadecode.workspace.uimodel.WorkspaceModel
 import org.jetbrains.compose.resources.stringResource
+import kotlin.math.roundToInt
 
 /** Below this width the sessions sidebar turns into a drawer and toolbars wrap. */
 public val NarrowLayoutBreakpoint: Dp = 960.dp
 
-private val SidebarWidth = 232.dp
 private val RailWidth = 60.dp
 private val DrawerMaxWidth = 300.dp
+
+/** The sidebar can't be dragged so wide that the main panel gets narrower than this. */
+private val MainPanelMinWidth = 480.dp
 
 /** Draws one session's terminal. The app passes the live terminal; previews pass a transcript. */
 public typealias TerminalSlot = @Composable (sessionId: String, modifier: Modifier) -> Unit
@@ -115,6 +122,13 @@ public fun WorkspaceContent(
     val drawerWidth = min(DrawerMaxWidth, maxWidth - 16.dp)
     val panel = model.sessions
     val sessionsVisible = if (narrow) panel.drawerOpen else panel.expanded
+    val gap = LemonadeTheme.spaces.spacing200
+    val minSidebarWidth = SessionsPanelModel.MinSidebarWidth.dp
+    val maxSidebarWidth = min(SessionsPanelModel.MaxSidebarWidth.dp, maxWidth - gap * 3 - MainPanelMinWidth)
+      .coerceAtLeast(minSidebarWidth)
+    // While dragging, and after until the saved width comes back, the edge follows the pointer.
+    var draggedWidth by remember(panel.sidebarWidth) { mutableStateOf<Dp?>(null) }
+    val sidebarWidth = (draggedWidth ?: panel.sidebarWidth.dp).coerceIn(minSidebarWidth, maxSidebarWidth)
 
     Column(modifier = Modifier.fillMaxSize()) {
       TopBar(
@@ -127,22 +141,25 @@ public fun WorkspaceContent(
       )
       Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
         Row(
-          horizontalArrangement = Arrangement.spacedBy(LemonadeTheme.spaces.spacing200),
           modifier = Modifier
             .fillMaxSize()
-            .padding(
-              start = LemonadeTheme.spaces.spacing200,
-              end = LemonadeTheme.spaces.spacing200,
-              bottom = LemonadeTheme.spaces.spacing200,
-            ),
+            .padding(start = gap, end = gap, bottom = gap),
         ) {
           if (!narrow) {
             if (panel.expanded) {
               SessionsSidebar(
                 navigation = panel.navigation,
                 onEvent = onEvent,
-                modifier = Modifier.width(SidebarWidth).fillMaxHeight(),
+                modifier = Modifier.width(sidebarWidth).fillMaxHeight(),
                 menu = panel.menu,
+              )
+              SidebarResizeHandle(
+                sidebarWidth = sidebarWidth,
+                minWidth = minSidebarWidth,
+                maxWidth = maxSidebarWidth,
+                onResize = { draggedWidth = it },
+                onResizeFinished = { onEvent(WorkspaceEvent.ResizeSessionsSidebar(it.value.roundToInt())) },
+                modifier = Modifier.width(gap),
               )
             } else {
               SessionRail(
@@ -151,6 +168,7 @@ public fun WorkspaceContent(
                 modifier = Modifier.width(RailWidth).fillMaxHeight(),
                 menu = panel.menu,
               )
+              Spacer(modifier = Modifier.width(gap))
             }
           }
           MainPanel(

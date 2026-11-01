@@ -18,6 +18,7 @@ import dev.lemonadecode.workspace.strings.session_path_copied
 import dev.lemonadecode.workspace.uimodel.DiffRowModel
 import dev.lemonadecode.workspace.uimodel.SessionMenuModel
 import dev.lemonadecode.workspace.uimodel.SessionRenameModel
+import dev.lemonadecode.workspace.uimodel.SessionsPanelModel
 import dev.lemonadecode.workspace.uimodel.ThemeOption
 import dev.lemonadecode.workspace.uimodel.WorkspaceContentModel
 import dev.lemonadecode.workspace.uimodel.WorkspaceEvent
@@ -144,6 +145,22 @@ class WorkspacePresenterTest {
       val updated = awaitItemWhere { it.settings.theme == ThemeOption.Light && it.settings.keepAwake }
       assertTrue(updated.settings.keepAwake)
       assertEquals(ThemePreference.Light, settings.settings.value.theme)
+    }
+  }
+
+  @Test
+  fun `the sidebar width is saved, kept within its limits`() = runTest {
+    withSession()
+    presenter.test {
+      val model = awaitItem()
+      assertEquals(232, model.sessions.sidebarWidth)
+      model.eventSink(WorkspaceEvent.ResizeSessionsSidebar(300))
+      assertEquals(300, awaitItemWhere { it.sessions.sidebarWidth != 232 }.sessions.sidebarWidth)
+      assertEquals(300, settings.settings.value.sidebarWidth)
+
+      model.eventSink(WorkspaceEvent.ResizeSessionsSidebar(5_000))
+      awaitItemWhere { it.sessions.sidebarWidth == SessionsPanelModel.MaxSidebarWidth }
+      assertEquals(SessionsPanelModel.MaxSidebarWidth, settings.settings.value.sidebarWidth)
     }
   }
 

@@ -5,6 +5,10 @@ public sealed interface WorkspaceEvent {
   /** The sidebar on wide windows, the drawer below the narrow-layout breakpoint. */
   public data class ToggleSessionsPanel(val narrowLayout: Boolean) : WorkspaceEvent
   public data object CloseDrawer : WorkspaceEvent
+
+  /** Dragged the sidebar's edge and let go: keeps [width] (dp) as the sidebar's width. */
+  public data class ResizeSessionsSidebar(val width: Int) : WorkspaceEvent
+
   public data class SelectSession(val sessionId: String) : WorkspaceEvent
   public data class ToggleSessionFold(val sessionId: String) : WorkspaceEvent
   public data object CloseSelectedSession : WorkspaceEvent

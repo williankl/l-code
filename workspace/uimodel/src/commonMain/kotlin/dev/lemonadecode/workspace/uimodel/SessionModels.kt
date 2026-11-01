@@ -13,12 +13,20 @@ public enum class SessionStatus { Shell, Idle, Working, NeedsInput, Exited }
 @Immutable
 public data class SessionsPanelModel(
   val expanded: Boolean,
+  /** The sidebar's width in dp, between [MinSidebarWidth] and [MaxSidebarWidth]. */
+  val sidebarWidth: Int,
   val drawerOpen: Boolean,
   val navigation: SessionNavigationModel,
   val tiles: List<SessionTileModel>,
   /** The right-click menu, on the row or tile of its session; null when closed. */
   val menu: SessionMenuModel? = null,
-)
+) {
+  public companion object {
+    /** How far the sidebar can be dragged, in dp. */
+    public const val MinSidebarWidth: Int = 180
+    public const val MaxSidebarWidth: Int = 480
+  }
+}
 
 /**
  * A session's right-click menu. It names the session and where it is, so it's clear what the

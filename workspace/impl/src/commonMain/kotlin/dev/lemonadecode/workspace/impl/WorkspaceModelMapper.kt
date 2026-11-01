@@ -69,6 +69,7 @@ internal object WorkspaceModelMapper {
       ),
       sessions = SessionsPanelModel(
         expanded = input.settings.sidebarExpanded,
+        sidebarWidth = clampSidebarWidth(input.settings.sidebarWidth),
         drawerOpen = view.drawerOpen,
         navigation = SessionsMapper.navigation(sessions, selected, view.navigationStyle, view.folded, input.homeDirectory),
         tiles = SessionsMapper.tiles(sessions, selected),
@@ -112,6 +113,8 @@ internal object WorkspaceModelMapper {
       eventSink = eventSink,
     )
   }
+
+  fun clampSidebarWidth(width: Int): Int = width.coerceIn(SessionsPanelModel.MinSidebarWidth, SessionsPanelModel.MaxSidebarWidth)
 
   fun selectedSession(sessions: List<Session>, view: WorkspaceViewState): Session? = sessions.firstOrNull { it.id == view.selectedId } ?: sessions.firstOrNull()
 

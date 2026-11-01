@@ -10,4 +10,6 @@ public data class AppSettings(
   /** The location the new sub-session panel opened with last time. */
   val subSessionLocation: SubSessionLocation = SubSessionLocation.SameFolder,
   val sidebarExpanded: Boolean = true,
+  /** The sessions sidebar's width in dp, as the user last dragged it. */
+  val sidebarWidth: Int = 232,
 )

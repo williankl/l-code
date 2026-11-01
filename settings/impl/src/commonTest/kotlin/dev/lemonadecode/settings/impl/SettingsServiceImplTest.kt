@@ -16,11 +16,12 @@ class SettingsServiceImplTest {
   fun `updates are stored and read back`() = runTest {
     val store = FakePreferenceStore()
     val service = SettingsServiceImpl(store, backgroundScope)
-    service.update { it.copy(theme = ThemePreference.Light, subSessionLocation = SubSessionLocation.NewWorktree) }
+    service.update { it.copy(theme = ThemePreference.Light, subSessionLocation = SubSessionLocation.NewWorktree, sidebarWidth = 320) }
 
     val reloaded = SettingsServiceImpl(store, backgroundScope)
     val settings = reloaded.settings.first { it.theme == ThemePreference.Light }
     assertEquals(SubSessionLocation.NewWorktree, settings.subSessionLocation)
+    assertEquals(320, settings.sidebarWidth)
   }
 
   @Test
@@ -30,10 +31,12 @@ class SettingsServiceImplTest {
         "settings" to buildJsonObject {
           put("theme", JsonPrimitive("Sepia"))
           put("keepAwake", JsonPrimitive(true))
+          put("sidebarWidth", JsonPrimitive(-40))
         },
       ),
     )
     val settings = SettingsServiceImpl(store, backgroundScope).settings.first { it.keepAwake }
     assertEquals(AppSettings().theme, settings.theme)
+    assertEquals(AppSettings().sidebarWidth, settings.sidebarWidth)
   }
 }

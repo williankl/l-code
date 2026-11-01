@@ -25,12 +25,12 @@ jobs:
         if: env.HAS_TOKEN != 'true'
         run: echo "::notice::HOMEBREW_TAP_TOKEN isn't set, so the Homebrew tap wasn't updated."
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         if: env.HAS_TOKEN == 'true'
         with:
           path: source
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         if: env.HAS_TOKEN == 'true'
         with:
           repository: ${{ github.repository_owner }}/homebrew-tap
@@ -44,7 +44,7 @@ jobs:
           gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern '*.dmg' --dir dmg
           mkdir -p tap/Casks
           source/packaging/homebrew/write-cask.sh "$version" "$GITHUB_REPOSITORY" \
-            "dmg/Lemonade-Code-$version-arm64.dmg" "dmg/Lemonade-Code-$version-x64.dmg" > tap/Casks/lemonade-code.rb
+            "dmg/Lemonade-Code-$version-macos-arm64.dmg" "dmg/Lemonade-Code-$version-macos-x64.dmg" > tap/Casks/lemonade-code.rb
           cd tap
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

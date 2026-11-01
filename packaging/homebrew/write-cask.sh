@@ -24,7 +24,7 @@ cask "lemonade-code" do
   sha256 arm:   "$arm",
          intel: "$intel"
 
-  url "https://github.com/$repo/releases/download/v#{version}/Lemonade-Code-#{version}-#{arch}.dmg"
+  url "https://github.com/$repo/releases/download/v#{version}/Lemonade-Code-#{version}-macos-#{arch}.dmg"
   name "Lemonade Code"
   desc "Terminal IDE for reviewing work"
   homepage "https://github.com/$repo"

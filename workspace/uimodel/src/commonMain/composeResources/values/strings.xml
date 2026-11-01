@@ -19,6 +19,22 @@
   </plurals>
   <string name="keep_awake_idle">On · no sessions working, sleep allowed</string>
 
+  <!-- Update -->
+  <string name="update_action">Update</string>
+  <string name="update_action_busy">Updating…</string>
+  <string name="update_title">Update available</string>
+  <string name="update_detail">Lemonade Code %1$s is ready to install. You have %2$s.</string>
+  <string name="update_restart_note">Lemonade Code restarts to finish. Your sessions come back, but programs running in them stop.</string>
+  <string name="update_release_notes">What’s new</string>
+  <string name="update_install">Update and restart</string>
+  <string name="update_retry">Try again</string>
+  <string name="update_downloading">Downloading… %1$s</string>
+  <string name="update_downloading_unknown">Downloading…</string>
+  <string name="update_restarting">Restarting…</string>
+  <string name="update_failed_download">Couldn’t download the update. Check your connection and try again.</string>
+  <string name="update_failed_checksum">The download didn’t match the release’s checksum, so it was thrown away. Try again.</string>
+  <string name="update_failed_install">Couldn’t install the update here. Download it from the release page instead.</string>
+
   <!-- Sessions -->
   <string name="sessions_title">Sessions</string>
   <string name="sessions_resize">Resize sessions</string>

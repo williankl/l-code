@@ -1,12 +1,13 @@
 name: Release
 
-# Builds Lemonade Code for macOS and Linux.
+# Builds Lemonade Code for macOS, Windows and Linux.
 #
-# A version tag (v1.2.3) drafts a GitHub release with the builds attached. Nothing reaches users
-# until you publish that draft, which runs publish.yml.
+# A version tag (v1.2.3) drafts a GitHub release with every build attached and a download table per
+# platform. Nothing reaches users until you publish that draft, which runs publish.yml.
 #
 # Running this workflow by hand is a dry run: it builds everything and keeps the files as workflow
-# artifacts, without touching releases or stores.
+# artifacts, listed in the run's summary, without touching releases or stores. Run it on main now
+# and then: builds on main save Gradle's caches, which tag builds read.
 
 on:
   push:
@@ -31,151 +32,39 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github
       - id: version
-        env:
-          INPUT_VERSION: ${{ inputs.version }}
-        run: |
-          if [ "$GITHUB_REF_TYPE" = tag ]; then version="${GITHUB_REF_NAME#v}"; else version="$INPUT_VERSION"; fi
-          # DMGs need MAJOR.MINOR.PATCH with MAJOR of at least 1.
-          if ! echo "$version" | grep -Eq '^[1-9][0-9]*\.[0-9]+\.[0-9]+$'; then
-            echo "::error::Version '$version' isn't MAJOR.MINOR.PATCH with MAJOR of at least 1."
-            exit 1
-          fi
-          echo "version=$version" >> "$GITHUB_OUTPUT"
+        uses: ./.github/actions/version
+        with:
+          version: ${{ inputs.version }}
 
   macos:
-    name: macOS (${{ matrix.arch }})
+    name: macOS
     needs: version
-    strategy:
-      matrix:
-        include:
-          - runner: macos-15
-            arch: arm64
-          - runner: macos-15-intel
-            arch: x64
-    runs-on: ${{ matrix.runner }}
-    env:
-      VERSION: ${{ needs.version.outputs.version }}
-      SIGN: ${{ secrets.MACOS_CERTIFICATE != '' }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 21
-      - uses: gradle/actions/setup-gradle@v4
+    uses: ./.github/workflows/build-macos.yml
+    with:
+      version: ${{ needs.version.outputs.version }}
+    secrets: inherit
 
-      - name: Add the signing certificate to a temporary keychain
-        if: env.SIGN == 'true'
-        env:
-          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
-          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
-        run: |
-          keychain="$RUNNER_TEMP/signing.keychain-db"
-          password="$(uuidgen)"
-          echo "$MACOS_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/certificate.p12"
-          security create-keychain -p "$password" "$keychain"
-          security set-keychain-settings -lut 21600 "$keychain"
-          security unlock-keychain -p "$password" "$keychain"
-          security import "$RUNNER_TEMP/certificate.p12" -P "$MACOS_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$keychain"
-          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$password" "$keychain"
-          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
-          rm "$RUNNER_TEMP/certificate.p12"
-          echo "KEYCHAIN=$keychain" >> "$GITHUB_ENV"
-
-      - name: Build the DMG
-        env:
-          MACOS_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: |
-          tasks=(:apps:desktop:packageDmg)
-          props=("-PappVersion=$VERSION")
-          if [ "$SIGN" = true ]; then
-            # Download the dependencies first, so pty4j's helper can be signed before packaging.
-            ./gradlew :platform:terminal:compileKotlinDesktop
-            packaging/macos/sign-pty4j-helper.sh "$MACOS_SIGNING_IDENTITY" "$KEYCHAIN"
-            tasks+=(:apps:desktop:notarizeDmg)
-            props+=(
-              -Pcompose.desktop.mac.sign=true
-              "-Pcompose.desktop.mac.signing.identity=$MACOS_SIGNING_IDENTITY"
-              "-Pcompose.desktop.mac.signing.keychain=$KEYCHAIN"
-              "-Pcompose.desktop.mac.notarization.appleID=$APPLE_ID"
-              "-Pcompose.desktop.mac.notarization.password=$APPLE_APP_PASSWORD"
-              "-Pcompose.desktop.mac.notarization.teamID=$APPLE_TEAM_ID"
-            )
-          else
-            echo "::warning::MACOS_CERTIFICATE isn't set, so this DMG is unsigned: macOS blocks it until the user clicks Open Anyway."
-          fi
-          ./gradlew "${tasks[@]}" "${props[@]}"
-          mkdir -p dist
-          cp "apps/desktop/build/compose/binaries/main/dmg/Lemonade Code-$VERSION.dmg" "dist/Lemonade-Code-$VERSION-${{ matrix.arch }}.dmg"
-
-      - name: Check the DMG passes Gatekeeper
-        if: env.SIGN == 'true'
-        run: |
-          dmg="dist/Lemonade-Code-$VERSION-${{ matrix.arch }}.dmg"
-          xcrun stapler validate "$dmg"
-          spctl --assess --type open --context context:primary-signature --verbose "$dmg"
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: macos-${{ matrix.arch }}
-          path: dist/*
-          if-no-files-found: error
-
-      - name: Remove the temporary keychain
-        if: always() && env.KEYCHAIN != ''
-        run: security delete-keychain "$KEYCHAIN"
+  windows:
+    name: Windows
+    needs: version
+    uses: ./.github/workflows/build-windows.yml
+    with:
+      version: ${{ needs.version.outputs.version }}
 
   linux:
-    name: Linux (amd64)
+    name: Linux
     needs: version
-    runs-on: ubuntu-24.04
-    env:
-      VERSION: ${{ needs.version.outputs.version }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 21
-      - uses: gradle/actions/setup-gradle@v4
-
-      - name: Build the .deb and the app folder
-        run: |
-          # jpackage needs fakeroot to build a .deb.
-          sudo apt-get update -q && sudo apt-get install -yq fakeroot
-          ./gradlew :apps:desktop:packageDeb :apps:desktop:createDistributable "-PappVersion=$VERSION"
-
-      - name: Stage the app for the snap
-        run: |
-          rm -rf build/snap
-          mkdir -p build/snap
-          cp -a "apps/desktop/build/compose/binaries/main/app/Lemonade Code" build/snap/app
-          echo "$VERSION" > build/snap/version
-
-      - name: Build the snap
-        id: snap
-        uses: snapcore/action-build@v1
-
-      - name: Collect the files
-        run: |
-          mkdir -p dist
-          cp apps/desktop/build/compose/binaries/main/deb/*.deb "dist/lemonade-code_${VERSION}_amd64.deb"
-          cp "${{ steps.snap.outputs.snap }}" "dist/lemonade-code_${VERSION}_amd64.snap"
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: linux-amd64
-          path: dist/*
-          if-no-files-found: error
+    uses: ./.github/workflows/build-linux.yml
+    with:
+      version: ${{ needs.version.outputs.version }}
 
   release:
-    name: Draft the GitHub release
-    if: github.ref_type == 'tag' && github.repository_owner == 'williankl'
-    needs: [version, macos, linux]
+    name: ${{ github.ref_type == 'tag' && 'Draft the GitHub release' || 'Summary' }}
+    needs: [version, macos, windows, linux]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -183,23 +72,45 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       TAG: ${{ github.ref_name }}
       VERSION: ${{ needs.version.outputs.version }}
+      DRAFT: ${{ github.ref_type == 'tag' && github.repository_owner == 'williankl' }}
+      HOMEBREW: ${{ secrets.HOMEBREW_TAP_TOKEN != '' }}
+      SNAP_STORE: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS != '' }}
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github
+
+      - uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true
 
+      - name: Write the checksums and the notes
+        run: |
+          (cd dist && sha256sum -- * > SHA256SUMS)
+          links=""
+          if [ "$DRAFT" = true ]; then links="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/download/$TAG"; fi
+          .github/scripts/release-notes.sh "$VERSION" dist "$links" > "$RUNNER_TEMP/notes.md"
+          cat "$RUNNER_TEMP/notes.md" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Draft the release
+        if: env.DRAFT == 'true'
         working-directory: dist
         run: |
-          sha256sum -- * > SHA256SUMS
-          ls -l
           draft=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft 2>/dev/null || echo missing)
           case "$draft" in
-            missing) gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --draft --verify-tag --title "Lemonade Code $VERSION" --generate-notes -- * ;;
-            true) gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber -- * ;;
+            missing)
+              # GitHub adds the generated notes (the changes since the last release) under ours.
+              gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --draft --verify-tag --title "Lemonade Code $VERSION" \
+                --notes-file "$RUNNER_TEMP/notes.md" --generate-notes -- *
+              ;;
+            true)
+              # A re-run: replace the files, keep the notes in case they were edited.
+              gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber -- *
+              ;;
             *)
               echo "::error::Release $TAG is already published; its files were left alone."
               exit 1
               ;;
           esac
+          echo "Draft: $(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json url --jq .url)" >> "$GITHUB_STEP_SUMMARY"

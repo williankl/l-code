@@ -1,0 +1,36 @@
+name: Version
+description: >-
+  Picks the version to stamp on the builds (the one given, else the v1.2.3 tag being built), checks
+  every installer format accepts it, and exports it as VERSION for the rest of the job.
+
+inputs:
+  version:
+    description: The version, e.g. 1.2.3. Leave empty to take it from the tag.
+    required: false
+    default: ''
+
+outputs:
+  version:
+    description: The checked version.
+    value: ${{ steps.check.outputs.version }}
+
+runs:
+  using: composite
+  steps:
+    - id: check
+      shell: bash
+      env:
+        INPUT_VERSION: ${{ inputs.version }}
+      run: |
+        version="$INPUT_VERSION"
+        if [ -z "$version" ] && [ "$GITHUB_REF_TYPE" = tag ]; then version="${GITHUB_REF_NAME#v}"; fi
+
+        # DMGs need MAJOR of at least 1; MSIs need MAJOR and MINOR up to 255 and PATCH up to 65535.
+        if [[ ! "$version" =~ ^([1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] \
+          || (( BASH_REMATCH[1] > 255 || BASH_REMATCH[2] > 255 || BASH_REMATCH[3] > 65535 )); then
+          echo "::error::Version '$version' isn't MAJOR.MINOR.PATCH with MAJOR from 1 to 255, MINOR up to 255 and PATCH up to 65535."
+          exit 1
+        fi
+
+        echo "version=$version" >> "$GITHUB_OUTPUT"
+        echo "VERSION=$version" >> "$GITHUB_ENV"

@@ -28,6 +28,7 @@ import dev.lemonadecode.platform.process.HomeDirectory
 import dev.lemonadecode.review.fake.FakeReviewService
 import dev.lemonadecode.sessions.fake.FakeSessionService
 import dev.lemonadecode.settings.fake.FakeSettingsService
+import dev.lemonadecode.updates.fake.FakeUpdateService
 import dev.lemonadecode.workspace.impl.WorkspacePresenter
 import dev.lemonadecode.workspace.impl.showcase.ShowcaseFixtures
 import dev.lemonadecode.workspace.ui.WorkspaceContent
@@ -46,6 +47,7 @@ class CommentTypingUiTest {
     homeDirectory = object : HomeDirectory {
       override val path: String = ShowcaseFixtures.Home
     },
+    updateService = FakeUpdateService(),
   )
   private val ar = SessionId("ar")
 

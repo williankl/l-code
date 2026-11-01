@@ -1,19 +1,52 @@
 # Releasing
 
-How a version gets from this repo to users: GitHub Releases, Homebrew (macOS) and the Snap Store,
-which Ubuntu's App Center installs from.
+How a version gets from this repo to users: GitHub Releases (macOS, Windows, Linux), Homebrew
+(macOS) and the Snap Store, which Ubuntu's App Center installs from. Installs from a release file
+then update themselves.
 
 ## Cutting a release
 
-1. Tag and push: `git tag v1.2.0 && git push origin v1.2.0`. Versions are `MAJOR.MINOR.PATCH`
-   with `MAJOR` of at least 1 (a DMG rule).
-2. The **Release** workflow builds the Mac DMGs (Apple Silicon and Intel), the `.deb` and the snap,
-   and drafts a GitHub release with them and a `SHA256SUMS` file. Nothing is public yet.
+1. Tag and push: `git tag v1.2.0 && git push origin v1.2.0`. Versions are `MAJOR.MINOR.PATCH`,
+   with `MAJOR` from 1 to 255, `MINOR` up to 255 and `PATCH` up to 65535 (DMG and MSI rules).
+2. The **Release** workflow builds every platform at once and drafts a GitHub release with the
+   files, a `SHA256SUMS` file and notes that start with a download table, one row per platform,
+   followed by the changes since the last release. The run's summary shows the same table.
 3. Check the draft: download a build, try it, edit the notes.
-4. Publish the draft. The **Publish** workflow then updates the Homebrew cask and uploads the snap.
+4. Publish the draft. The **Publish** workflow then updates the Homebrew cask and uploads the snap,
+   and installs from a release file offer the update within a few hours (see
+   [Self-update](#self-update)).
+
+| File | Platform |
+|---|---|
+| `Lemonade-Code-1.2.0-macos-arm64.dmg` | macOS, Apple Silicon |
+| `Lemonade-Code-1.2.0-macos-x64.dmg` | macOS, Intel |
+| `Lemonade-Code-1.2.0-windows-x64.msi` | Windows, installs for the current user |
+| `lemonade-code_1.2.0_amd64.deb` | Ubuntu, Debian |
+| `lemonade-code-1.2.0-linux-x64.tar.gz` | Any Linux, unpacked anywhere |
+| `lemonade-code_1.2.0_amd64.snap` | The Snap Store (also attached) |
 
 A dry run: Actions → Release → Run workflow. It builds everything and keeps the files as workflow
-artifacts; no release, no stores.
+artifacts, listed in the run's summary; no release, no stores. To build one platform, run
+**Build for macOS**, **Build for Windows** or **Build for Linux** the same way.
+
+### The workflows
+
+| File | What it does |
+|---|---|
+| `.github/workflows/release.yml` | On a tag: checks the version, calls the three builds, drafts the release. |
+| `.github/workflows/build-macos.yml` | The two DMGs, signed and notarized once the secrets are set. |
+| `.github/workflows/build-windows.yml` | Checks the app starts a terminal on Windows, then builds the MSI. |
+| `.github/workflows/build-linux.yml` | The .deb, the tar.gz and the snap. |
+| `.github/workflows/publish.yml` | On publishing: the Homebrew cask and the Snap Store. |
+| `.github/actions/version` | The version from the tag (or the input), checked once for every format. |
+| `.github/actions/setup-gradle` | Java 21 and Gradle with its caches. |
+| `.github/actions/upload-build` | Keeps `dist/` as an artifact and lists it, with checksums, in the summary. |
+| `.github/scripts/release-notes.sh` | The download table and install steps at the top of the notes. |
+
+**Caches.** Gradle's dependencies and build cache are restored in every job, and Windows keeps the
+WiX toolset Compose downloads. GitHub only lets a tag read caches saved on `main`, so runs on
+`main` save them and tag builds read them: run the dry run on `main` now and then (after
+dependency updates, say) to keep releases fast.
 
 ## One-time setup
 
@@ -118,6 +151,38 @@ snapcraft pack
 sudo snap install --dangerous --classic lemonade-code_1.2.0_amd64.snap
 ```
 
+### Windows
+
+Nothing to set up. The MSI installs for the current user (no admin rights), into
+`%LOCALAPPDATA%\Lemonade Code`, with a Start menu entry. Its upgrade code is fixed in
+`apps/desktop/build.gradle.kts`, so each version replaces the last; never change it.
+
+The MSI isn't signed yet, so Windows SmartScreen warns on first run (More info → Run anyway).
+Signing needs a code-signing certificate and a `signtool` step in `build-windows.yml`.
+
+## Self-update
+
+Installed from the DMG, the MSI, the .deb or the tar.gz, Lemonade Code looks for a newer release
+10 seconds after launch and every 6 hours. A release counts once it is published (not a draft, not
+a pre-release), has a higher version, and carries both the file for that install and
+`SHA256SUMS`. An **Update** button then shows next to Settings; its panel downloads the file,
+checks it against `SHA256SUMS`, and the app quits and comes back on the new version, sessions
+restored.
+
+| Installed from | How it updates |
+|---|---|
+| DMG | The new bundle is copied out of the DMG next to the old one, then swapped in. |
+| MSI | `msiexec` installs the new MSI over the old one. |
+| .deb | `pkexec dpkg -i`, which asks for the user's password. |
+| tar.gz | The new folder is unpacked next to the old one, then swapped in. |
+| Homebrew, Snap Store | Not by the app: `brew upgrade` and snapd do it. |
+
+The app reads releases from GitHub's API without signing in, so the repository must be public.
+`updates/impl` holds it all: `InstallationDetector` tells the install apart, `InstallKind.assetName`
+names the file each install downloads (keep it in step with the build workflows), and the helper
+scripts that swap the files after the app quits are in its resources. A development build
+(`./gradlew run`) never checks; one built with `createDistributable` checks like a tar.gz.
+
 ## Not covered yet
 
-Windows (the MSI format is configured but not built) and Linux on ARM.
+Windows code signing, and Linux and Windows on ARM.

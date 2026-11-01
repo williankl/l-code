@@ -20,4 +20,5 @@ internal interface AppGraph : WorkspaceGraph {
   val sessionTerminals: SessionTerminals
   val applicationScope: CoroutineScope
   val sessionService: SessionService
+  val appExit: DesktopAppExit
 }

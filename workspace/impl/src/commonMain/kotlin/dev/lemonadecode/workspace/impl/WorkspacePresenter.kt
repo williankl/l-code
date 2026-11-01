@@ -31,6 +31,7 @@ import dev.lemonadecode.platform.process.HomeDirectory
 import dev.lemonadecode.review.api.ReviewService
 import dev.lemonadecode.sessions.api.SessionService
 import dev.lemonadecode.settings.api.SettingsService
+import dev.lemonadecode.updates.api.UpdateService
 import dev.lemonadecode.workspace.impl.WorkspaceModelMapper.toDomain
 import dev.lemonadecode.workspace.impl.WorkspaceModelMapper.toPreference
 import dev.lemonadecode.workspace.strings.Res
@@ -56,11 +57,13 @@ public class WorkspacePresenter internal constructor(
   private val reviewService: ReviewService,
   private val settingsService: SettingsService,
   private val homeDirectory: HomeDirectory,
+  private val updateService: UpdateService,
 ) : LemonadeCodePresenter<WorkspaceModel>() {
   @Composable
   override fun present(): WorkspaceModel {
     val sessions by sessionService.sessions.collectAsState()
     val settings by settingsService.settings.collectAsState()
+    val updateState by updateService.state.collectAsState()
     var view by remember { mutableStateOf(WorkspaceViewState()) }
     val scope = rememberCoroutineScope()
     val toastTimer = remember { ToastTimer() }
@@ -167,6 +170,11 @@ public class WorkspacePresenter internal constructor(
           WorkspaceEvent.DismissSettings -> update { it.copy(settingsOpen = false) }
           is WorkspaceEvent.SetTheme -> scope.launch { settingsService.update { it.copy(theme = event.theme.toPreference()) } }
           is WorkspaceEvent.SetKeepAwake -> scope.launch { settingsService.update { it.copy(keepAwake = event.enabled) } }
+
+          WorkspaceEvent.ToggleUpdate -> update { if (it.updateOpen) it.copy(updateOpen = false) else it.closingPopovers().copy(updateOpen = true) }
+          WorkspaceEvent.DismissUpdate -> update { it.copy(updateOpen = false) }
+          // The panel stays open to show the download's progress.
+          WorkspaceEvent.InstallUpdate -> updateService.install()
 
           WorkspaceEvent.OpenParentSession -> current?.parentId?.let { parent -> update { it.selecting(parent) } }
           WorkspaceEvent.ToggleNewSubSessionMenu -> update {
@@ -320,6 +328,7 @@ public class WorkspacePresenter internal constructor(
       pendingMessage = if (view.previewOpen) selectedId?.let(reviewService::pendingMessage) else null,
       homeDirectory = homeDirectory.path,
       previews = previewLoads,
+      update = updateState,
     )
     return WorkspaceModelMapper.map(input, eventSink)
   }
@@ -392,7 +401,7 @@ private fun WorkspaceViewState.selecting(id: SessionId): WorkspaceViewState = co
   basePickerOpen = false,
 )
 
-private fun WorkspaceViewState.closingPopovers(): WorkspaceViewState = copy(settingsOpen = false, subSessionMenu = null, sessionMenu = null, basePickerOpen = false)
+private fun WorkspaceViewState.closingPopovers(): WorkspaceViewState = copy(settingsOpen = false, updateOpen = false, subSessionMenu = null, sessionMenu = null, basePickerOpen = false)
 
 /** How long a toast stays up, as in the design. */
 internal const val ToastMillis: Long = 2_200

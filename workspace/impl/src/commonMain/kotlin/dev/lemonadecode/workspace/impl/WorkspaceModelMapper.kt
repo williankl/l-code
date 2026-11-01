@@ -8,6 +8,9 @@ import dev.lemonadecode.domain.session.SubSessionLocation
 import dev.lemonadecode.domain.session.SubSessionPlan
 import dev.lemonadecode.domain.settings.AppSettings
 import dev.lemonadecode.domain.settings.ThemePreference
+import dev.lemonadecode.domain.update.UpdateFailure
+import dev.lemonadecode.domain.update.UpdateProgress
+import dev.lemonadecode.domain.update.UpdateState
 import dev.lemonadecode.platform.localization.asLemonadeCodeString
 import dev.lemonadecode.platform.process.abbreviateHome
 import dev.lemonadecode.workspace.impl.SessionsMapper.toModel
@@ -21,12 +24,17 @@ import dev.lemonadecode.workspace.strings.keep_awake_tag
 import dev.lemonadecode.workspace.strings.sub_help_no_repo
 import dev.lemonadecode.workspace.strings.sub_help_same
 import dev.lemonadecode.workspace.strings.sub_help_worktree
+import dev.lemonadecode.workspace.strings.update_failed_checksum
+import dev.lemonadecode.workspace.strings.update_failed_download
+import dev.lemonadecode.workspace.strings.update_failed_install
 import dev.lemonadecode.workspace.uimodel.KeepAwakeStatusModel
 import dev.lemonadecode.workspace.uimodel.NewSubSessionModel
 import dev.lemonadecode.workspace.uimodel.SessionsPanelModel
 import dev.lemonadecode.workspace.uimodel.SettingsModel
 import dev.lemonadecode.workspace.uimodel.ThemeOption
 import dev.lemonadecode.workspace.uimodel.TopBarModel
+import dev.lemonadecode.workspace.uimodel.UpdateModel
+import dev.lemonadecode.workspace.uimodel.UpdateStatusModel
 import dev.lemonadecode.workspace.uimodel.ViewSwitcherModel
 import dev.lemonadecode.workspace.uimodel.WorkspaceContentModel
 import dev.lemonadecode.workspace.uimodel.WorkspaceEvent
@@ -49,6 +57,7 @@ internal data class WorkspaceInput(
   val previews: Map<String, PreviewLoad> = emptyMap(),
   /** The worktree a sub-session started from the open session menu would get. */
   val menuWorktreePlan: SubSessionPlan? = null,
+  val update: UpdateState = UpdateState.None,
 )
 
 /** Turns domain state and the workspace's UI state into the immutable Model the UI draws. */
@@ -66,6 +75,7 @@ internal object WorkspaceModelMapper {
         path = selected?.workingDirectory?.let { abbreviateHome(it, input.homeDirectory) },
         keepAwakeLabel = if (input.settings.keepAwake && working > 0) Res.string.keep_awake_tag.asLemonadeCodeString(working) else null,
         anySessionNeedsInput = sessions.any { it.status == SessionStatus.NeedsInput },
+        update = update(input.update, view.updateOpen),
       ),
       sessions = SessionsPanelModel(
         expanded = input.settings.sidebarExpanded,
@@ -111,6 +121,28 @@ internal object WorkspaceModelMapper {
       error = view.error,
       toast = view.toast,
       eventSink = eventSink,
+    )
+  }
+
+  fun update(state: UpdateState, open: Boolean): UpdateModel? {
+    val available = state as? UpdateState.Available ?: return null
+    return UpdateModel(
+      version = available.release.version.toString(),
+      currentVersion = available.current.toString(),
+      releaseUrl = available.release.pageUrl,
+      open = open,
+      status = when (val progress = available.progress) {
+        UpdateProgress.Ready -> UpdateStatusModel.Ready
+        is UpdateProgress.Downloading -> UpdateStatusModel.Downloading(progress.fraction?.let { (it * 100).toInt().coerceIn(0, 100) })
+        UpdateProgress.Restarting -> UpdateStatusModel.Restarting
+        is UpdateProgress.Failed -> UpdateStatusModel.Failed(
+          when (progress.reason) {
+            UpdateFailure.Download -> Res.string.update_failed_download
+            UpdateFailure.Checksum -> Res.string.update_failed_checksum
+            UpdateFailure.Install -> Res.string.update_failed_install
+          }.asLemonadeCodeString(),
+        )
+      },
     )
   }
 

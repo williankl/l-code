@@ -1,0 +1,63 @@
+name: Build for Linux
+
+# A .deb, a snap and a portable tar.gz for x64. release.yml calls this for every release; run it by
+# hand to build only the Linux files.
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        type: string
+        required: true
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to stamp on the build
+        required: true
+        default: 1.0.0
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    name: x64
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/version
+        with:
+          version: ${{ inputs.version }}
+      - uses: ./.github/actions/setup-gradle
+
+      - name: Build the .deb and the app folder
+        run: |
+          # jpackage needs fakeroot to build a .deb.
+          command -v fakeroot >/dev/null || { sudo apt-get update -q && sudo apt-get install -yq fakeroot; }
+          ./gradlew :apps:desktop:packageDeb :apps:desktop:createDistributable "-PappVersion=$VERSION"
+
+      - name: Pack the portable app folder
+        run: |
+          mkdir -p dist
+          # Unpacks to lemonade-code/, with the launcher at lemonade-code/bin/Lemonade Code.
+          tar -C apps/desktop/build/compose/binaries/main/app --transform 's,^Lemonade Code,lemonade-code,' \
+            -czf "dist/lemonade-code-$VERSION-linux-x64.tar.gz" "Lemonade Code"
+          cp apps/desktop/build/compose/binaries/main/deb/*.deb "dist/lemonade-code_${VERSION}_amd64.deb"
+
+      - name: Stage the app for the snap
+        run: |
+          rm -rf build/snap
+          mkdir -p build/snap
+          cp -a "apps/desktop/build/compose/binaries/main/app/Lemonade Code" build/snap/app
+          echo "$VERSION" > build/snap/version
+
+      - name: Build the snap
+        id: snap
+        uses: snapcore/action-build@v1
+
+      - name: Add the snap
+        run: cp "${{ steps.snap.outputs.snap }}" "dist/lemonade-code_${VERSION}_amd64.snap"
+
+      - uses: ./.github/actions/upload-build
+        with:
+          name: linux-x64

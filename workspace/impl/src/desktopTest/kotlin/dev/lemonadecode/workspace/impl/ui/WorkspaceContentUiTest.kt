@@ -33,15 +33,19 @@ import androidx.compose.ui.test.withKeyDown
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.width
 import dev.lemonadecode.platform.designsystem.LemonadeCodeTheme
+import dev.lemonadecode.platform.localization.asLemonadeCodeString
 import dev.lemonadecode.workspace.impl.showcase.ShowcaseFixtures
 import dev.lemonadecode.workspace.impl.showcase.WorkspaceShowcase
 import dev.lemonadecode.workspace.impl.showcase.WorkspaceShowcaseContent
+import dev.lemonadecode.workspace.strings.Res
+import dev.lemonadecode.workspace.strings.update_failed_download
 import dev.lemonadecode.workspace.ui.TerminalTranscript
 import dev.lemonadecode.workspace.ui.WorkspaceContent
 import dev.lemonadecode.workspace.uimodel.SessionMenuModel
 import dev.lemonadecode.workspace.uimodel.SessionsPanelModel
 import dev.lemonadecode.workspace.uimodel.SubSessionLocation
 import dev.lemonadecode.workspace.uimodel.ThemeOption
+import dev.lemonadecode.workspace.uimodel.UpdateStatusModel
 import dev.lemonadecode.workspace.uimodel.WorkspaceContentModel
 import dev.lemonadecode.workspace.uimodel.WorkspaceEvent
 import dev.lemonadecode.workspace.uimodel.WorkspaceModel
@@ -219,6 +223,41 @@ class WorkspaceContentUiTest {
     onNodeWithText("Appearance").assertExists()
     expect(WorkspaceEvent.SetTheme(ThemeOption.Light)) { onNodeWithText("Light").performClick() }
     expect(WorkspaceEvent.SetKeepAwake(false)) { onNode(isToggleable()).performClick() }
+  }
+
+  @Test
+  fun `the Update button opens its panel`() = show(
+    WorkspaceShowcase.UpdateAvailable,
+    edit = { model -> model.copy(topBar = model.topBar.copy(update = model.topBar.update?.copy(open = false, status = UpdateStatusModel.Ready))) },
+  ) {
+    expect(WorkspaceEvent.ToggleUpdate) { onNodeWithText("Update").performClick() }
+  }
+
+  @Test
+  fun `the update panel installs the new version`() = show(
+    WorkspaceShowcase.UpdateAvailable,
+    edit = { model -> model.copy(topBar = model.topBar.copy(update = model.topBar.update?.copy(status = UpdateStatusModel.Ready))) },
+  ) {
+    onNodeWithText("Lemonade Code 1.3.0 is ready to install. You have 1.2.0.").assertExists()
+    expect(WorkspaceEvent.InstallUpdate) { onNodeWithText("Update and restart").performClick() }
+  }
+
+  @Test
+  fun `while the update downloads, it can't be started twice`() = show(WorkspaceShowcase.UpdateAvailable) {
+    onNodeWithText("Downloading… 42%").assertExists()
+    onNodeWithText("Update and restart").assertIsNotEnabled()
+  }
+
+  @Test
+  fun `a failed update says why and offers to try again`() = show(
+    WorkspaceShowcase.UpdateAvailable,
+    edit = { model ->
+      val failed = UpdateStatusModel.Failed(Res.string.update_failed_download.asLemonadeCodeString())
+      model.copy(topBar = model.topBar.copy(update = model.topBar.update?.copy(status = failed)))
+    },
+  ) {
+    onNodeWithText("Couldn’t download the update. Check your connection and try again.").assertExists()
+    expect(WorkspaceEvent.InstallUpdate) { onNodeWithText("Try again").performClick() }
   }
 
   @Test

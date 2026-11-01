@@ -1,5 +1,8 @@
 package dev.lemonadecode.app
 
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.painter.BitmapPainter
@@ -37,14 +40,19 @@ public fun main(args: Array<String>) {
 
   nameLinuxWindowClass()
   application {
+    fun quit() {
+      runBlocking { graph.sessionService.shutdown() }
+      exitApplication()
+    }
+    // The updater quits so its helper can put the new version in place.
+    val exitRequested by graph.appExit.requested.collectAsState()
+    LaunchedEffect(exitRequested) { if (exitRequested) quit() }
+
     Window(
       title = "Lemonade Code",
       icon = remember { appIcon() },
       state = rememberWindowState(size = DpSize(1440.dp, 900.dp), position = WindowPosition(Alignment.Center)),
-      onCloseRequest = {
-        runBlocking { graph.sessionService.shutdown() }
-        exitApplication()
-      },
+      onCloseRequest = ::quit,
     ) {
       graph.workspaceScreen.Content(
         onBackground = { color ->

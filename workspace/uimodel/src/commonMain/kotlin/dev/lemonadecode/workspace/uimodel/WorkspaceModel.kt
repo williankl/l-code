@@ -32,6 +32,8 @@ public data class TopBarModel(
   val keepAwakeLabel: LemonadeCodeString?,
   /** Drives the info dot on the sessions toggle when the drawer is closed. */
   val anySessionNeedsInput: Boolean,
+  /** The Update button next to Settings; null while there's no update to install. */
+  val update: UpdateModel? = null,
 )
 
 public enum class WorkspaceView { Terminal, Diff }

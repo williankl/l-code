@@ -1,0 +1,56 @@
+name: Build for Windows
+
+# An MSI for x64 that installs for the current user (no admin rights), so the app can update itself.
+# release.yml calls this for every release; run it by hand to build only the Windows file.
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        type: string
+        required: true
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to stamp on the build
+        required: true
+        default: 1.0.0
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  msi:
+    name: x64
+    # windows-2022 has the .NET Framework 3.5 that WiX 3, which jpackage builds MSIs with, runs on.
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/version
+        with:
+          version: ${{ inputs.version }}
+      - uses: ./.github/actions/setup-gradle
+
+      # Compose downloads WiX into the Gradle home and skips it when it's already there.
+      - name: Restore WiX
+        uses: actions/cache@v6
+        with:
+          path: ~/.gradle/wix311.zip
+          key: wix311
+
+      - name: Check the app starts a terminal
+        run: ./gradlew :apps:desktop:desktopTest --tests 'dev.lemonadecode.app.AppGraphSmokeTest'
+
+      - name: Build the MSI
+        run: |
+          ./gradlew :apps:desktop:packageMsi "-PappVersion=$VERSION"
+          mkdir -p dist
+          cp apps/desktop/build/compose/binaries/main/msi/*.msi "dist/Lemonade-Code-$VERSION-windows-x64.msi"
+
+      - uses: ./.github/actions/upload-build
+        with:
+          name: windows-x64

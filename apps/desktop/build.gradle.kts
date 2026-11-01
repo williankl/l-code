@@ -11,6 +11,7 @@ kotlin {
       implementation(projects.sessions.impl)
       implementation(projects.review.impl)
       implementation(projects.settings.impl)
+      implementation(projects.updates.impl)
       implementation(projects.data.git.impl)
       implementation(projects.platform.architectureCore)
       implementation(projects.platform.preferencesCore)
@@ -59,7 +60,12 @@ compose.desktop {
       windows {
         iconFile.set(project.file("icons/lemonade-code.ico"))
         shortcut = true
+        menu = true
         menuGroup = "Lemonade Code"
+        // For the current user only, so installing a newer version (the app updating itself) needs no admin rights.
+        perUserInstall = true
+        // Ties every version's MSI to the same install, so a newer one replaces the older. Never change it.
+        upgradeUuid = "157e89ef-e60c-4b37-9f08-bb011f0521a0"
       }
     }
   }

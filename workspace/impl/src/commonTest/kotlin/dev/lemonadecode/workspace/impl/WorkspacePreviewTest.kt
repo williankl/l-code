@@ -24,6 +24,7 @@ import dev.lemonadecode.review.api.ReviewError
 import dev.lemonadecode.review.fake.FakeReviewService
 import dev.lemonadecode.sessions.fake.FakeSessionService
 import dev.lemonadecode.settings.fake.FakeSettingsService
+import dev.lemonadecode.updates.fake.FakeUpdateService
 import dev.lemonadecode.workspace.impl.showcase.ShowcaseFixtures
 import dev.lemonadecode.workspace.uimodel.DiffFileModel
 import dev.lemonadecode.workspace.uimodel.FilePreviewContentModel
@@ -53,6 +54,7 @@ class WorkspacePreviewTest {
     object : HomeDirectory {
       override val path: String = ShowcaseFixtures.Home
     },
+    FakeUpdateService(),
   )
 
   private val logo = FileDiff("art/logo.png", null, FileChange.Modified, "PNG", emptyList(), isBinary = true)

@@ -46,6 +46,8 @@ internal data class WorkspaceViewState(
   val composer: Composer? = null,
   val previewOpen: Boolean = false,
   val settingsOpen: Boolean = false,
+  /** The panel under the Update button is open. */
+  val updateOpen: Boolean = false,
   val subSessionMenu: SubSessionLocation? = null,
   /** The list of branches the diff can compare with is open. */
   val basePickerOpen: Boolean = false,

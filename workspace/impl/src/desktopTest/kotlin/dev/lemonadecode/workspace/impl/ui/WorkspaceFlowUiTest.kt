@@ -33,6 +33,7 @@ import dev.lemonadecode.platform.process.HomeDirectory
 import dev.lemonadecode.review.fake.FakeReviewService
 import dev.lemonadecode.sessions.fake.FakeSessionService
 import dev.lemonadecode.settings.fake.FakeSettingsService
+import dev.lemonadecode.updates.fake.FakeUpdateService
 import dev.lemonadecode.workspace.impl.WorkspacePresenter
 import dev.lemonadecode.workspace.impl.showcase.ShowcaseFixtures
 import dev.lemonadecode.workspace.ui.WorkspaceContent
@@ -49,6 +50,7 @@ class WorkspaceFlowUiTest {
   private val sessions = FakeSessionService().apply { homeFolder = ShowcaseFixtures.Home }
   private val reviews = FakeReviewService()
   private val settings = FakeSettingsService()
+  private val updates = FakeUpdateService()
   private val presenter = WorkspacePresenter(
     sessionService = sessions,
     reviewService = reviews,
@@ -56,6 +58,7 @@ class WorkspaceFlowUiTest {
     homeDirectory = object : HomeDirectory {
       override val path: String = ShowcaseFixtures.Home
     },
+    updateService = updates,
   )
   private val ar = SessionId("ar")
 

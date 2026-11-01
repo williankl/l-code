@@ -10,6 +10,7 @@ kotlin {
       implementation(projects.sessions.api)
       implementation(projects.review.api)
       implementation(projects.settings.api)
+      implementation(projects.updates.api)
       implementation(projects.platform.architectureCore)
       implementation(projects.platform.syntaxCore)
       implementation(projects.platform.processCore)
@@ -20,6 +21,7 @@ kotlin {
       implementation(projects.sessions.fake)
       implementation(projects.review.fake)
       implementation(projects.settings.fake)
+      implementation(projects.updates.fake)
       implementation(projects.platform.presenterTest)
       implementation(projects.platform.architectureTest)
     }

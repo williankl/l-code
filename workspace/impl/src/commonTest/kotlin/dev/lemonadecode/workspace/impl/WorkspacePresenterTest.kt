@@ -4,6 +4,11 @@ import dev.lemonadecode.domain.review.DiffState
 import dev.lemonadecode.domain.review.Review
 import dev.lemonadecode.domain.session.SessionId
 import dev.lemonadecode.domain.settings.ThemePreference
+import dev.lemonadecode.domain.update.AppRelease
+import dev.lemonadecode.domain.update.AppVersion
+import dev.lemonadecode.domain.update.UpdateFailure
+import dev.lemonadecode.domain.update.UpdateProgress
+import dev.lemonadecode.domain.update.UpdateState
 import dev.lemonadecode.platform.localization.asLemonadeCodeString
 import dev.lemonadecode.platform.presenter.testing.awaitItemWhere
 import dev.lemonadecode.platform.presenter.testing.test
@@ -12,14 +17,18 @@ import dev.lemonadecode.platform.process.HomeDirectory
 import dev.lemonadecode.review.fake.FakeReviewService
 import dev.lemonadecode.sessions.fake.FakeSessionService
 import dev.lemonadecode.settings.fake.FakeSettingsService
+import dev.lemonadecode.updates.fake.FakeUpdateService
 import dev.lemonadecode.workspace.impl.showcase.ShowcaseFixtures
 import dev.lemonadecode.workspace.strings.Res
 import dev.lemonadecode.workspace.strings.session_path_copied
+import dev.lemonadecode.workspace.strings.update_failed_checksum
 import dev.lemonadecode.workspace.uimodel.DiffRowModel
 import dev.lemonadecode.workspace.uimodel.SessionMenuModel
 import dev.lemonadecode.workspace.uimodel.SessionRenameModel
 import dev.lemonadecode.workspace.uimodel.SessionsPanelModel
 import dev.lemonadecode.workspace.uimodel.ThemeOption
+import dev.lemonadecode.workspace.uimodel.UpdateModel
+import dev.lemonadecode.workspace.uimodel.UpdateStatusModel
 import dev.lemonadecode.workspace.uimodel.WorkspaceContentModel
 import dev.lemonadecode.workspace.uimodel.WorkspaceEvent
 import dev.lemonadecode.workspace.uimodel.WorkspaceView
@@ -34,6 +43,7 @@ class WorkspacePresenterTest {
   private val sessions = FakeSessionService()
   private val reviews = FakeReviewService()
   private val settings = FakeSettingsService()
+  private val updates = FakeUpdateService()
   private val presenter = WorkspacePresenter(
     sessions,
     reviews,
@@ -41,6 +51,7 @@ class WorkspacePresenterTest {
     object : HomeDirectory {
       override val path: String = ShowcaseFixtures.Home
     },
+    updates,
   )
 
   private fun withSession() {
@@ -145,6 +156,46 @@ class WorkspacePresenterTest {
       val updated = awaitItemWhere { it.settings.theme == ThemeOption.Light && it.settings.keepAwake }
       assertTrue(updated.settings.keepAwake)
       assertEquals(ThemePreference.Light, settings.settings.value.theme)
+    }
+  }
+
+  @Test
+  fun `an update shows a button whose panel installs it and follows the download`() = runTest {
+    val available = UpdateState.Available(
+      current = AppVersion(1, 2, 0),
+      release = AppRelease(AppVersion(1, 3, 0), "https://github.com/williankl/loupe/releases/tag/v1.3.0"),
+    )
+    presenter.test {
+      assertEquals(null, awaitItem().topBar.update)
+      updates.setState(available)
+      val offered = awaitItemWhere { it.topBar.update != null }
+      assertEquals(UpdateModel("1.3.0", "1.2.0", available.release.pageUrl, open = false, status = UpdateStatusModel.Ready), offered.topBar.update)
+
+      offered.eventSink(WorkspaceEvent.ToggleUpdate)
+      awaitItemWhere { it.topBar.update?.open == true }.eventSink(WorkspaceEvent.InstallUpdate)
+      assertEquals(1, updates.installCount)
+
+      updates.setState(available.copy(progress = UpdateProgress.Downloading(0.5f)))
+      awaitItemWhere { it.topBar.update?.status == UpdateStatusModel.Downloading(50) }
+      updates.setState(available.copy(progress = UpdateProgress.Failed(UpdateFailure.Checksum)))
+      val failed = awaitItemWhere { it.topBar.update?.status is UpdateStatusModel.Failed }
+      assertEquals(
+        UpdateStatusModel.Failed(Res.string.update_failed_checksum.asLemonadeCodeString()),
+        failed.topBar.update?.status,
+      )
+    }
+  }
+
+  @Test
+  fun `opening settings closes the update panel`() = runTest {
+    updates.setState(
+      UpdateState.Available(AppVersion(1, 2, 0), AppRelease(AppVersion(1, 3, 0), "https://github.com/williankl/loupe/releases/tag/v1.3.0")),
+    )
+    presenter.test {
+      awaitItemWhere { it.topBar.update != null }.eventSink(WorkspaceEvent.ToggleUpdate)
+      awaitItemWhere { it.topBar.update?.open == true }.eventSink(WorkspaceEvent.ToggleSettings)
+      val settingsOpen = awaitItemWhere { it.settings.open }
+      assertEquals(false, settingsOpen.topBar.update?.open)
     }
   }
 

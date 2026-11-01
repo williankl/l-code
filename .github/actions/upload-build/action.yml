@@ -1,0 +1,36 @@
+name: Upload build
+description: >-
+  Keeps the files in dist/ as a workflow artifact and lists them, with sizes and SHA-256, in the
+  run's summary.
+
+inputs:
+  name:
+    description: Artifact name, e.g. windows-x64.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: List the files
+      shell: bash
+      env:
+        NAME: ${{ inputs.name }}
+      run: |
+        cd dist
+        {
+          echo "### $NAME"
+          echo
+          echo "| File | Size | SHA-256 |"
+          echo "|---|--:|---|"
+          for file in *; do
+            bytes=$(wc -c < "$file" | tr -d ' ')
+            sha=$(sha256sum "$file" 2>/dev/null || shasum -a 256 "$file")
+            printf '| `%s` | %s MB | `%s` |\n' "$file" "$(awk "BEGIN { printf \"%.1f\", $bytes / 1000000 }")" "${sha%% *}"
+          done
+        } >> "$GITHUB_STEP_SUMMARY"
+
+    - uses: actions/upload-artifact@v7
+      with:
+        name: ${{ inputs.name }}
+        path: dist/*
+        if-no-files-found: error

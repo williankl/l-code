@@ -1,0 +1,14 @@
+name: Set up Gradle
+description: >-
+  Java 21 and Gradle, with Gradle's dependency and build caches restored. Runs on main save the
+  caches; tag builds only read them, since a cache saved for one tag can't be read by the next.
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-java@v6
+      with:
+        distribution: temurin
+        java-version: 21
+
+    - uses: gradle/actions/setup-gradle@v6

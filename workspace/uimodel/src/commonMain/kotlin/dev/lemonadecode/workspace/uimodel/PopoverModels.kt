@@ -13,6 +13,35 @@ public data class SettingsModel(
   val keepAwakeStatus: KeepAwakeStatusModel,
 )
 
+/** A newer Lemonade Code to install, and how installing it is going. */
+@Immutable
+public data class UpdateModel(
+  /** e.g. `1.3.0`. */
+  val version: String,
+  val currentVersion: String,
+  /** The release's page, with its notes. */
+  val releaseUrl: String,
+  /** The panel under the button is open. */
+  val open: Boolean,
+  val status: UpdateStatusModel,
+)
+
+@Immutable
+public sealed interface UpdateStatusModel {
+  @Immutable
+  public data object Ready : UpdateStatusModel
+
+  /** [percent] is null until the download's size is known. */
+  @Immutable
+  public data class Downloading(val percent: Int?) : UpdateStatusModel
+
+  @Immutable
+  public data object Restarting : UpdateStatusModel
+
+  @Immutable
+  public data class Failed(val message: LemonadeCodeString) : UpdateStatusModel
+}
+
 @Immutable
 public data class KeepAwakeStatusModel(
   /** e.g. "Keeping awake now · 2 sessions working". */

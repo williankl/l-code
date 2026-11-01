@@ -19,6 +19,22 @@
   </plurals>
   <string name="keep_awake_idle">Ligado · nenhuma sessão a trabalhar, pode adormecer</string>
 
+  <!-- Atualização -->
+  <string name="update_action">Atualizar</string>
+  <string name="update_action_busy">A atualizar…</string>
+  <string name="update_title">Atualização disponível</string>
+  <string name="update_detail">O Lemonade Code %1$s está pronto a instalar. Tem a versão %2$s.</string>
+  <string name="update_restart_note">O Lemonade Code reinicia para terminar. As sessões voltam, mas os programas a correr nelas param.</string>
+  <string name="update_release_notes">Novidades</string>
+  <string name="update_install">Atualizar e reiniciar</string>
+  <string name="update_retry">Tentar novamente</string>
+  <string name="update_downloading">A transferir… %1$s</string>
+  <string name="update_downloading_unknown">A transferir…</string>
+  <string name="update_restarting">A reiniciar…</string>
+  <string name="update_failed_download">Não foi possível transferir a atualização. Verifique a ligação e tente novamente.</string>
+  <string name="update_failed_checksum">A transferência não corresponde à soma de verificação da versão e foi descartada. Tente novamente.</string>
+  <string name="update_failed_install">Não foi possível instalar a atualização aqui. Transfira-a a partir da página da versão.</string>
+
   <!-- Sessions -->
   <string name="sessions_title">Sessões</string>
   <string name="sessions_resize">Redimensionar sessões</string>

@@ -13,6 +13,10 @@ import dev.lemonadecode.domain.session.SubSessionLocation
 import dev.lemonadecode.domain.session.SubSessionPlan
 import dev.lemonadecode.domain.settings.AppSettings
 import dev.lemonadecode.domain.settings.ThemePreference
+import dev.lemonadecode.domain.update.AppRelease
+import dev.lemonadecode.domain.update.AppVersion
+import dev.lemonadecode.domain.update.UpdateProgress
+import dev.lemonadecode.domain.update.UpdateState
 import dev.lemonadecode.workspace.impl.Composer
 import dev.lemonadecode.workspace.impl.LineRange
 import dev.lemonadecode.workspace.impl.NavigationStyle
@@ -58,6 +62,7 @@ public enum class WorkspaceShowcase(
   MultiLineComment("5a", "A range comment posted, another range selected", "rateLimit.ts:24–26 has a range comment; 28–32 is selected with the composer open."),
   SessionMenu("6a", "Menu on lua-script", "Right-click a session: the menu names it and its folder, and the row holds a ring."),
   RenamingSession("6b", "Renaming in place", "Rename swaps the menu’s actions for a name field."),
+  UpdateAvailable("7a", "An update is out", "Installed from a release file, the app offers the newer version next to Settings; the panel downloads it and restarts."),
   ;
 
   public fun model(eventSink: (WorkspaceEvent) -> Unit = {}): WorkspaceModel = WorkspaceModelMapper.map(scene.input, eventSink)
@@ -257,6 +262,14 @@ private fun sceneFor(showcase: WorkspaceShowcase): Scene = when (showcase) {
   )
   WorkspaceShowcase.SessionMenu -> treeScene(sessionMenu = SessionId("d3"))
   WorkspaceShowcase.RenamingSession -> treeScene(sessionMenu = SessionId("d3"), renaming = true)
+  WorkspaceShowcase.UpdateAvailable -> scene().let { scene ->
+    val update = UpdateState.Available(
+      current = AppVersion(1, 2, 0),
+      release = AppRelease(AppVersion(1, 3, 0), "https://github.com/williankl/loupe/releases/tag/v1.3.0"),
+      progress = UpdateProgress.Downloading(0.42f),
+    )
+    scene.copy(input = scene.input.copy(view = scene.input.view.copy(updateOpen = true), update = update))
+  }
 }
 
 private object ShowcaseSources {

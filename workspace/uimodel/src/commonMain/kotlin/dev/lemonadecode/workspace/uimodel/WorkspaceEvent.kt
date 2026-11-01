@@ -46,6 +46,13 @@ public sealed interface WorkspaceEvent {
   public data class SetTheme(val theme: ThemeOption) : WorkspaceEvent
   public data class SetKeepAwake(val enabled: Boolean) : WorkspaceEvent
 
+  /** The Update button: opens or closes the panel about the new version. */
+  public data object ToggleUpdate : WorkspaceEvent
+  public data object DismissUpdate : WorkspaceEvent
+
+  /** Downloads the new version, then restarts into it. */
+  public data object InstallUpdate : WorkspaceEvent
+
   public data object OpenParentSession : WorkspaceEvent
   public data object ToggleNewSubSessionMenu : WorkspaceEvent
   public data object DismissNewSubSessionMenu : WorkspaceEvent

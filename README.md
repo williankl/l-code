@@ -15,7 +15,7 @@ Lemonade dark theme* (`Loupe.dc.html`).
 
 ```sh
 ./gradlew :apps:desktop:run            # the app; opens with one terminal at ~
-./gradlew :apps:desktop:packageDmg     # a Lemonade Code.app bundle
+./gradlew :apps:desktop:packageDmg     # a Lemonade Code.app bundle (packageMsi on Windows, packageDeb on Linux)
 ./gradlew :sample:run                  # the design showcase, static screens
 ./gradlew :sample:renderScreens        # PNG of every showcase screen → sample/build/screens (-Plang=pt)
 ./gradlew allTests                     # every module's tests
@@ -60,6 +60,7 @@ Same layering as `teya-business-app`: domain models, data sources, features spli
 | `sessions/{api,impl,fake}` | `SessionService`: opens login shells in PTYs, follows each shell's folder and branch, infers working / needs input / idle / exited, plans and starts sub-sessions. `SessionTerminals` exposes the terminals to the UI. |
 | `review/{api,impl,fake}` | `ReviewService`: diff and comments per checkout, the review text, pasting it into the session or into a review sub-session. |
 | `settings/{api,impl,fake}` | `SettingsService` (persisted) and the keep-awake coordinator. |
+| `updates/{api,impl,fake}` | `UpdateService`: finds a newer GitHub release for this install, downloads and checks it, and hands over to a helper that swaps it in after the app quits. See RELEASING.md. |
 | `workspace/uimodel` | `WorkspaceModel` + `WorkspaceEvent` and the localized strings (`composeResources`, English and Portuguese). |
 | `workspace/ui` | The composables: `WorkspaceContent(model, terminal)` and its parts. Pure rendering. |
 | `workspace/impl` | `WorkspacePresenter`, the Model mapper, `WorkspaceScreen` (presenter + live terminals), and the showcase built from fixtures through the same mapper. |
@@ -114,6 +115,9 @@ type into `TerminalView` and check the cursor follows the text and blinks.
 - **Settings** live in `~/Library/Application Support/Lemonade Code/preferences.json` (macOS),
   `~/.config/lemonade-code/preferences.json` (Linux). A settings folder from when the app was
   called Loupe is moved there on first launch.
+- **Updates.** Installed from a release file (DMG, MSI, .deb or tar.gz), the app checks GitHub for
+  a newer release at launch and every 6 hours, and an Update button shows next to Settings when
+  there is one. Homebrew and the Snap Store update their installs themselves.
 - **Sessions come back.** Quitting saves every session (name, sub-session tree, the folder its
   shell was in, the last 1,000 lines it showed) to `sessions.json` next to the settings, then ends
   them and whatever runs in them. The next launch opens each one again in a fresh shell in that

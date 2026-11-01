@@ -2,12 +2,15 @@ package dev.lemonadecode.workspace.impl
 
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.platform.UriHandler
 import com.teya.lemonade.LemonadeTheme
 import dev.lemonadecode.domain.session.SessionId
 import dev.lemonadecode.platform.designsystem.LemonadeCodeTheme
@@ -15,6 +18,7 @@ import dev.lemonadecode.platform.di.AppScope
 import dev.lemonadecode.platform.presenter.presenterAsState
 import dev.lemonadecode.platform.terminal.TerminalColors
 import dev.lemonadecode.platform.terminal.TerminalView
+import dev.lemonadecode.platform.terminal.openInBrowser
 import dev.lemonadecode.sessions.api.SessionTerminals
 import dev.lemonadecode.workspace.ui.WorkspaceContent
 import dev.lemonadecode.workspace.ui.toThemeMode
@@ -34,11 +38,14 @@ public class WorkspaceScreen internal constructor(
     LemonadeCodeTheme(mode = model.settings.theme.toThemeMode()) {
       val background = LemonadeTheme.colors.background.bgSubtle
       LaunchedEffect(background) { onBackground(background) }
-      WorkspaceContent(
-        model = model,
-        terminal = { sessionId, slotModifier -> LiveTerminal(sessionId, slotModifier) },
-        modifier = modifier,
-      )
+      // Links in the UI open the way terminal links do, which works on Linux desktops too.
+      CompositionLocalProvider(LocalUriHandler provides BrowserUriHandler) {
+        WorkspaceContent(
+          model = model,
+          terminal = { sessionId, slotModifier -> LiveTerminal(sessionId, slotModifier) },
+          modifier = modifier,
+        )
+      }
     }
   }
 
@@ -60,6 +67,10 @@ public class WorkspaceScreen internal constructor(
     )
     LaunchedEffect(sessionId) { focusRequester.requestFocus() }
   }
+}
+
+private object BrowserUriHandler : UriHandler {
+  override fun openUri(uri: String) = openInBrowser(uri)
 }
 
 /** The 16 ANSI colours taken from Lemonade's themed hues, so program output matches the app. */

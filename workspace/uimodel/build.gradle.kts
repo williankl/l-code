@@ -1,5 +1,5 @@
 plugins {
-  id("loupe.kmp.uimodel")
+  id("lemonadecode.kmp.uimodel")
 }
 
 kotlin {
@@ -14,5 +14,5 @@ kotlin {
 compose.resources {
   publicResClass = true
   generateResClass = org.jetbrains.compose.resources.ResourcesExtension.ResourceClassGeneration.Always
-  packageOfResClass = "dev.loupe.workspace.strings"
+  packageOfResClass = "dev.lemonadecode.workspace.strings"
 }

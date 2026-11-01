@@ -1,6 +1,6 @@
 plugins {
-  id("loupe.kmp.library")
-  id("loupe.kmp.serialization")
+  id("lemonadecode.kmp.library")
+  id("lemonadecode.kmp.serialization")
 }
 
 kotlin {

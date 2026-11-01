@@ -1,0 +1,338 @@
+package dev.lemonadecode.platform.terminal
+
+import com.jediterm.core.typeahead.TerminalTypeAheadManager
+import com.jediterm.core.typeahead.TypeAheadTerminalModel
+import com.jediterm.core.util.TermSize
+import com.jediterm.terminal.CursorShape
+import com.jediterm.terminal.ProcessTtyConnector
+import com.jediterm.terminal.RequestOrigin
+import com.jediterm.terminal.TerminalDisplay
+import com.jediterm.terminal.TerminalExecutorServiceManager
+import com.jediterm.terminal.TerminalStarter
+import com.jediterm.terminal.TtyBasedArrayDataStream
+import com.jediterm.terminal.emulator.mouse.MouseFormat
+import com.jediterm.terminal.emulator.mouse.MouseMode
+import com.jediterm.terminal.model.JediTerminal
+import com.jediterm.terminal.model.StyleState
+import com.jediterm.terminal.model.TerminalSelection
+import com.jediterm.terminal.model.TerminalTextBuffer
+import com.jediterm.terminal.model.hyperlinks.LinkResult
+import com.jediterm.terminal.model.hyperlinks.LinkResultItem
+import com.jediterm.terminal.util.CharUtils
+import com.pty4j.PtyProcess
+import com.pty4j.PtyProcessBuilder
+import com.pty4j.WinSize
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import java.nio.charset.StandardCharsets
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
+import java.util.concurrent.ScheduledExecutorService
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.concurrent.thread
+
+/** What a running terminal reports besides the screen itself. */
+public sealed interface TerminalSignal {
+  /** The program wrote output. */
+  public data object Output : TerminalSignal
+
+  /** The program reported what it is doing; see [ProgramStatus]. */
+  public data class Program(val status: ProgramStatus) : TerminalSignal
+
+  public data class Exited(val exitCode: Int) : TerminalSignal
+}
+
+/**
+ * How to launch the program behind a terminal. [restoredOutput] is shown first, above whatever
+ * the program prints: the output of an earlier session, brought back.
+ */
+public data class TerminalLaunch(
+  val command: List<String>,
+  val workingDirectory: String,
+  val environment: Map<String, String> = emptyMap(),
+  val columns: Int = 120,
+  val rows: Int = 32,
+  val restoredOutput: List<String> = emptyList(),
+)
+
+/**
+ * One program running in a pseudo-terminal, with JediTerm's emulator keeping the screen model.
+ * The screen is read from [textBuffer]; [version] ticks whenever it changes so UI can redraw.
+ */
+public class TerminalSession(launch: TerminalLaunch) : AutoCloseable {
+  private val process: PtyProcess = PtyProcessBuilder(launch.command.toTypedArray())
+    .setDirectory(launch.workingDirectory)
+    .setEnvironment(System.getenv() + TerminalEnvironment + launch.environment)
+    .setInitialColumns(launch.columns)
+    .setInitialRows(launch.rows)
+    .setConsole(false)
+    .start()
+
+  private val signalFlow = MutableSharedFlow<TerminalSignal>(
+    extraBufferCapacity = 64,
+    onBufferOverflow = BufferOverflow.DROP_OLDEST,
+  )
+  private val versionFlow = MutableStateFlow(0L)
+  private val display = SessionDisplay()
+  private val closed = AtomicBoolean(false)
+  private val executors = SessionExecutors()
+
+  private val outputFlow = MutableStateFlow(0L)
+
+  public val signals: SharedFlow<TerminalSignal> = signalFlow.asSharedFlow()
+  public val version: StateFlow<Long> = versionFlow.asStateFlow()
+
+  /**
+   * How many times the program has written output. Unlike [signals], it can be read at any time,
+   * so waiting on it never misses output that came before anyone was listening.
+   */
+  public val outputs: StateFlow<Long> = outputFlow.asStateFlow()
+
+  private val styleState = StyleState()
+  public val textBuffer: TerminalTextBuffer = TerminalTextBuffer(launch.columns, launch.rows, styleState)
+  private val terminal = JediTerminal(display, textBuffer, styleState)
+  private val connector = PtyConnector(
+    process,
+    onOutput = {
+      outputFlow.update { it + 1 }
+      signalFlow.tryEmit(TerminalSignal.Output)
+    },
+    onStatus = { status -> signalFlow.tryEmit(TerminalSignal.Program(status)) },
+  )
+  private val starter = TerminalStarter(
+    terminal,
+    connector,
+    TtyBasedArrayDataStream(connector),
+    TerminalTypeAheadManager(NoTypeAhead),
+    executors,
+  )
+
+  public val cursorColumn: Int get() = terminal.cursorX - 1
+  public val cursorRow: Int get() = terminal.cursorY - 1
+  public val cursorVisible: Boolean get() = display.showsCursor
+  public val columns: Int get() = textBuffer.width
+  public val rows: Int get() = textBuffer.height
+  public val isRunning: Boolean get() = process.isAlive
+
+  /** The id of the program's process (the shell, for a session). */
+  public val pid: Long get() = process.pid()
+
+  /** The program's current folder, read from the OS; null when it can't be told. */
+  public fun currentDirectory(): String? = if (process.isAlive) ProcessDirectory.of(process.pid()) else null
+
+  /**
+   * The last [maxLines] lines of output, history included, as text: soft-wrapped lines joined back
+   * into one, trailing blanks dropped. What [TerminalLaunch.restoredOutput] takes to bring them back.
+   */
+  public fun recentOutput(maxLines: Int): List<String> {
+    textBuffer.lock()
+    try {
+      val lines = mutableListOf<String>()
+      val current = StringBuilder()
+      for (index in -textBuffer.historyLinesCount until textBuffer.height) {
+        val line = textBuffer.getLine(index)
+        current.append(line.text.replace(CharUtils.DWC.toString(), "").replace(CharUtils.NUL_CHAR, ' '))
+        if (!line.isWrapped) {
+          lines += current.toString().trimEnd()
+          current.setLength(0)
+        }
+      }
+      if (current.isNotEmpty()) lines += current.toString().trimEnd()
+      return lines.dropLastWhile { it.isBlank() }.takeLast(maxLines)
+    } finally {
+      textBuffer.unlock()
+    }
+  }
+
+  /**
+   * Whether a program the shell started holds the terminal (true) or the shell is back at its
+   * prompt (false); null when it can't be told. Blocks while it asks the OS.
+   */
+  public fun programInForeground(): Boolean? {
+    if (!process.isAlive) return false
+    val group = ForegroundProcess.groupOf(process.pid()) ?: return null
+    return group != process.pid()
+  }
+
+  /**
+   * The name of the program the shell started that holds the terminal, e.g. `claude`; null while
+   * the shell is at its prompt or when it can't be told. Blocks while it asks the OS.
+   */
+  public fun foregroundProgram(): String? {
+    if (!process.isAlive) return null
+    val group = ForegroundProcess.groupOf(process.pid())?.takeIf { it != process.pid() } ?: return null
+    return ForegroundProcess.nameOf(group)
+  }
+
+  init {
+    // Cells inside an OSC 8 link get tagged with where it points, for the view to open.
+    terminal.setUrlHyperlinkFilter { uri -> LinkResult(LinkResultItem(0, uri.length, UrlLink(uri))) }
+    textBuffer.addModelListener { versionFlow.value++ }
+    launch.restoredOutput.forEach { line ->
+      terminal.writeString(line)
+      terminal.carriageReturn()
+      terminal.newLine()
+    }
+    val _ = thread(name = "lemonade-code-terminal-${process.pid()}", isDaemon = true) { starter.start() }
+    val _ = thread(name = "lemonade-code-terminal-exit-${process.pid()}", isDaemon = true) {
+      val code = process.waitFor()
+      signalFlow.tryEmit(TerminalSignal.Exited(code))
+      versionFlow.value++
+    }
+  }
+
+  /** Sends raw input, as if typed. */
+  public fun send(text: String) {
+    if (closed.get()) return
+    starter.sendString(text, true)
+  }
+
+  public fun send(bytes: ByteArray) {
+    if (closed.get()) return
+    starter.sendBytes(bytes, true)
+  }
+
+  /**
+   * Pastes [text] the way a terminal paste does: wrapped in bracketed-paste markers when the
+   * program asked for them, so multi-line text lands as one block instead of running line by line.
+   */
+  public fun paste(text: String) {
+    val normalized = text.replace("\r\n", "\n").replace('\n', '\r')
+    send(if (display.bracketedPaste) "$PasteStart$normalized$PasteEnd" else normalized)
+  }
+
+  /** Escape sequence for a non-text key (arrows, Enter, function keys), or null for text keys. */
+  public fun keyCode(awtKeyCode: Int, awtModifiersEx: Int): ByteArray? = terminal.getCodeForKey(awtKeyCode, awtModifiersEx)
+
+  public fun resize(columns: Int, rows: Int) {
+    if (columns < 2 || rows < 2 || (columns == this.columns && rows == this.rows)) return
+    starter.postResize(TermSize(columns, rows), RequestOrigin.User)
+  }
+
+  override fun close() {
+    if (!closed.compareAndSet(false, true)) return
+    starter.requestEmulatorStop()
+    connector.close()
+    executors.shutdownWhenAllExecuted()
+  }
+
+  private inner class SessionDisplay : TerminalDisplay {
+    @Volatile var showsCursor: Boolean = true
+
+    @Volatile var bracketedPaste: Boolean = false
+    private var title = ""
+
+    override fun setCursor(x: Int, y: Int) {
+      versionFlow.value++
+    }
+
+    override fun setCursorShape(cursorShape: CursorShape?) = Unit
+
+    override fun beep() = Unit
+
+    override fun scrollArea(scrollRegionTop: Int, scrollRegionSize: Int, dy: Int) = Unit
+
+    override fun setCursorVisible(isCursorVisible: Boolean) {
+      showsCursor = isCursorVisible
+      versionFlow.value++
+    }
+
+    override fun useAlternateScreenBuffer(useAlternateScreenBuffer: Boolean) {
+      versionFlow.value++
+    }
+
+    override fun getWindowTitle(): String = title
+
+    override fun setWindowTitle(windowTitle: String) {
+      title = windowTitle
+    }
+
+    override fun getSelection(): TerminalSelection? = null
+
+    override fun terminalMouseModeSet(mouseMode: MouseMode) = Unit
+
+    override fun setMouseFormat(mouseFormat: MouseFormat) = Unit
+
+    override fun ambiguousCharsAreDoubleWidth(): Boolean = false
+
+    override fun setBracketedPasteMode(bracketedPasteModeEnabled: Boolean) {
+      bracketedPaste = bracketedPasteModeEnabled
+    }
+  }
+
+  private companion object {
+    const val PasteStart = "\u001b[200~"
+    const val PasteEnd = "\u001b[201~"
+    val TerminalEnvironment = mapOf(
+      "TERM" to "xterm-256color",
+      "COLORTERM" to "truecolor",
+      "TERM_PROGRAM" to "lemonade-code",
+    )
+  }
+}
+
+private class PtyConnector(
+  private val process: PtyProcess,
+  private val onOutput: () -> Unit,
+  onStatus: (ProgramStatus) -> Unit,
+) : ProcessTtyConnector(process, StandardCharsets.UTF_8) {
+  // Answered from the reading thread, so the reply goes out before any later query's.
+  private val statuses = ProgramStatusScanner(reply = { write(it.toByteArray(StandardCharsets.UTF_8)) }, report = onStatus)
+
+  override fun read(buf: CharArray, offset: Int, length: Int): Int {
+    val read = super.read(buf, offset, length)
+    if (read > 0) {
+      statuses.scan(buf, offset, read)
+      onOutput()
+    }
+    return read
+  }
+
+  override fun resize(termSize: TermSize) {
+    if (process.isAlive) process.winSize = WinSize(termSize.columns, termSize.rows)
+  }
+
+  override fun getName(): String = "lemonade-code"
+
+  override fun isConnected(): Boolean = process.isAlive
+}
+
+private class SessionExecutors : TerminalExecutorServiceManager {
+  private val single: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor { runnable ->
+    Thread(runnable, "lemonade-code-terminal-io").apply { isDaemon = true }
+  }
+  private val unbounded: ExecutorService = Executors.newCachedThreadPool { runnable ->
+    Thread(runnable, "lemonade-code-terminal-worker").apply { isDaemon = true }
+  }
+
+  override fun getSingleThreadScheduledExecutor(): ScheduledExecutorService = single
+
+  override fun getUnboundedExecutorService(): ExecutorService = unbounded
+
+  override fun shutdownWhenAllExecuted() {
+    single.shutdown()
+    unbounded.shutdown()
+  }
+}
+
+private object NoTypeAhead : TypeAheadTerminalModel {
+  override fun insertCharacter(ch: Char, index: Int) = Unit
+  override fun removeCharacters(from: Int, count: Int) = Unit
+  override fun moveCursor(index: Int) = Unit
+  override fun forceRedraw() = Unit
+  override fun clearPredictions() = Unit
+  override fun lock() = Unit
+  override fun unlock() = Unit
+  override fun isUsingAlternateBuffer(): Boolean = false
+  override fun getCurrentLineWithCursor() = TypeAheadTerminalModel.LineWithCursorX(StringBuffer(), 0)
+  override fun getTerminalWidth(): Int = 0
+  override fun isTypeAheadEnabled(): Boolean = false
+  override fun getLatencyThreshold(): Long = 0
+  override fun getShellType() = TypeAheadTerminalModel.ShellType.Unknown
+}

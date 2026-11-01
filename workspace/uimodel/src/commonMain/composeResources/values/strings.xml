@@ -35,13 +35,8 @@
     <item quantity="one">Hide %1$d sub-session</item>
     <item quantity="other">Hide %1$d sub-sessions</item>
   </plurals>
-  <string name="meta_shell_place">%1$s · %2$s</string>
-  <plurals name="meta_review">
-    <item quantity="one">%1$d comment to address</item>
-    <item quantity="other">%1$d comments to address</item>
-  </plurals>
-  <string name="meta_split_same_folder">%1$s · same folder</string>
-  <string name="meta_split_worktree">%1$s · worktree</string>
+  <!-- Session row subtitle: the agent (or shell), then the branch (or folder) -->
+  <string name="session_meta">%1$s · %2$s</string>
 
   <!-- Session menu (right click) and rename -->
   <string name="session_options">Session options</string>
@@ -65,7 +60,7 @@
 
   <!-- Session header -->
   <string name="view_terminal">Terminal</string>
-  <string name="view_diff">Diff vs %1$s</string>
+  <string name="view_diff">Diff</string>
   <string name="tag_sub_session_same_folder">sub-session · same folder</string>
   <string name="tag_sub_session_worktree">sub-session · worktree</string>
 
@@ -87,6 +82,7 @@
   <!-- Diff review -->
   <string name="diff_changes">Changes</string>
   <string name="diff_vs">vs</string>
+  <string name="diff_compare_with">Compare with</string>
   <string name="diff_refresh">Refresh diff</string>
   <string name="diff_source_working_tree">working tree</string>
   <plurals name="diff_summary_uncommitted">

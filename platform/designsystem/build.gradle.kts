@@ -1,5 +1,5 @@
 plugins {
-  id("loupe.kmp.feature")
+  id("lemonadecode.kmp.feature")
 }
 
 kotlin {

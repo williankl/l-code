@@ -1,7 +1,7 @@
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 
 plugins {
-  id("loupe.kmp.feature")
+  id("lemonadecode.kmp.feature")
 }
 
 kotlin {
@@ -33,7 +33,7 @@ tasks.withType<Test>().configureEach {
 
 compose.desktop {
   application {
-    mainClass = "dev.loupe.app.MainKt"
+    mainClass = "dev.lemonadecode.app.MainKt"
     jvmArgs("--enable-native-access=ALL-UNNAMED", "--add-opens=java.desktop/sun.awt.X11=ALL-UNNAMED")
 
     nativeDistributions {

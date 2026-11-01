@@ -1,7 +1,7 @@
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 
 plugins {
-  id("loupe.kmp.feature")
+  id("lemonadecode.kmp.feature")
 }
 
 kotlin {
@@ -18,11 +18,11 @@ kotlin {
 val desktopMainCompilation = kotlin.targets.getByName("desktop").compilations.getByName("main")
 
 tasks.register<JavaExec>("renderScreens") {
-  group = "loupe"
+  group = "lemonade code"
   description = "Renders every showcase screen to PNG under build/screens."
   dependsOn(desktopMainCompilation.compileAllTaskName)
   classpath(desktopMainCompilation.output.allOutputs, desktopMainCompilation.runtimeDependencyFiles)
-  mainClass.set("dev.loupe.sample.RenderScreensKt")
+  mainClass.set("dev.lemonadecode.sample.RenderScreensKt")
   args(layout.buildDirectory.dir("screens").get().asFile.absolutePath)
   providers.gradleProperty("theme").orNull?.let { args(it) }
   jvmArgs("-Djava.awt.headless=true", "-Duser.language=" + (providers.gradleProperty("lang").orNull ?: "en"))
@@ -33,11 +33,11 @@ tasks.register<JavaExec>("renderScreens") {
 
 compose.desktop {
   application {
-    mainClass = "dev.loupe.sample.MainKt"
+    mainClass = "dev.lemonadecode.sample.MainKt"
 
     nativeDistributions {
       targetFormats(TargetFormat.Dmg)
-      packageName = "Loupe UI Sample"
+      packageName = "Lemonade Code UI Sample"
       packageVersion = "1.0.0"
     }
   }

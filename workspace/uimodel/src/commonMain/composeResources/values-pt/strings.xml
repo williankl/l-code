@@ -35,13 +35,8 @@
     <item quantity="one">Ocultar %1$d subsessão</item>
     <item quantity="other">Ocultar %1$d subsessões</item>
   </plurals>
-  <string name="meta_shell_place">%1$s · %2$s</string>
-  <plurals name="meta_review">
-    <item quantity="one">%1$d comentário por resolver</item>
-    <item quantity="other">%1$d comentários por resolver</item>
-  </plurals>
-  <string name="meta_split_same_folder">%1$s · mesma pasta</string>
-  <string name="meta_split_worktree">%1$s · worktree</string>
+  <!-- Session row subtitle: the agent (or shell), then the branch (or folder) -->
+  <string name="session_meta">%1$s · %2$s</string>
 
   <!-- Session menu (right click) and rename -->
   <string name="session_options">Opções da sessão</string>
@@ -65,7 +60,7 @@
 
   <!-- Session header -->
   <string name="view_terminal">Terminal</string>
-  <string name="view_diff">Diff vs %1$s</string>
+  <string name="view_diff">Diff</string>
   <string name="tag_sub_session_same_folder">subsessão · mesma pasta</string>
   <string name="tag_sub_session_worktree">subsessão · worktree</string>
 
@@ -87,6 +82,7 @@
   <!-- Diff review -->
   <string name="diff_changes">Alterações</string>
   <string name="diff_vs">vs</string>
+  <string name="diff_compare_with">Comparar com</string>
   <string name="diff_refresh">Atualizar diff</string>
   <string name="diff_source_working_tree">árvore de trabalho</string>
   <plurals name="diff_summary_uncommitted">

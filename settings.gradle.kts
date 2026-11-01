@@ -1,4 +1,4 @@
-rootProject.name = "loupe"
+rootProject.name = "lemonade-code"
 enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
 
 pluginManagement {

@@ -1,5 +1,5 @@
 plugins {
-  id("loupe.kmp.library")
+  id("lemonadecode.kmp.library")
 }
 
 kotlin {

@@ -2,7 +2,7 @@ plugins {
   `kotlin-dsl`
 }
 
-group = "dev.loupe.buildlogic"
+group = "dev.lemonadecode.buildlogic"
 
 kotlin {
   jvmToolchain(21)

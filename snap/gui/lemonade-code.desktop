@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Lemonade Code
+Comment=A terminal IDE for reviewing work
+Exec=lemonade-code
+Icon=${SNAP}/meta/gui/lemonade-code.png
+Terminal=false
+Categories=Development;
+StartupWMClass=lemonade-code

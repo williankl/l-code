@@ -1,0 +1,78 @@
+name: Publish
+
+# Runs when a release is published (normally a draft from release.yml that you checked): points
+# the Homebrew cask at it and uploads its snap to the Snap Store. Each part is skipped until its
+# secret is set; see RELEASING.md.
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  homebrew:
+    name: Homebrew tap
+    if: github.repository_owner == 'williankl' && !github.event.release.prerelease
+    runs-on: ubuntu-24.04
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ github.event.release.tag_name }}
+      HAS_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN != '' }}
+    steps:
+      - name: Skip without a tap token
+        if: env.HAS_TOKEN != 'true'
+        run: echo "::notice::HOMEBREW_TAP_TOKEN isn't set, so the Homebrew tap wasn't updated."
+
+      - uses: actions/checkout@v4
+        if: env.HAS_TOKEN == 'true'
+        with:
+          path: source
+
+      - uses: actions/checkout@v4
+        if: env.HAS_TOKEN == 'true'
+        with:
+          repository: ${{ github.repository_owner }}/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: tap
+
+      - name: Update the cask
+        if: env.HAS_TOKEN == 'true'
+        run: |
+          version="${TAG#v}"
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern '*.dmg' --dir dmg
+          mkdir -p tap/Casks
+          source/packaging/homebrew/write-cask.sh "$version" "$GITHUB_REPOSITORY" \
+            "dmg/Lemonade-Code-$version-arm64.dmg" "dmg/Lemonade-Code-$version-x64.dmg" > tap/Casks/lemonade-code.rb
+          cd tap
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Casks/lemonade-code.rb
+          if git diff --cached --quiet; then
+            echo "The cask already points at $TAG."
+            exit 0
+          fi
+          git commit -m "lemonade-code $version"
+          git push
+
+  snap:
+    name: Snap Store
+    if: github.repository_owner == 'williankl' && !github.event.release.prerelease
+    runs-on: ubuntu-24.04
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ github.event.release.tag_name }}
+      SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
+      # edge until you set the SNAP_CHANNEL repository variable (e.g. to stable).
+      CHANNEL: ${{ vars.SNAP_CHANNEL || 'edge' }}
+    steps:
+      - name: Upload the snap
+        run: |
+          if [ -z "$SNAPCRAFT_STORE_CREDENTIALS" ]; then
+            echo "::notice::SNAPCRAFT_STORE_CREDENTIALS isn't set, so nothing was uploaded to the Snap Store."
+            exit 0
+          fi
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern '*.snap' --dir snap
+          sudo snap install snapcraft --classic
+          snapcraft upload --release="$CHANNEL" snap/*.snap

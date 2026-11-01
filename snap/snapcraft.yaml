@@ -1,0 +1,46 @@
+name: lemonade-code
+title: Lemonade Code
+summary: A terminal IDE for reviewing work
+description: |
+  Every session is a plain terminal: your login shell, starting in your home folder. Lemonade Code
+  follows the shell as it moves between folders, shows what changed in that checkout against main
+  (or a branch you pick), lets you comment on lines or ranges, and hands the comments to the
+  program in the terminal or to a sub-session in a new git worktree.
+website: https://github.com/williankl/loupe
+source-code: https://github.com/williankl/loupe
+issues: https://github.com/williankl/loupe/issues
+icon: snap/gui/lemonade-code.png
+# license: add the SPDX id once the repository has a LICENSE file.
+
+base: core24
+grade: stable
+# Classic, like other terminals and IDEs: the app runs the user's own login shell, git and coding
+# agents, follows the shell into any folder and creates worktrees there. A strictly confined snap
+# would only see the tools inside the snap and couldn't read hidden files in the home folder.
+confinement: classic
+adopt-info: lemonade-code
+
+platforms:
+  amd64:
+
+apps:
+  lemonade-code:
+    command: bin/lemonade-code
+
+parts:
+  lemonade-code:
+    # The app folder Gradle builds (createDistributable, with its own Java runtime), staged in
+    # build/snap by .github/workflows/release.yml. To build by hand, see RELEASING.md.
+    plugin: nil
+    override-build: |
+      staged="$CRAFT_PROJECT_DIR/build/snap"
+      mkdir -p "$CRAFT_PART_INSTALL/opt/lemonade-code" "$CRAFT_PART_INSTALL/bin"
+      cp -a "$staged/app/." "$CRAFT_PART_INSTALL/opt/lemonade-code/"
+      install -m 755 "$CRAFT_PROJECT_DIR/snap/local/launcher.sh" "$CRAFT_PART_INSTALL/bin/lemonade-code"
+      craftctl set version="$(cat "$staged/version")"
+
+lint:
+  ignore:
+    # The bundled Java runtime uses the host's X11 and font libraries, as a classic snap may.
+    - classic
+    - library

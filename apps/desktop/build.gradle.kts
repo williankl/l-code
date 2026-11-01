@@ -39,10 +39,13 @@ compose.desktop {
     nativeDistributions {
       targetFormats(TargetFormat.Dmg, TargetFormat.Deb, TargetFormat.Msi)
       packageName = "Lemonade Code"
-      packageVersion = "1.0.0"
+      // Release builds stamp the tag's version with -PappVersion=1.2.3 (see RELEASING.md).
+      packageVersion = providers.gradleProperty("appVersion").getOrElse("1.0.0")
       description = "A terminal IDE for reviewing work"
       // Drawn by icons/make_icons.py.
       macOS {
+        // Signing and notarization are switched on from the command line by the release workflow
+        // (the compose.desktop.mac.* Gradle properties), so local builds stay unsigned.
         bundleID = "dev.lemonadecode.app"
         iconFile.set(project.file("icons/lemonade-code.icns"))
       }

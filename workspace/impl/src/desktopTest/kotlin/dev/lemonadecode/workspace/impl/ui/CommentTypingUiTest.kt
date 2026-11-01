@@ -1,6 +1,12 @@
 package dev.lemonadecode.workspace.impl.ui
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.DesktopComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
@@ -52,8 +58,16 @@ class CommentTypingUiTest {
     runDesktopComposeUiTest(width = 1440, height = 900) {
       setContent {
         LemonadeCodeTheme {
+          // In the app the Model reaches the screen a frame or more after the event that changed
+          // it (PresenterHost hands it over through a StateFlow), so it arrives a frame late here too.
+          val live = presenter.present()
+          var shown by remember { mutableStateOf(live) }
+          LaunchedEffect(live) {
+            withFrameNanos { }
+            shown = live
+          }
           WorkspaceContent(
-            model = presenter.present(),
+            model = shown,
             terminal = { id, modifier -> Box(modifier.testTag("terminal:$id")) },
           )
         }

@@ -28,6 +28,7 @@ import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -39,6 +40,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -114,6 +116,7 @@ import dev.lemonadecode.workspace.uimodel.DiffLineKind
 import dev.lemonadecode.workspace.uimodel.DiffRowModel
 import dev.lemonadecode.workspace.uimodel.ReviewCommentModel
 import dev.lemonadecode.workspace.uimodel.WorkspaceEvent
+import kotlinx.coroutines.flow.drop
 import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
 
@@ -553,6 +556,16 @@ private fun CommentComposerCard(
     withFrameNanos { }
     bringIntoView.bringIntoView()
   }
+  // The field keeps its own text and caret and reports edits. Fed the draft back from the Model,
+  // it could redraw against the older, shorter text before the Model caught up and drop the caret
+  // to its end: the first letter typed ended up after the second.
+  val draft = remember(composer.title) { TextFieldState(composer.draft) }
+  val currentOnEvent by rememberUpdatedState(onEvent)
+  LaunchedEffect(draft) {
+    snapshotFlow { draft.text.toString() }
+      .drop(1)
+      .collect { currentOnEvent(WorkspaceEvent.UpdateCommentDraft(it)) }
+  }
   LemonadeUi.Card(
     contentPadding = LemonadeCardPadding.Medium,
     background = LemonadeCardBackground.Default,
@@ -560,8 +573,7 @@ private fun CommentComposerCard(
   ) {
     Column(verticalArrangement = Arrangement.spacedBy(spaces.spacing300)) {
       LemonadeUi.TextArea(
-        input = composer.draft,
-        onInputChanged = { onEvent(WorkspaceEvent.UpdateCommentDraft(it)) },
+        state = draft,
         label = composer.title.resolve(),
         placeholderText = stringResource(Res.string.comment_placeholder),
         height = 112.dp,

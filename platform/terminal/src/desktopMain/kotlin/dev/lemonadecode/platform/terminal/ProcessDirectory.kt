@@ -9,6 +9,9 @@ import java.util.concurrent.TimeUnit
 internal object ProcessDirectory {
   private val os = System.getProperty("os.name").orEmpty()
 
+  /** Whether this OS can be asked at all. Elsewhere (Windows) [of] is always null. */
+  val isSupported: Boolean = os.startsWith("Linux") || os.startsWith("Mac")
+
   fun of(pid: Long): String? = runCatching {
     when {
       os.startsWith("Linux") -> Files.readSymbolicLink(Paths.get("/proc/$pid/cwd")).toString()

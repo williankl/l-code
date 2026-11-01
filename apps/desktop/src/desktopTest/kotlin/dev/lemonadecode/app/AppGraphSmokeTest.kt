@@ -27,8 +27,10 @@ class AppGraphSmokeTest {
     checkNotNull(id) { "the session didn't start" }
     val terminal = checkNotNull(graph.sessionTerminals.terminal(id))
     delay(1_500)
+    // PowerShell reads `$((6*7))` as a subexpression, so this runs on Windows too. Starting it cold
+    // on a CI runner can take a while; what's typed waits for it.
     terminal.send("echo lemonade-code-smoke-\$((6*7))\r")
-    withTimeout(10_000) {
+    withTimeout(30_000) {
       while (!terminal.screen().contains("lemonade-code-smoke-42")) delay(50)
     }
     assertTrue(graph.sessionService.sessions.value.single().branch == "feature")

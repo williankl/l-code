@@ -62,6 +62,22 @@ class TerminalSessionTest {
   }
 
   @Test
+  fun `the folder a shell reports is remembered`() = runBlocking<Unit> {
+    val script = "printf 'one\\033]7;file://host/srv/my%%20code\\007two'; sleep 1; printf '\\033]9;9;/opt\\033\\\\three'; sleep 1"
+    TerminalSession(TerminalLaunch(command = listOf("/bin/sh", "-c", script), workingDirectory = System.getProperty("java.io.tmpdir"))).use { session ->
+      withTimeout(5_000) {
+        while (session.reportedDirectory != "/srv/my code") delay(20)
+      }
+      withTimeout(5_000) {
+        while (session.reportedDirectory != "/opt") delay(20)
+      }
+      withTimeout(5_000) {
+        while (!session.screenText().contains("onetwothree")) delay(20)
+      }
+    }
+  }
+
+  @Test
   fun `the program status probe is answered`() = runBlocking<Unit> {
     // Reads the 9 bytes of the reply straight off the terminal and prints them in hex.
     val script = "stty raw -echo; printf '\\033]7501;?\\007'; head -c 9 | od -An -tx1"

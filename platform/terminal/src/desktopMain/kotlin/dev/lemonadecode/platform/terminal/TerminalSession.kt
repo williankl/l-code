@@ -30,6 +30,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import java.io.File
 import java.nio.charset.StandardCharsets
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -67,11 +68,15 @@ public data class TerminalLaunch(
  */
 public class TerminalSession(launch: TerminalLaunch) : AutoCloseable {
   private val process: PtyProcess = PtyProcessBuilder(launch.command.toTypedArray())
-    .setDirectory(launch.workingDirectory)
+    // On Windows a folder may come written as git writes it, `C:/Users/me/repo`; File makes it `C:\Users\me\repo`.
+    .setDirectory(if (IsWindows) File(launch.workingDirectory).path else launch.workingDirectory)
     .setEnvironment(System.getenv() + TerminalEnvironment + launch.environment)
     .setInitialColumns(launch.columns)
     .setInitialRows(launch.rows)
     .setConsole(false)
+    // Windows: ConPTY (pty4j bundles it) rather than winpty, which drops sequences such as the
+    // folder reports. Ignored elsewhere.
+    .setUseWinConPty(true)
     .start()
 
   private val signalFlow = MutableSharedFlow<TerminalSignal>(
@@ -84,6 +89,10 @@ public class TerminalSession(launch: TerminalLaunch) : AutoCloseable {
   private val executors = SessionExecutors()
 
   private val outputFlow = MutableStateFlow(0L)
+
+  /** The folder the shell last reported (OSC 7 or 9;9), for when the OS can't be asked. */
+  @Volatile internal var reportedDirectory: String? = null
+    private set
 
   public val signals: SharedFlow<TerminalSignal> = signalFlow.asSharedFlow()
   public val version: StateFlow<Long> = versionFlow.asStateFlow()
@@ -104,6 +113,7 @@ public class TerminalSession(launch: TerminalLaunch) : AutoCloseable {
       signalFlow.tryEmit(TerminalSignal.Output)
     },
     onStatus = { status -> signalFlow.tryEmit(TerminalSignal.Program(status)) },
+    onFolder = { folder -> reportedDirectory = folder },
   )
   private val starter = TerminalStarter(
     terminal,
@@ -123,8 +133,15 @@ public class TerminalSession(launch: TerminalLaunch) : AutoCloseable {
   /** The id of the program's process (the shell, for a session). */
   public val pid: Long get() = process.pid()
 
-  /** The program's current folder, read from the OS; null when it can't be told. */
-  public fun currentDirectory(): String? = if (process.isAlive) ProcessDirectory.of(process.pid()) else null
+  /**
+   * The program's current folder, read from the OS; where it can't be (Windows), the one the shell
+   * last reported, if it exists here. Null when it can't be told.
+   */
+  public fun currentDirectory(): String? {
+    if (!process.isAlive) return null
+    if (ProcessDirectory.isSupported) return ProcessDirectory.of(process.pid())
+    return reportedDirectory?.takeIf { File(it).isDirectory }
+  }
 
   /**
    * The last [maxLines] lines of output, history included, as text: soft-wrapped lines joined back
@@ -281,14 +298,20 @@ private class PtyConnector(
   private val process: PtyProcess,
   private val onOutput: () -> Unit,
   onStatus: (ProgramStatus) -> Unit,
+  onFolder: (String) -> Unit,
 ) : ProcessTtyConnector(process, StandardCharsets.UTF_8) {
   // Answered from the reading thread, so the reply goes out before any later query's.
-  private val statuses = ProgramStatusScanner(reply = { write(it.toByteArray(StandardCharsets.UTF_8)) }, report = onStatus)
+  private val reports = OscScanner(
+    reply = { write(it.toByteArray(StandardCharsets.UTF_8)) },
+    report = onStatus,
+    folder = onFolder,
+    windows = IsWindows,
+  )
 
   override fun read(buf: CharArray, offset: Int, length: Int): Int {
     val read = super.read(buf, offset, length)
     if (read > 0) {
-      statuses.scan(buf, offset, read)
+      reports.scan(buf, offset, read)
       onOutput()
     }
     return read
@@ -302,6 +325,8 @@ private class PtyConnector(
 
   override fun isConnected(): Boolean = process.isAlive
 }
+
+private val IsWindows = System.getProperty("os.name").orEmpty().startsWith("Windows")
 
 private class SessionExecutors : TerminalExecutorServiceManager {
   private val single: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor { runnable ->

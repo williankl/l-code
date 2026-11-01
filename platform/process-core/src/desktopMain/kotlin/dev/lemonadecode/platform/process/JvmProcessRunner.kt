@@ -57,15 +57,22 @@ internal class JvmProcessRunner(
   }
 
   private companion object {
-    val NullDevice: String = if (System.getProperty("os.name").orEmpty().startsWith("Windows")) "NUL" else "/dev/null"
+    val NullDevice: String = if (IsWindows) "NUL" else "/dev/null"
   }
 }
 
+/** `$SHELL` on macOS and Linux. Windows has no such variable, so there it's PowerShell or cmd.exe; see [windowsShell]. */
 @ContributesBinding(AppScope::class)
 @Inject
 internal class EnvironmentUserShell : UserShell {
-  override val path: String = System.getenv("SHELL")?.takeIf { it.isNotBlank() } ?: "/bin/zsh"
+  override val path: String = if (IsWindows) {
+    windowsShell(System.getenv()) { File(it).isFile }
+  } else {
+    System.getenv("SHELL")?.takeIf { it.isNotBlank() } ?: "/bin/zsh"
+  }
 }
+
+private val IsWindows = System.getProperty("os.name").orEmpty().startsWith("Windows")
 
 @ContributesBinding(AppScope::class)
 @Inject

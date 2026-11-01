@@ -53,7 +53,7 @@ Same layering as `teya-business-app`: domain models, data sources, features spli
 | `platform/process-core` | `ProcessRunner`, `UserShell`, `HomeDirectory`. |
 | `platform/terminal` | `TerminalSession` (pty4j + JediTerm's emulator) and `TerminalView`, a Compose renderer. |
 | `platform/syntax-core` | Lightweight code colouring for the diff. |
-| `platform/power-core` | Keep-awake (`caffeinate` on macOS, `systemd-inhibit` on Linux). |
+| `platform/power-core` | Keep-awake (`caffeinate` on macOS, `systemd-inhibit` on Linux, PowerShell calling `SetThreadExecutionState` on Windows). |
 | `platform/designsystem` | `LemonadeCodeTheme` over Lemonade, plus tooltips, popovers, a slot segmented control. |
 | `domainEntities` | Sessions, reviews, diffs, settings. No dependencies. |
 | `data/git/{api,impl,fake}` | `GitDataSource` over the `git` command: merge-base diffs with whole-file context, untracked files, worktrees. |
@@ -93,7 +93,9 @@ type into `TerminalView` and check the cursor follows the text and blinks.
 
 - **Sessions** run `$SHELL -l` in a pseudo-terminal, starting at `~`. Every second Lemonade Code reads the
   shell's current folder from the OS (`lsof` on macOS, `/proc` on Linux) and asks git for its
-  checkout and branch, so the session name, top bar, diff and comments follow your `cd`s.
+  checkout and branch, so the session name, top bar, diff and comments follow your `cd`s. On
+  Windows a session runs PowerShell (`pwsh`, else Windows PowerShell, else `cmd.exe`) in a ConPTY,
+  with your profile, and its prompt also reports the folder to the terminal (OSC 9;9).
 - **Status** shows only while an agent reports it; a plain terminal shows none. Lemonade Code answers the
   program-status probe (OSC 7501) that Claude Code sends at startup, then Claude reports its own
   state and one per background agent: anything blocked (a permission, a question, an error) shows
@@ -113,7 +115,8 @@ type into `TerminalView` and check the cursor follows the text and blinks.
 - **The session list** shows each session's agent (or its shell when no agent is running) and its
   branch (or its folder outside git), e.g. `claude · feat/rate-limit`.
 - **Settings** live in `~/Library/Application Support/Lemonade Code/preferences.json` (macOS),
-  `~/.config/lemonade-code/preferences.json` (Linux). A settings folder from when the app was
+  `~/.config/lemonade-code/preferences.json` (Linux), `%APPDATA%\Lemonade Code\preferences.json`
+  (Windows). A settings folder from when the app was
   called Loupe is moved there on first launch.
 - **Updates.** Installed from a release file (DMG, MSI, .deb or tar.gz), the app checks GitHub for
   a newer release at launch and every 6 hours, and an Update button shows next to Settings when

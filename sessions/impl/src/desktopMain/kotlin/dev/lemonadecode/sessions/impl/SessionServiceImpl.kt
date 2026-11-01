@@ -368,7 +368,8 @@ internal class SessionServiceImpl(
     state.update { sessions -> sessions.map { if (it.id == id) transform(it).takeIf { new -> new != it } ?: it else it } }
   }
 
-  private fun rootName(folder: String): String = if (folder == home.path) "~" else folder.substringAfterLast('/').ifEmpty { folder }
+  // Windows paths ignore case: `cd c:\users\me` is home too.
+  private fun rootName(folder: String): String = if (folder.equals(home.path, ignoreCase = IsWindows)) "~" else folderName(folder, IsWindows).ifEmpty { folder }
 
   private companion object {
     val StaleReportCheck = 1.seconds
@@ -380,4 +381,10 @@ internal class SessionServiceImpl(
     val SaveDelay = 500.milliseconds
     const val MaxRestoredLines = 1_000
   }
+}
+
+/** The last part of [path]: `app` for `/Users/me/app`, and on [windows] for `C:\Users\me\app` too. */
+internal fun folderName(path: String, windows: Boolean): String {
+  val name = path.substringAfterLast('/')
+  return if (windows) name.substringAfterLast('\\') else name
 }

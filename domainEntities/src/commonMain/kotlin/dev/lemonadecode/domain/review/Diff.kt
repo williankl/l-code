@@ -21,8 +21,9 @@ public data class FileDiff(
   val lines: List<DiffLine>,
   val isBinary: Boolean,
 ) {
-  val additions: Int get() = lines.count { it.kind == DiffLineKind.Added }
-  val deletions: Int get() = lines.count { it.kind == DiffLineKind.Removed }
+  // Counted once: every Model reads them, and a file can have tens of thousands of lines.
+  val additions: Int = lines.count { it.kind == DiffLineKind.Added }
+  val deletions: Int = lines.count { it.kind == DiffLineKind.Removed }
 
   /** How the file can be drawn besides its text, or null when only the diff applies. */
   val previewKind: PreviewKind? get() = PreviewKind.of(path)

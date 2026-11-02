@@ -2,8 +2,11 @@ package dev.lemonadecode.workspace.ui
 
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.ScrollableDefaults
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.scrollable
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.hoverable
@@ -11,31 +14,28 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -50,8 +50,11 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.isShiftPressed
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.LocalPinnableContainer
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.onClick
@@ -59,16 +62,16 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.min
 import com.teya.lemonade.Button
 import com.teya.lemonade.Card
 import com.teya.lemonade.Icon
@@ -119,6 +122,8 @@ import dev.lemonadecode.workspace.uimodel.WorkspaceEvent
 import kotlinx.coroutines.flow.drop
 import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
+import kotlin.math.abs
+import kotlin.math.ceil
 
 /** Plus, old number, new number and sign columns: 32 + 44 + 44 + 24. */
 private val GutterWidth = 144.dp
@@ -128,91 +133,254 @@ private val CardMaxWidth = 880.dp
 private typealias LineBounds = MutableMap<Int, ClosedFloatingPointRange<Float>>
 
 /**
- * Rows of one file. Code scrolls sideways as one block; comment cards and the composer stay
- * pinned to the left edge while it does, like `position: sticky` in the design.
+ * How many items of the diff's list a file's body takes: its preview, or its rows, at least one
+ * so there is always an item to close the file's card.
  */
-@Composable
-internal fun DiffFileBody(
-  file: DiffFileModel,
-  onEvent: (WorkspaceEvent) -> Unit,
-  modifier: Modifier = Modifier,
-) {
-  val radius = LemonadeTheme.radius.radius500
-  val shape = RoundedCornerShape(bottomStart = radius, bottomEnd = radius)
-  val scroll = rememberScrollState()
-  val lineBounds = remember(file.id) { mutableStateMapOf<Int, ClosedFloatingPointRange<Float>>() }
-  val style = LemonadeCodeTheme.typography.code
+internal val DiffFileModel.bodyItemCount: Int
+  get() = when {
+    !expanded -> 0
+    preview?.showing == true -> 1
+    else -> maxOf(rows.size, 1)
+  }
 
-  BoxWithConstraints(
-    modifier = modifier
-      .fillMaxWidth()
-      .clip(shape)
-      .background(LemonadeTheme.colors.background.bgSubtle)
-      .padding(bottom = LemonadeTheme.spaces.spacing200),
-  ) {
-    val viewport = maxWidth
-    val pinnedWidth = min(viewport, CardMaxWidth)
-    Column(
-      modifier = Modifier
-        .horizontalScroll(scroll)
-        .widthIn(min = viewport)
-        .width(IntrinsicSize.Max),
-    ) {
-      file.rows.forEach { row ->
-        key(row.key) {
-          when (row) {
-            is DiffRowModel.Hunk -> HunkRow(
-              hunk = row,
-              style = style,
-              onExpand = { onEvent(WorkspaceEvent.ShowFullFile(file.id)) },
-            )
-            is DiffRowModel.Line -> {
-              DiffLineRow(
-                fileId = file.id,
-                fileName = file.fileName,
-                line = row,
-                style = style,
-                lineBounds = lineBounds,
-                onEvent = onEvent,
-              )
-              row.comments.forEach { comment ->
-                PinnedSlot(scroll = scroll, width = pinnedWidth) {
-                  ReviewCommentCard(comment = comment, onEvent = onEvent)
-                }
-              }
-              row.composer?.let { composer ->
-                PinnedSlot(scroll = scroll, width = pinnedWidth) {
-                  CommentComposerCard(composer = composer, onEvent = onEvent)
-                }
-              }
-            }
-            is DiffRowModel.FileTail -> FileTailRow(
-              tail = row,
-              scroll = scroll,
-              width = pinnedWidth,
-              onExpand = { onEvent(WorkspaceEvent.ShowFullFile(file.id)) },
-            )
-          }
-        }
+/**
+ * Rows of one file, each an item of the diff's list, so only the lines on screen are composed.
+ * Code scrolls sideways as one block through [state]; comment cards and the composer stay pinned
+ * to the left edge while it does, like `position: sticky` in the design.
+ */
+internal fun LazyListScope.diffFileRows(
+  file: DiffFileModel,
+  state: DiffFileRowsState,
+  measure: CodeMeasure,
+  onEvent: (WorkspaceEvent) -> Unit,
+) {
+  val rows = file.rows
+  items(
+    count = file.bodyItemCount,
+    key = { index -> rows.getOrNull(index)?.let { "row:${file.id}:${it.key}" } ?: "end:${file.id}" },
+    contentType = { index ->
+      when (rows.getOrNull(index)) {
+        is DiffRowModel.Line -> "line"
+        is DiffRowModel.Hunk -> "hunk"
+        is DiffRowModel.FileTail -> "tail"
+        null -> "end"
       }
+    },
+  ) { index ->
+    val row = rows.getOrNull(index)
+    // The item gets only what it draws, not the file: comparing a file's rows to skip an
+    // unchanged item would cost as much as the file is long.
+    DiffRowItem(
+      fileId = file.id,
+      fileName = file.fileName,
+      row = row,
+      last = index >= rows.lastIndex,
+      codeWidthPx = if (row is DiffRowModel.Line || row is DiffRowModel.Hunk) state.codeWidth(rows, measure) else 0,
+      state = state,
+      onEvent = onEvent,
+    )
+  }
+}
+
+/**
+ * What a file's rows share while they scroll in and out of the list: the code's sideways scroll,
+ * where each line on screen is, and how wide the code is.
+ */
+@Stable
+internal class DiffFileRowsState {
+  val scroll: ScrollState = ScrollState(initial = 0)
+  val lineBounds: LineBounds = HashMap()
+  private var measuredRows: List<DiffRowModel>? = null
+  private var measuredWith: CodeMeasure? = null
+  private var width = 0
+
+  /**
+   * The width, in pixels, of every row that scrolls with the code: that of the widest one, as when
+   * the rows were one column as wide as its widest. Measured again only when the code changes, not
+   * for a selection, comment or composer over it.
+   */
+  fun codeWidth(rows: List<DiffRowModel>, measure: CodeMeasure): Int {
+    if (measure !== measuredWith || !sameCode(rows, measuredRows)) {
+      width = rows.maxOfOrNull(measure::rowWidth) ?: 0
+      measuredWith = measure
     }
+    measuredRows = rows
+    return width
+  }
+
+  private fun sameCode(rows: List<DiffRowModel>, measured: List<DiffRowModel>?): Boolean = rows === measured ||
+    (measured != null && rows.size == measured.size && rows.indices.all { sameCode(rows[it], measured[it]) })
+
+  private fun sameCode(row: DiffRowModel, measured: DiffRowModel): Boolean = row === measured ||
+    when (row) {
+      is DiffRowModel.Line -> measured is DiffRowModel.Line && row.tokens === measured.tokens
+      is DiffRowModel.Hunk -> measured is DiffRowModel.Hunk && row.header == measured.header
+      is DiffRowModel.FileTail -> measured is DiffRowModel.FileTail
+    }
+}
+
+/**
+ * Measures a row of code as it lays itself out: gutter, text and the space after it. The code font
+ * is monospace, so text of printable ASCII is its length in cells; only text with anything else in
+ * it, like a tab or a wide character, is laid out to be measured.
+ */
+internal class CodeMeasure(
+  private val measurer: TextMeasurer,
+  private val style: TextStyle,
+  private val code: LemonadeCodeCodeColors,
+  private val gutter: Int,
+  private val endPadding: Int,
+) {
+  private val cells = HashMap<CodeTokenKind, Float>()
+
+  /** Should the system's monospace font be anything but, every line is laid out to be measured. */
+  private val monospace = abs(cellOf("i", CodeTokenKind.Plain) - cellOf("W", CodeTokenKind.Plain)) < 0.01f
+
+  fun rowWidth(row: DiffRowModel): Int = when (row) {
+    is DiffRowModel.Line -> gutter + ceil(lineWidth(row.tokens)).toInt() + endPadding
+    is DiffRowModel.Hunk -> gutter + ceil(textWidth(row.header)).toInt() + endPadding
+    is DiffRowModel.FileTail -> 0
+  }
+
+  private fun lineWidth(tokens: List<CodeTokenModel>): Float {
+    var width = 0f
+    for (token in tokens) {
+      if (!monospace || !token.text.isPrintableAscii()) return measured(codeLine(tokens, code))
+      width += token.text.length * cell(token.kind)
+    }
+    return width
+  }
+
+  private fun textWidth(text: String): Float = if (monospace && text.isPrintableAscii()) {
+    text.length * cell(CodeTokenKind.Plain)
+  } else {
+    measured(AnnotatedString(text))
+  }
+
+  private fun cell(kind: CodeTokenKind): Float = cells.getOrPut(kind) { cellOf("0", kind) }
+
+  /** The advance of [char] in the style of [kind], to a hundredth of a pixel. */
+  private fun cellOf(char: String, kind: CodeTokenKind): Float = measured(
+    buildAnnotatedString { withStyle(kind.span(code)) { append(char.repeat(CellSample)) } },
+  ) / CellSample
+
+  private fun measured(text: AnnotatedString): Float = measurer.measure(text, style, softWrap = false, maxLines = 1).multiParagraph.intrinsics.maxIntrinsicWidth
+
+  private fun String.isPrintableAscii(): Boolean = all { it in ' '..'~' }
+
+  private companion object {
+    const val CellSample = 100
   }
 }
 
 @Composable
+internal fun rememberCodeMeasure(): CodeMeasure {
+  val measurer = rememberTextMeasurer(cacheSize = 0)
+  val style = LemonadeCodeTheme.typography.code
+  val code = LemonadeCodeTheme.code
+  val density = LocalDensity.current
+  val gutter = with(density) { GutterWidth.roundToPx() }
+  val endPadding = with(density) { LemonadeTheme.spaces.spacing600.roundToPx() }
+  return remember(measurer, style, code, gutter, endPadding) { CodeMeasure(measurer, style, code, gutter, endPadding) }
+}
+
+@Composable
+private fun DiffRowItem(
+  fileId: String,
+  fileName: String,
+  row: DiffRowModel?,
+  last: Boolean,
+  codeWidthPx: Int,
+  state: DiffFileRowsState,
+  onEvent: (WorkspaceEvent) -> Unit,
+) {
+  val radius = LemonadeTheme.radius.radius500
+  val background = LemonadeTheme.colors.background.bgSubtle
+  val style = LemonadeCodeTheme.typography.code
+  val codeWidth = with(LocalDensity.current) { codeWidthPx.toDp() }
+  // The last item closes the file's card, as its header opens it.
+  Column(
+    modifier = if (last) {
+      Modifier
+        .fillMaxWidth()
+        .clip(RoundedCornerShape(bottomStart = radius, bottomEnd = radius))
+        .background(background)
+        .padding(bottom = LemonadeTheme.spaces.spacing200)
+    } else {
+      Modifier.fillMaxWidth().background(background)
+    },
+  ) {
+    when (row) {
+      is DiffRowModel.Hunk -> HunkRow(
+        hunk = row,
+        style = style,
+        codeWidth = codeWidth,
+        scroll = state.scroll,
+        onExpand = { onEvent(WorkspaceEvent.ShowFullFile(fileId)) },
+      )
+      is DiffRowModel.Line -> {
+        DiffLineRow(
+          fileId = fileId,
+          fileName = fileName,
+          line = row,
+          style = style,
+          codeWidth = codeWidth,
+          scroll = state.scroll,
+          lineBounds = state.lineBounds,
+          onEvent = onEvent,
+        )
+        row.comments.forEach { comment ->
+          PinnedSlot(scroll = state.scroll) {
+            ReviewCommentCard(comment = comment, onEvent = onEvent)
+          }
+        }
+        row.composer?.let { composer ->
+          PinnedSlot(scroll = state.scroll) {
+            CommentComposerCard(composer = composer, onEvent = onEvent)
+          }
+        }
+      }
+      is DiffRowModel.FileTail -> FileTailRow(
+        tail = row,
+        scroll = state.scroll,
+        onExpand = { onEvent(WorkspaceEvent.ShowFullFile(fileId)) },
+      )
+      null -> Unit
+    }
+  }
+}
+
+/**
+ * Scrolls the code sideways from over something that stays put while it does, like a comment card,
+ * as it did when everything sat in the code's scrolling column.
+ */
+@Composable
+private fun Modifier.scrollsCode(scroll: ScrollState): Modifier = scrollable(
+  state = scroll,
+  orientation = Orientation.Horizontal,
+  reverseDirection = ScrollableDefaults.reverseDirection(LocalLayoutDirection.current, Orientation.Horizontal, reverseScrolling = false),
+)
+
+/** A row that scrolls with the code: as wide as the widest, and never narrower than the list. */
+private fun Modifier.scrollingWithCode(scroll: ScrollState, codeWidth: Dp): Modifier = fillMaxWidth()
+  .horizontalScroll(scroll)
+  .width(codeWidth)
+
+@Composable
 private fun PinnedSlot(
   scroll: ScrollState,
-  width: Dp,
   content: @Composable () -> Unit,
 ) {
   val spaces = LemonadeTheme.spaces
-  Box(
-    modifier = Modifier
-      .width(width)
-      .offset { IntOffset(scroll.value, 0) }
-      .padding(start = GutterWidth, end = spaces.spacing400, top = spaces.spacing200, bottom = spaces.spacing200),
-  ) {
-    content()
+  Box(modifier = Modifier.fillMaxWidth().scrollsCode(scroll)) {
+    Box(
+      modifier = Modifier
+        .widthIn(max = CardMaxWidth)
+        .fillMaxWidth()
+        .padding(start = GutterWidth, end = spaces.spacing400, top = spaces.spacing200, bottom = spaces.spacing200),
+    ) {
+      content()
+    }
   }
 }
 
@@ -220,12 +388,14 @@ private fun PinnedSlot(
 private fun HunkRow(
   hunk: DiffRowModel.Hunk,
   style: TextStyle,
+  codeWidth: Dp,
+  scroll: ScrollState,
   onExpand: () -> Unit,
 ) {
   Row(
     verticalAlignment = Alignment.CenterVertically,
     modifier = Modifier
-      .fillMaxWidth()
+      .scrollingWithCode(scroll, codeWidth)
       .heightIn(min = 36.dp)
       .background(LemonadeTheme.colors.background.bgElevated),
   ) {
@@ -246,7 +416,8 @@ private fun HunkRow(
       style = style,
       color = LemonadeTheme.colors.content.contentSecondary,
       maxLines = 1,
-      modifier = Modifier.padding(end = LemonadeTheme.spaces.spacing600),
+      // Measured on its own, so a header can't wrap should it come out a hair wider than measured.
+      modifier = Modifier.wrapContentWidth(Alignment.Start, unbounded = true).padding(end = LemonadeTheme.spaces.spacing600),
     )
   }
 }
@@ -255,7 +426,6 @@ private fun HunkRow(
 private fun FileTailRow(
   tail: DiffRowModel.FileTail,
   scroll: ScrollState,
-  width: Dp,
   onExpand: () -> Unit,
 ) {
   val secondary = LemonadeTheme.colors.content.contentSecondary
@@ -264,11 +434,12 @@ private fun FileTailRow(
     modifier = Modifier
       .fillMaxWidth()
       .heightIn(min = 36.dp)
-      .background(LemonadeTheme.colors.background.bgElevated),
+      .background(LemonadeTheme.colors.background.bgElevated)
+      .scrollsCode(scroll),
   ) {
     Row(
       verticalAlignment = Alignment.CenterVertically,
-      modifier = Modifier.width(width).offset { IntOffset(scroll.value, 0) },
+      modifier = Modifier.widthIn(max = CardMaxWidth).fillMaxWidth(),
     ) {
       Box(modifier = Modifier.width(GutterWidth).padding(start = LemonadeTheme.spaces.spacing100)) {
         LemonadeUi.IconButton(
@@ -302,6 +473,8 @@ private fun DiffLineRow(
   fileName: String,
   line: DiffRowModel.Line,
   style: TextStyle,
+  codeWidth: Dp,
+  scroll: ScrollState,
   lineBounds: LineBounds,
   onEvent: (WorkspaceEvent) -> Unit,
 ) {
@@ -318,7 +491,7 @@ private fun DiffLineRow(
 
   Row(
     modifier = Modifier
-      .fillMaxWidth()
+      .scrollingWithCode(scroll, codeWidth)
       .heightIn(min = 20.dp)
       .background(
         when (line.kind) {
@@ -332,7 +505,7 @@ private fun DiffLineRow(
       }
       .hoverable(interactionSource)
       .onGloballyPositioned { coordinates ->
-        // Unclipped, so lines scrolled out of view still map to where they really are.
+        // Unclipped, so a line half out of view still maps to where it really is.
         val top = coordinates.positionInRoot().y
         lineBounds[line.index] = top..(top + coordinates.size.height)
       },
@@ -376,7 +549,8 @@ private fun DiffLineRow(
       text = rememberCodeLine(line.tokens, LemonadeCodeTheme.code),
       textStyle = style,
       maxLines = 1,
-      modifier = Modifier.padding(end = LemonadeTheme.spaces.spacing600),
+      // Measured on its own, so a line can't wrap should it come out a hair wider than measured.
+      modifier = Modifier.wrapContentWidth(Alignment.Start, unbounded = true).padding(end = LemonadeTheme.spaces.spacing600),
     )
   }
 }
@@ -463,18 +637,19 @@ private fun CommentPlusButton(
 }
 
 @Composable
-private fun rememberCodeLine(tokens: List<CodeTokenModel>, code: LemonadeCodeCodeColors): AnnotatedString = remember(tokens, code) {
-  buildAnnotatedString {
-    tokens.forEach { token ->
-      val span = SpanStyle(
-        color = token.kind.color(code),
-        fontStyle = if (token.kind == CodeTokenKind.Comment) FontStyle.Italic else FontStyle.Normal,
-        fontWeight = if (token.kind == CodeTokenKind.Heading) FontWeight.SemiBold else FontWeight.Normal,
-      )
-      withStyle(span) { append(token.text) }
-    }
+private fun rememberCodeLine(tokens: List<CodeTokenModel>, code: LemonadeCodeCodeColors): AnnotatedString = remember(tokens, code) { codeLine(tokens, code) }
+
+private fun codeLine(tokens: List<CodeTokenModel>, code: LemonadeCodeCodeColors): AnnotatedString = buildAnnotatedString {
+  tokens.forEach { token ->
+    withStyle(token.kind.span(code)) { append(token.text) }
   }
 }
+
+private fun CodeTokenKind.span(code: LemonadeCodeCodeColors): SpanStyle = SpanStyle(
+  color = color(code),
+  fontStyle = if (this == CodeTokenKind.Comment) FontStyle.Italic else FontStyle.Normal,
+  fontWeight = if (this == CodeTokenKind.Heading) FontWeight.SemiBold else FontWeight.Normal,
+)
 
 private fun CodeTokenKind.color(code: LemonadeCodeCodeColors): Color = when (this) {
   CodeTokenKind.Plain -> code.plain
@@ -551,6 +726,13 @@ private fun CommentComposerCard(
   onEvent: (WorkspaceEvent) -> Unit,
 ) {
   val spaces = LemonadeTheme.spaces
+  // The list keeps the composer while it's open, as it did when every row was there: scrolled
+  // away, it keeps its text, caret and focus, and scrolling back doesn't pull the list to it again.
+  val pinnable = LocalPinnableContainer.current
+  DisposableEffect(pinnable) {
+    val pinned = pinnable?.pin()
+    onDispose { pinned?.release() }
+  }
   val bringIntoView = remember { BringIntoViewRequester() }
   LaunchedEffect(composer.title) {
     withFrameNanos { }

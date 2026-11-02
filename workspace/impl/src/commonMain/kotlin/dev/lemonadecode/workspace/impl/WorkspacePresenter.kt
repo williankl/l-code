@@ -86,6 +86,8 @@ public class WorkspacePresenter internal constructor(
 
     RefreshWhenTerminalSettles(selected, onRefresh = { previewGeneration++ })
 
+    val diffRows = remember { DiffRowCache() }
+
     val eventSink: (WorkspaceEvent) -> Unit = remember {
       { event ->
         val current = WorkspaceModelMapper.selectedSession(sessionService.sessions.value, view)
@@ -353,6 +355,7 @@ public class WorkspacePresenter internal constructor(
       previews = previewLoads,
       previewAssets = previewAssets,
       update = updateState,
+      diffRows = diffRows,
     )
     return WorkspaceModelMapper.map(input, eventSink)
   }

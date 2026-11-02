@@ -65,6 +65,8 @@ internal data class WorkspaceInput(
   /** The worktree the open session menu's branch field would create. */
   val menuWorktreePlan: SubSessionPlan? = null,
   val update: UpdateState = UpdateState.None,
+  /** Diff rows mapped for earlier Models, reused while their file and marks stay the same. */
+  val diffRows: DiffRowCache = DiffRowCache(),
 )
 
 /** Turns domain state and the workspace's UI state into the immutable Model the UI draws. */
@@ -114,7 +116,7 @@ internal object WorkspaceModelMapper {
       content = when {
         selected == null -> WorkspaceContentModel.NoSessions
         view.view == WorkspaceView.Terminal -> WorkspaceContentModel.Terminal(selected.id.value)
-        else -> DiffMapper.content(input.review, view, input.pendingMessage, input.previews, input.previewAssets)
+        else -> DiffMapper.content(input.review, view, input.pendingMessage, input.previews, input.previewAssets, input.diffRows)
       },
       settings = SettingsModel(
         open = view.settingsOpen,

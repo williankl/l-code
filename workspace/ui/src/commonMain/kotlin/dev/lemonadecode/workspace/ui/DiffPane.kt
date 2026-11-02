@@ -2,6 +2,7 @@ package dev.lemonadecode.workspace.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
@@ -17,16 +18,22 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -77,6 +84,7 @@ import dev.lemonadecode.workspace.ui.preview.FilePreviewBody
 import dev.lemonadecode.workspace.uimodel.DiffBaseModel
 import dev.lemonadecode.workspace.uimodel.DiffFileModel
 import dev.lemonadecode.workspace.uimodel.DiffReviewModel
+import dev.lemonadecode.workspace.uimodel.DiffRowModel
 import dev.lemonadecode.workspace.uimodel.DiffToolbarModel
 import dev.lemonadecode.workspace.uimodel.FileChangeKind
 import dev.lemonadecode.workspace.uimodel.WorkspaceEvent
@@ -90,9 +98,16 @@ internal fun DiffPane(
   modifier: Modifier = Modifier,
 ) {
   val spaces = LemonadeTheme.spaces
+  val listState = rememberLazyListState()
+  // Here rather than in the rows, which are only composed while on screen.
+  val fileStates = remember { HashMap<String, DiffFileRowsState>() }
+  SideEffect { fileStates.keys.retainAll(review.files.mapTo(HashSet()) { it.id }) }
+  val measure = rememberCodeMeasure()
+  RevealOpenComposer(review = review, listState = listState)
   Column(modifier = modifier) {
     DiffToolbar(toolbar = review.toolbar, onEvent = onEvent)
     LazyColumn(
+      state = listState,
       contentPadding = PaddingValues(start = spaces.spacing400, end = spaces.spacing400, bottom = spaces.spacing400),
       modifier = Modifier.weight(1f).fillMaxWidth(),
     ) {
@@ -103,20 +118,54 @@ internal fun DiffPane(
         stickyHeader(key = "head:${file.id}") {
           DiffFileHeader(file = file, onEvent = onEvent)
         }
-        if (file.expanded) {
-          item(key = "body:${file.id}") {
-            val preview = file.preview
-            if (preview != null && preview.showing) {
-              FilePreviewBody(file = file, preview = preview, assets = review.assets, onEvent = onEvent)
-            } else {
-              DiffFileBody(file = file, onEvent = onEvent)
-            }
+        val preview = file.preview
+        when {
+          !file.expanded -> Unit
+          preview != null && preview.showing -> item(key = "body:${file.id}") {
+            FilePreviewBody(file = file, preview = preview, assets = review.assets, onEvent = onEvent)
           }
+          else -> diffFileRows(file = file, state = fileStates.getOrPut(file.id) { DiffFileRowsState() }, measure = measure, onEvent = onEvent)
         }
       }
     }
     SendBar(sendBar = review.sendBar, onEvent = onEvent)
   }
+}
+
+/**
+ * The composer brings itself into view as it opens. One already open as the diff appears can be on
+ * a line far down that the list hasn't composed, so the list first brings that line up from below
+ * the bottom edge, and the composer then shows itself from there as it would have.
+ */
+@Composable
+private fun RevealOpenComposer(
+  review: DiffReviewModel,
+  listState: LazyListState,
+) {
+  val lineHeight = with(LocalDensity.current) { 20.dp.toPx() }
+  LaunchedEffect(listState) {
+    val index = review.composerItemIndex() ?: return@LaunchedEffect
+    withFrameNanos { }
+    val layout = listState.layoutInfo
+    if (layout.visibleItemsInfo.any { it.index == index }) return@LaunchedEffect
+    listState.scrollToItem(index)
+    val _ = listState.scrollBy(-(layout.viewportEndOffset - layout.viewportStartOffset - lineHeight))
+  }
+}
+
+/** The list item of the line the composer is open under, counted as [DiffPane] lays the items out. */
+private fun DiffReviewModel.composerItemIndex(): Int? {
+  var item = 0
+  files.forEachIndexed { index, file ->
+    if (index > 0) item++ // The gap above the file.
+    item++ // Its header.
+    if (file.preview?.showing != true) {
+      val row = file.rows.indexOfFirst { it is DiffRowModel.Line && it.composer != null }
+      if (row >= 0) return item + row
+    }
+    item += file.bodyItemCount
+  }
+  return null
 }
 
 /** "Changes · working tree vs <branch>", the branch a picker; the summary once there is a diff. */

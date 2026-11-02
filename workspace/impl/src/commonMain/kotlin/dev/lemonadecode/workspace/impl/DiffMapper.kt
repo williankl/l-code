@@ -67,6 +67,7 @@ internal object DiffMapper {
     pendingMessage: String?,
     previews: Map<String, PreviewLoad> = emptyMap(),
     assets: PreviewAssetLoader = PreviewAssetLoader.None,
+    rowCache: DiffRowCache = DiffRowCache(),
   ): WorkspaceContentModel {
     val toolbar = toolbar(review, view)
     return when (val diff = review?.diff ?: DiffState.Loading) {
@@ -84,7 +85,7 @@ internal object DiffMapper {
       is DiffState.Ready -> if (diff.snapshot.files.isEmpty()) {
         WorkspaceContentModel.Message(Res.string.message_no_changes.asLemonadeCodeString(diff.snapshot.baseRef), diffToolbar = toolbar)
       } else {
-        WorkspaceContentModel.Diff(review(diff.snapshot, review?.comments.orEmpty(), toolbar, view, pendingMessage, previews, assets))
+        WorkspaceContentModel.Diff(review(diff.snapshot, review?.comments.orEmpty(), toolbar, view, pendingMessage, previews, assets, rowCache))
       }
     }
   }
@@ -146,9 +147,11 @@ internal object DiffMapper {
     pendingMessage: String?,
     previews: Map<String, PreviewLoad>,
     assets: PreviewAssetLoader,
+    rowCache: DiffRowCache,
   ): DiffReviewModel {
     val unsent = comments.filter { it.status == CommentStatus.Unsent }
     val fileCount = snapshot.files.size
+    rowCache.retain(snapshot.files)
     return DiffReviewModel(
       toolbar = toolbar.copy(
         summary = if (snapshot.hasUncommittedChanges) {
@@ -157,7 +160,7 @@ internal object DiffMapper {
           Res.plurals.diff_summary.asLemonadeCodeString(fileCount)
         },
       ),
-      files = snapshot.files.map { file(it, comments.filter { comment -> comment.filePath == it.path }, view, previews[it.path]) },
+      files = snapshot.files.map { file(it, comments.filter { comment -> comment.filePath == it.path }, view, previews[it.path], rowCache) },
       sendBar = SendBarModel(
         summary = when {
           unsent.isNotEmpty() -> SendBarSummary.Unsent(unsent.size, unsent.map { it.filePath }.distinct().size)
@@ -176,41 +179,22 @@ internal object DiffMapper {
     comments: List<ReviewComment>,
     view: WorkspaceViewState,
     preview: PreviewLoad?,
+    rowCache: DiffRowCache,
   ): DiffFileModel {
     val commented = comments.isNotEmpty()
     val expanded = isBodyVisible(file, view, commented)
     val showingPreview = isShowingPreview(file, view, commented)
     val full = file.path in view.fullFiles
     val fileName = file.path.substringAfterLast('/')
-    val selection = (view.dragging ?: view.composer?.range)?.takeIf { it.filePath == file.path }
-    val composer = view.composer?.takeIf { it.range.filePath == file.path && view.dragging == null }
-    fun line(index: Int): DiffRowModel.Line {
-      val line = file.lines[index]
-      val anchor = anchorOf(line)
-      return DiffRowModel.Line(
-        key = "${file.path}:${if (anchor.side == LineSide.New) "n" else "o"}${anchor.line}",
-        index = index,
-        oldNumber = line.oldNumber,
-        newNumber = line.newNumber,
-        kind = line.kind.toModel(),
-        tokens = line.tokens.map { CodeTokenModel(it.text, it.kind.toModel()) },
-        selected = selection != null && index in selection.first..selection.last,
-        isSelectionAnchor = selection?.first == index,
-        comments = comments.filter { it.end == anchor }.map { comment(it, fileName) },
-        composer = composer?.takeIf { it.range.last == index }?.let {
-          val range = rangeText(anchorOf(file.lines[it.range.first]), anchorOf(file.lines[it.range.last]))
-          CommentComposerModel(
-            title = Res.string.comment_on_line.asLemonadeCodeString("${file.path}:$range"),
-            draft = it.draft,
-            canSubmit = it.draft.isNotBlank(),
-          )
-        },
+    val rows = if (!expanded || file.isBinary || showingPreview) {
+      emptyList()
+    } else {
+      val marks = LineMarks(
+        selection = (view.dragging ?: view.composer?.range)?.takeIf { it.filePath == file.path },
+        composer = view.composer?.takeIf { it.range.filePath == file.path && view.dragging == null },
+        comments = comments,
       )
-    }
-    val rows = when {
-      !expanded || file.isBinary || showingPreview -> emptyList()
-      full -> file.lines.indices.map(::line)
-      else -> hunkedRows(file, ::line)
+      rowCache.rows(file, full, marks, plain = { plainRows(file, full) }, marked = { plain -> marked(file, fileName, plain, marks) })
     }
     return DiffFileModel(
       id = file.path,
@@ -275,6 +259,61 @@ internal object DiffMapper {
     is FileContent.Bytes -> PreviewSideModel.Content(bytes, path.substringAfterLast('/').substringAfterLast('.', "").lowercase())
   }
 
+  /** The file's rows, hunked or [full], before any selection, comment or composer is laid over them. */
+  private fun plainRows(file: FileDiff, full: Boolean): List<DiffRowModel> {
+    fun line(index: Int): DiffRowModel.Line {
+      val line = file.lines[index]
+      val anchor = anchorOf(line)
+      return DiffRowModel.Line(
+        key = "${file.path}:${if (anchor.side == LineSide.New) "n" else "o"}${anchor.line}",
+        index = index,
+        oldNumber = line.oldNumber,
+        newNumber = line.newNumber,
+        kind = line.kind.toModel(),
+        tokens = line.tokens.map { CodeTokenModel(it.text, it.kind.toModel()) },
+        selected = false,
+        isSelectionAnchor = false,
+        comments = emptyList(),
+        composer = null,
+      )
+    }
+    return if (full) file.lines.indices.map(::line) else hunkedRows(file, ::line)
+  }
+
+  /** [plain] with the selection, comments and composer of [marks] on their lines; the rest are kept as they are. */
+  private fun marked(
+    file: FileDiff,
+    fileName: String,
+    plain: List<DiffRowModel>,
+    marks: LineMarks,
+  ): List<DiffRowModel> {
+    val selection = marks.selection
+    val composer = marks.composer
+    val commentsByEnd = marks.comments.groupBy { it.end }
+    if (selection == null && composer == null && commentsByEnd.isEmpty()) return plain
+    return plain.map { row ->
+      if (row !is DiffRowModel.Line) return@map row
+      val index = row.index
+      val selected = selection != null && index in selection.first..selection.last
+      val comments = if (commentsByEnd.isEmpty()) emptyList() else commentsByEnd[anchorOf(file.lines[index])].orEmpty()
+      val composing = composer?.takeIf { it.range.last == index }
+      if (!selected && comments.isEmpty() && composing == null) return@map row
+      row.copy(
+        selected = selected,
+        isSelectionAnchor = selection?.first == index,
+        comments = comments.map { comment(it, fileName) },
+        composer = composing?.let {
+          val range = rangeText(anchorOf(file.lines[it.range.first]), anchorOf(file.lines[it.range.last]))
+          CommentComposerModel(
+            title = Res.string.comment_on_line.asLemonadeCodeString("${file.path}:$range"),
+            draft = it.draft,
+            canSubmit = it.draft.isNotBlank(),
+          )
+        },
+      )
+    }
+  }
+
   /** Changed lines with three lines of context, merged where they touch, like `git diff`. */
   private fun hunkedRows(file: FileDiff, line: (Int) -> DiffRowModel.Line): List<DiffRowModel> {
     val lines = file.lines
@@ -288,12 +327,19 @@ internal object DiffMapper {
     }
     if (ranges.isEmpty()) return lines.indices.map(line)
     var previousEnd = -1
+    // The nearest declaration above each hunk, found in one pass down the file rather than a
+    // search back from every hunk.
+    var context: String? = null
+    var searched = 0
     return buildList {
       ranges.forEach { (start, end) ->
         val segment = lines.subList(start, end + 1)
         val olds = segment.filter { it.oldNumber != null }
         val news = segment.filter { it.newNumber != null }
-        val context = (start - 1 downTo 0).map { lines[it].text }.firstOrNull { hunkContext.containsMatchIn(it) }
+        while (searched < start) {
+          val text = lines[searched++].text
+          if (hunkContext.containsMatchIn(text)) context = text
+        }
         val header = "@@ -${olds.firstOrNull()?.oldNumber ?: 0},${olds.size} +${news.firstOrNull()?.newNumber ?: 0},${news.size} @@" +
           (context?.let { "  $it" } ?: "")
         add(DiffRowModel.Hunk(key = "h$start", header = header, hiddenLineCount = start - (previousEnd + 1)))

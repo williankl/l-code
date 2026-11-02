@@ -128,6 +128,16 @@ public class TerminalSession(launch: TerminalLaunch) : AutoCloseable {
   public val cursorVisible: Boolean get() = display.showsCursor
   public val columns: Int get() = textBuffer.width
   public val rows: Int get() = textBuffer.height
+
+  /**
+   * Lines above the screen that can be scrolled back to. None while a full-screen program has the
+   * alternate screen: like xterm's, it keeps no scrollback. JediTerm files whatever is erased or
+   * scrolled off it there, so every repaint of a full-screen app would otherwise pile up above it.
+   */
+  public val scrollbackLines: Int get() = if (textBuffer.isUsingAlternateBuffer) 0 else textBuffer.historyLinesCount
+
+  /** Whether the program asked for mouse reports (xterm mouse tracking), so the wheel is its to handle. */
+  public val reportsMouse: Boolean get() = display.trackingMode in MouseTracking
   public val isRunning: Boolean get() = process.isAlive
 
   /** The id of the program's process (the shell, for a session). */
@@ -152,7 +162,7 @@ public class TerminalSession(launch: TerminalLaunch) : AutoCloseable {
     try {
       val lines = mutableListOf<String>()
       val current = StringBuilder()
-      for (index in -textBuffer.historyLinesCount until textBuffer.height) {
+      for (index in -scrollbackLines until textBuffer.height) {
         val line = textBuffer.getLine(index)
         current.append(line.text.replace(CharUtils.DWC.toString(), "").replace(CharUtils.NUL_CHAR, ' '))
         if (!line.isWrapped) {
@@ -224,6 +234,18 @@ public class TerminalSession(launch: TerminalLaunch) : AutoCloseable {
     send(if (display.bracketedPaste) "$PasteStart$normalized$PasteEnd" else normalized)
   }
 
+  /**
+   * Reports [turns] turns of the wheel, [up] or down, over the cell at [column], [row] (counted from
+   * 0) to the program, in the format it asked for. Sends nothing and returns false when it didn't ask
+   * for mouse reports.
+   */
+  public fun sendWheel(column: Int, row: Int, up: Boolean, turns: Int): Boolean {
+    if (!reportsMouse || turns < 1) return false
+    val report = mouseReport(display.reportFormat, if (up) WheelUp else WheelDown, column + 1, row + 1)
+    repeat(turns) { send(report) }
+    return true
+  }
+
   /** Escape sequence for a non-text key (arrows, Enter, function keys), or null for text keys. */
   public fun keyCode(awtKeyCode: Int, awtModifiersEx: Int): ByteArray? = terminal.getCodeForKey(awtKeyCode, awtModifiersEx)
 
@@ -243,6 +265,10 @@ public class TerminalSession(launch: TerminalLaunch) : AutoCloseable {
     @Volatile var showsCursor: Boolean = true
 
     @Volatile var bracketedPaste: Boolean = false
+
+    @Volatile var trackingMode: MouseMode = MouseMode.MOUSE_REPORTING_NONE
+
+    @Volatile var reportFormat: MouseFormat = MouseFormat.MOUSE_FORMAT_XTERM
     private var title = ""
 
     override fun setCursor(x: Int, y: Int) {
@@ -272,9 +298,13 @@ public class TerminalSession(launch: TerminalLaunch) : AutoCloseable {
 
     override fun getSelection(): TerminalSelection? = null
 
-    override fun terminalMouseModeSet(mouseMode: MouseMode) = Unit
+    override fun terminalMouseModeSet(mouseMode: MouseMode) {
+      trackingMode = mouseMode
+    }
 
-    override fun setMouseFormat(mouseFormat: MouseFormat) = Unit
+    override fun setMouseFormat(mouseFormat: MouseFormat) {
+      reportFormat = mouseFormat
+    }
 
     override fun ambiguousCharsAreDoubleWidth(): Boolean = false
 
@@ -286,6 +316,16 @@ public class TerminalSession(launch: TerminalLaunch) : AutoCloseable {
   private companion object {
     const val PasteStart = "\u001b[200~"
     const val PasteEnd = "\u001b[201~"
+
+    /** xterm's button codes for the wheel. */
+    const val WheelUp = 64
+    const val WheelDown = 65
+    val MouseTracking = setOf(
+      MouseMode.MOUSE_REPORTING_NORMAL,
+      MouseMode.MOUSE_REPORTING_HILITE,
+      MouseMode.MOUSE_REPORTING_BUTTON_MOTION,
+      MouseMode.MOUSE_REPORTING_ALL_MOTION,
+    )
     val TerminalEnvironment = mapOf(
       "TERM" to "xterm-256color",
       "COLORTERM" to "truecolor",
@@ -327,6 +367,24 @@ private class PtyConnector(
 }
 
 private val IsWindows = System.getProperty("os.name").orEmpty().startsWith("Windows")
+
+/**
+ * An xterm mouse report of [button] at [column], [row] (counted from 1), in [format]: SGR (1006) and
+ * urxvt (1015) as text, the UTF-8 extension (1005) with each value as a character, and the original
+ * format as raw bytes, which can't go past column or row 223.
+ */
+internal fun mouseReport(format: MouseFormat, button: Int, column: Int, row: Int): ByteArray = when (format) {
+  MouseFormat.MOUSE_FORMAT_SGR -> "\u001b[<$button;$column;${row}M".toByteArray(StandardCharsets.UTF_8)
+  MouseFormat.MOUSE_FORMAT_URXVT -> "\u001b[${button + 32};$column;${row}M".toByteArray(StandardCharsets.UTF_8)
+  MouseFormat.MOUSE_FORMAT_XTERM_EXT -> buildString {
+    append("\u001b[M")
+    appendCodePoint(32 + button)
+    appendCodePoint(32 + column)
+    appendCodePoint(32 + row)
+  }.toByteArray(StandardCharsets.UTF_8)
+  MouseFormat.MOUSE_FORMAT_XTERM -> byteArrayOf(0x1b, '['.code.toByte(), 'M'.code.toByte()) +
+    listOf(button, column, row).map { (32 + it).coerceAtMost(255).toByte() }
+}
 
 private class SessionExecutors : TerminalExecutorServiceManager {
   private val single: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor { runnable ->

@@ -178,6 +178,8 @@ public fun TerminalView(
       .pointerInput(session, cell, onOpenLink) {
         val clicks = ClickCounter(viewConfiguration.doubleTapTimeoutMillis, viewConfiguration.touchSlop)
         var dragging = false
+        // Wheel movement not yet reported to the program: trackpads turn it in fractions.
+        var wheelTurns = 0f
 
         /** The text position under [position]; [nearest] snaps to the closest cell edge, as a drag does. */
         fun pointAt(position: Offset, nearest: Boolean): TextPoint {
@@ -187,7 +189,17 @@ public fun TerminalView(
           val rows = max(2, (size.height / height).toInt())
           val column = (if (nearest) (position.x / width).roundToInt() else floor(position.x / width).toInt()).coerceIn(0, columns)
           val row = floor(position.y / height).toInt().coerceIn(0, rows - 1)
-          return TextPoint(session.textBuffer.historyLinesCount + row - scrollBack, column)
+          val history = session.scrollbackLines
+          return TextPoint(history + row - scrollBack.coerceAtMost(history), column)
+        }
+
+        /** The screen cell under [position], column then row, counted from 0. */
+        fun cellAt(position: Offset): Pair<Int, Int> {
+          val width = cell.width.toPx()
+          val height = cell.height.toPx()
+          val columns = max(2, (size.width / width).toInt())
+          val rows = max(2, (size.height / height).toInt())
+          return floor(position.x / width).toInt().coerceIn(0, columns - 1) to floor(position.y / height).toInt().coerceIn(0, rows - 1)
         }
 
         awaitPointerEventScope {
@@ -229,7 +241,7 @@ public fun TerminalView(
               }
               PointerEventType.Move -> if (dragging && event.buttons.isPrimaryPressed) {
                 // Dragging past the top or bottom edge scrolls, so a selection can run longer than the view.
-                val history = session.textBuffer.historyLinesCount
+                val history = session.scrollbackLines
                 if (change.position.y < 0) scrollBack = (scrollBack + 1).coerceAtMost(history)
                 if (change.position.y > size.height) scrollBack = (scrollBack - 1).coerceAtLeast(0)
                 selection = selection?.copy(focus = pointAt(change.position, nearest = true))
@@ -246,8 +258,19 @@ public fun TerminalView(
               }
               PointerEventType.Scroll -> {
                 val delta = change.scrollDelta.y
-                val history = session.textBuffer.historyLinesCount
-                scrollBack = (scrollBack - delta.roundToInt() * WheelLines).coerceIn(0, history)
+                if (session.reportsMouse) {
+                  // The program asked for mouse reports (a full-screen app scrolling its own view),
+                  // so the wheel is its to handle.
+                  wheelTurns += delta
+                  val turns = wheelTurns.toInt()
+                  wheelTurns -= turns
+                  val (column, row) = cellAt(change.position)
+                  session.sendWheel(column, row, up = turns < 0, turns = abs(turns))
+                } else {
+                  wheelTurns = 0f
+                  val history = session.scrollbackLines
+                  scrollBack = (scrollBack - delta.roundToInt() * WheelLines).coerceIn(0, history)
+                }
                 hovered = null
                 event.changes.forEach { it.consume() }
               }
@@ -344,8 +367,9 @@ private fun TerminalSession.lineText(line: Int): LineText? {
   val buffer = textBuffer
   buffer.lock()
   try {
-    val index = line - buffer.historyLinesCount
-    if (index < -buffer.historyLinesCount || index >= buffer.height) return null
+    val history = scrollbackLines
+    val index = line - history
+    if (index < -history || index >= buffer.height) return null
     val content = buffer.getLine(index)
     return LineText(content.text, content.isWrapped)
   } finally {
@@ -364,7 +388,7 @@ private fun TerminalSession.linkAt(point: TextPoint): TerminalLink? {
   val buffer = textBuffer
   buffer.lock()
   try {
-    val history = buffer.historyLinesCount
+    val history = scrollbackLines
     fun line(at: Int): TerminalLine? = (at - history).takeIf { it >= -history && it < buffer.height }?.let(buffer::getLine)
     if (line(point.line) == null) return null
     var first = point.line
@@ -400,7 +424,7 @@ private fun TerminalSession.everything(): TerminalSelection? {
   val buffer = textBuffer
   buffer.lock()
   try {
-    val history = buffer.historyLinesCount
+    val history = scrollbackLines
     val last = (buffer.height - 1 downTo -history).firstOrNull { buffer.getLine(it).text.isNotBlank() } ?: return null
     return TerminalSelection(TextPoint(0, 0), TextPoint(history + last, buffer.width))
   } finally {
@@ -534,17 +558,20 @@ private fun readScreen(
   buffer.lock()
   try {
     val visible = minOf(rows, buffer.height)
-    val lines = (0 until visible).map { row -> buffer.getLine(row - scrollBack).toSegments(colors, fits) }
+    val history = session.scrollbackLines
+    // Still scrolled back from before a full-screen program took the alternate screen, which has none.
+    val back = scrollBack.coerceAtMost(history)
+    val lines = (0 until visible).map { row -> buffer.getLine(row - back).toSegments(colors, fits) }
     val column = session.cursorColumn.coerceAtLeast(0)
     val row = session.cursorRow.coerceAtLeast(0)
-    val shown = scrollBack == 0 && session.cursorVisible && session.isRunning && row < visible
+    val shown = back == 0 && session.cursorVisible && session.isRunning && row < visible
     val cursor = if (shown) {
       val char = runCatching { buffer.getCharAt(column, row) }.getOrDefault(' ')
       CursorCell(column, row, if (char == CharUtils.NUL_CHAR || char == CharUtils.DWC) ' ' else char)
     } else {
       null
     }
-    val top = buffer.historyLinesCount - scrollBack
+    val top = history - back
     val highlights = (0 until visible).map { row -> selection?.columnsOn(top + row, columns) }
     return Screen(lines, cursor, highlights, top)
   } finally {

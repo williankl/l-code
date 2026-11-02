@@ -148,6 +148,7 @@ private fun PreviewSide(
           images = remember(source.path, source.version, source.assets) { MarkdownImageSource(source.path, source.version, source.assets) },
         )
         PreviewKindModel.Table -> TablePreview(side.bytes, side.extension)
+        PreviewKindModel.Video -> VideoPreview(side.bytes)
       }
     }
   }

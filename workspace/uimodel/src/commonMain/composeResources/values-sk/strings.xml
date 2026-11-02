@@ -200,6 +200,15 @@
   <string name="preview_unreadable">Tento súbor sa nepodarilo vykresliť: %1$s</string>
   <string name="preview_empty">Prázdny súbor</string>
   <string name="preview_image_info">%1$d × %2$d · %3$s</string>
+  <string name="preview_play">Prehrať</string>
+  <string name="preview_pause">Pozastaviť</string>
+  <string name="preview_position">Pozícia</string>
+  <string name="preview_seconds">%1$s s</string>
+  <plurals name="preview_frames">
+    <item quantity="one">%1$s snímka</item>
+    <item quantity="few">%1$s snímky</item>
+    <item quantity="other">%1$s snímok</item>
+  </plurals>
   <string name="preview_model_hint">Potiahnutím otočíte · ⌘ alebo Ctrl + posúvanie mení priblíženie · dvojklikom obnovíte</string>
   <string name="preview_model_partial">Zobrazuje sa %1$s z %2$s trojuholníkov</string>
   <string name="preview_reset_view">Obnoviť zobrazenie</string>

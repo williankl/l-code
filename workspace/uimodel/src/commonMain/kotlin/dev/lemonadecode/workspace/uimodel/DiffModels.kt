@@ -80,7 +80,7 @@ public data class DiffFileModel(
 
 public enum class FileChangeKind { Added, Modified, Deleted, Renamed }
 
-/** A file drawn as what it is (picture, model, document, table) instead of its text diff. */
+/** A file drawn as what it is (picture, model, document, table, video) instead of its text diff. */
 @Immutable
 public data class FilePreviewModel(
   val kind: PreviewKindModel,
@@ -91,7 +91,7 @@ public data class FilePreviewModel(
   val content: FilePreviewContentModel,
 )
 
-public enum class PreviewKindModel { Image, Vector, Model, Markdown, Table }
+public enum class PreviewKindModel { Image, Vector, Model, Markdown, Table, Video }
 
 public enum class PreviewLayout { Before, After, SideBySide }
 

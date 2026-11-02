@@ -1,3 +1,4 @@
+import dev.lemonadecode.buildlogic.stripFfmpegPrograms
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 
 plugins {
@@ -31,6 +32,9 @@ kotlin {
 tasks.withType<Test>().configureEach {
   jvmArgs("-Djava.awt.headless=true")
 }
+
+// The app is packaged from this classpath: FFmpeg's libraries go in, its command-line programs don't.
+stripFfmpegPrograms()
 
 // Release builds stamp the tag's version with -PappVersion=1.2.3 (see RELEASING.md).
 val appVersion: String = providers.gradleProperty("appVersion").getOrElse("1.0.0")

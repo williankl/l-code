@@ -2,7 +2,7 @@ package dev.lemonadecode.domain.review
 
 /** What a changed file can be drawn as besides its text diff. */
 public enum class PreviewKind {
-  /** PNG, JPEG, GIF, WebP, BMP, ICO. */
+  /** PNG, JPEG, GIF, WebP, BMP, ICO; animated GIFs and WebPs play. */
   Image,
 
   /** SVG, drawn as a picture. */
@@ -16,6 +16,9 @@ public enum class PreviewKind {
 
   /** CSV and TSV, drawn as a table. */
   Table,
+
+  /** MP4, M4V, MOV, WebM, MKV, AVI, OGV and MPEG, played without sound. */
+  Video,
   ;
 
   public companion object {
@@ -25,6 +28,8 @@ public enum class PreviewKind {
       listOf("stl", "obj", "ply", "gltf", "glb").forEach { put(it, Model) }
       listOf("md", "markdown", "mdown", "mkd").forEach { put(it, Markdown) }
       listOf("csv", "tsv").forEach { put(it, Table) }
+      // Not `ts`: that's TypeScript far more often than an MPEG transport stream.
+      listOf("mp4", "m4v", "mov", "webm", "mkv", "avi", "ogv", "mpg", "mpeg").forEach { put(it, Video) }
     }
 
     /** The preview for [path], judged by its extension; null when Lemonade Code can't draw it. */

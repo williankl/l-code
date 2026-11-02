@@ -1,3 +1,4 @@
+import dev.lemonadecode.buildlogic.stripFfmpegPrograms
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 
 plugins {
@@ -14,6 +15,9 @@ kotlin {
     }
   }
 }
+
+// Packaged as an app too: FFmpeg's libraries go in, its command-line programs don't.
+stripFfmpegPrograms()
 
 val desktopMainCompilation = kotlin.targets.getByName("desktop").compilations.getByName("main")
 

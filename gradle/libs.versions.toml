@@ -11,6 +11,8 @@ kotlinx-collections-immutable = "0.4.0"
 metro = "1.4.5"
 molecule = "2.2.0"
 turbine = "1.2.0"
+javacv = "1.5.14"
+ffmpeg = "8.1.2-1.5.14"
 spotless = "8.7.0"
 ktlint = "1.5.0"
 jsvg = "2.2.0"
@@ -35,6 +37,11 @@ kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serializa
 kotlinx-collections-immutable = { module = "org.jetbrains.kotlinx:kotlinx-collections-immutable", version.ref = "kotlinx-collections-immutable" }
 molecule-runtime = { module = "app.cash.molecule:molecule-runtime", version.ref = "molecule" }
 turbine = { module = "app.cash.turbine:turbine", version.ref = "turbine" }
+
+# Video previews: FFmpeg through JavaCV. The natives take a platform classifier; see build-logic's Ffmpeg.kt.
+javacv = { module = "org.bytedeco:javacv", version.ref = "javacv" }
+javacpp = { module = "org.bytedeco:javacpp", version.ref = "javacv" }
+ffmpeg = { module = "org.bytedeco:ffmpeg", version.ref = "ffmpeg" }
 
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
 

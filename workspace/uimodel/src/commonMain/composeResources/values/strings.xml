@@ -190,6 +190,14 @@
   <string name="preview_unreadable">Couldn’t draw this file: %1$s</string>
   <string name="preview_empty">Empty file</string>
   <string name="preview_image_info">%1$d × %2$d · %3$s</string>
+  <string name="preview_play">Play</string>
+  <string name="preview_pause">Pause</string>
+  <string name="preview_position">Position</string>
+  <string name="preview_seconds">%1$s s</string>
+  <plurals name="preview_frames">
+    <item quantity="one">%1$s frame</item>
+    <item quantity="other">%1$s frames</item>
+  </plurals>
   <string name="preview_model_hint">Drag to turn · ⌘ or Ctrl + scroll to zoom · double-click to reset</string>
   <string name="preview_model_partial">Showing %1$s of %2$s triangles</string>
   <string name="preview_reset_view">Reset view</string>

@@ -190,6 +190,14 @@
   <string name="preview_unreadable">Não foi possível desenhar este arquivo: %1$s</string>
   <string name="preview_empty">Arquivo vazio</string>
   <string name="preview_image_info">%1$d × %2$d · %3$s</string>
+  <string name="preview_play">Reproduzir</string>
+  <string name="preview_pause">Pausar</string>
+  <string name="preview_position">Posição</string>
+  <string name="preview_seconds">%1$s s</string>
+  <plurals name="preview_frames">
+    <item quantity="one">%1$s quadro</item>
+    <item quantity="other">%1$s quadros</item>
+  </plurals>
   <string name="preview_model_hint">Arraste para girar · ⌘ ou Ctrl + rolagem para zoom · clique duplo para redefinir</string>
   <string name="preview_model_partial">Mostrando %1$s de %2$s triângulos</string>
   <string name="preview_reset_view">Redefinir visualização</string>

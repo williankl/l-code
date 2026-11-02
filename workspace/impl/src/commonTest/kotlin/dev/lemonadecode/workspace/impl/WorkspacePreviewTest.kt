@@ -184,5 +184,25 @@ class WorkspacePreviewTest {
     }
   }
 
+  @Test
+  fun `a video opens on its preview, before and after side by side`() = runTest {
+    val demo = FileDiff("docs/demo.mp4", null, FileChange.Modified, "MP4", emptyList(), isBinary = true)
+    sessions.setSessions(listOf(ShowcaseFixtures.session("ar", "api-ratelimit")))
+    val snapshot = DiffSnapshot(baseRef = "main", files = listOf(demo), hasUncommittedChanges = true, mergeBase = "abc123")
+    reviews.setReview(ar, Review(DiffState.Ready(snapshot), emptyList()))
+    reviews.fileContents = mapOf(
+      (demo.path to FileVersion.Base) to bytes(1),
+      (demo.path to FileVersion.WorkingTree) to bytes(2),
+    )
+    presenter.test {
+      awaitItem().eventSink(WorkspaceEvent.SelectView(WorkspaceView.Diff))
+      val preview = awaitItemWhere { it.file(demo.path)?.preview?.content is FilePreviewContentModel.Ready }.file(demo.path)!!.preview!!
+      assertEquals(PreviewKindModel.Video, preview.kind)
+      assertTrue(preview.showing)
+      assertEquals(PreviewLayout.SideBySide, preview.layout)
+      assertEquals("mp4", assertIs<PreviewSideModel.Content>(assertIs<FilePreviewContentModel.Ready>(preview.content).after).extension)
+    }
+  }
+
   private fun WorkspaceModel.file(path: String): DiffFileModel? = (content as? WorkspaceContentModel.Diff)?.review?.files?.firstOrNull { it.path == path }
 }

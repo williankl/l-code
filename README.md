@@ -1,139 +1,228 @@
+<div align="center">
+
+<img src="apps/desktop/icons/lemonade-code.svg" width="112" alt="Lemonade Code icon: a prompt chevron next to half a lemon slice">
+
 # Lemonade Code
 
-A terminal IDE for reviewing work. Every session is a plain terminal: your login shell, starting
-in your home folder, exactly like a new terminal window. Run whatever you like in it. Lemonade Code follows
-the shell as it `cd`s, shows what changed against `main` (or a branch you pick) in that checkout, lets you comment on
-lines or ranges, and pastes the comments into the terminal or into a sub-session opened in the
-same folder or in a new git worktree.
+**Your terminal, with a code review built in.**
 
-Kotlin Multiplatform with Compose Multiplatform (desktop JVM target), Teya's
-[Lemonade](https://github.com/teya-engineering/lemonade-design-system) design system, and the
-architecture of `teya-business-app`. The design lives in Claude Design, project *Loupe rebuilt on
-Lemonade dark theme* (`Loupe.dc.html`).
+Run Claude Code (or anything else) in real terminals.<br>
+When the work is done, see what changed, comment on any line, and send your notes straight back.
 
-## Run
+[![Free](https://img.shields.io/badge/price-free-E1E51A?style=flat-square&labelColor=28310B)](#-get-it)
+[![macOS · Windows · Linux](https://img.shields.io/badge/runs_on-macOS_·_Windows_·_Linux-E1E51A?style=flat-square&labelColor=28310B)](docs/INSTALL.md)
+[![Built with Lemonade](https://img.shields.io/badge/built_with-🍋_Lemonade-E1E51A?style=flat-square&labelColor=28310B)](#-built-with-lemonade)
+[![Compose Multiplatform](https://img.shields.io/badge/Compose_Multiplatform-Kotlin-E1E51A?style=flat-square&labelColor=28310B&logo=kotlin&logoColor=E1E51A)](docs/ARCHITECTURE.md)
 
-```sh
-./gradlew :apps:desktop:run            # the app; opens with one terminal at ~
-./gradlew :apps:desktop:packageDmg     # a Lemonade Code.app bundle (packageMsi on Windows, packageDeb on Linux)
-./gradlew :sample:run                  # the design showcase, static screens
-./gradlew :sample:renderScreens        # PNG of every showcase screen → sample/build/screens (-Plang=pt)
-./gradlew allTests                     # every module's tests
-./gradlew spotlessApply                # format (ktlint, .editorconfig)
-```
+[![Download for macOS](https://img.shields.io/badge/Download-macOS-E1E51A?style=for-the-badge&labelColor=28310B)](https://github.com/williankl/loupe/releases/latest)
+[![Download for Windows](https://img.shields.io/badge/Download-Windows-E1E51A?style=for-the-badge&labelColor=28310B)](https://github.com/williankl/loupe/releases/latest)
+[![Download for Linux](https://img.shields.io/badge/Download-Linux-E1E51A?style=for-the-badge&labelColor=28310B)](https://github.com/williankl/loupe/releases/latest)
 
-Shortcuts: ⌘T new terminal, ⌘W close the selected session (and its sub-sessions), ⌘↵ paste the
-unsent comments into the terminal, Esc closes popovers. Right-click a session to rename it, copy
-its folder path or start a sub-session from it; middle-click closes it.
+<br>
 
-In the diff, images, SVGs, 3D models (STL, OBJ, PLY, glTF, GLB), Markdown and CSV/TSV files get a
-Preview chip that draws the file instead of its text, before and after side by side or one at a
-time. In the terminal, dead keys and input methods work as anywhere else (on an international layout
-`'` then `e` types `é`). Drag to select (double click
-for a word, triple click for a line, shift-click to extend), ⌘C copies, ⌘A selects all, ⌘V pastes,
-the wheel scrolls back. Links underline under the mouse; Ctrl-click (or ⌘-click) opens them. That
-covers URLs written out (a bare `www.` address opens over https), even when they wrap, and links
-programs mark (OSC 8). Only web and mail
-links open; a file link is shown in Finder instead of run.
+<img src="docs/images/hero.png" width="100%" alt="Lemonade Code: a terminal where Claude Code just finished, and in front of it the review of its changes with two comments">
 
-## Architecture
+</div>
 
-Same layering as `teya-business-app`: domain models, data sources, features split into
-`api`/`impl`/`fake`, Molecule presenters, Metro compile-time DI, fakes over mocks.
+<br>
 
-| Module | What it holds |
+## Why Lemonade Code?
+
+AI agents write a lot of code. Reading it is still your job. Lemonade Code puts the terminal and the
+review in the same window, so checking an agent's work feels like reviewing a pull request, not
+digging through `git diff`.
+
+<table>
+<tr>
+<td width="33%" valign="top">
+
+### 🖥️ Real terminals
+Each session is your own shell, with your aliases, your tools and your agents. Nothing to learn,
+nothing to configure.
+
+</td>
+<td width="33%" valign="top">
+
+### 🔍 A real code review
+See every change against `main`, comment on lines or ranges, and send all your notes in one go.
+
+</td>
+<td width="33%" valign="top">
+
+### 🌱 Room to branch out
+Hand work to a fresh sub-session, in the same folder or its own git worktree, and keep the tree
+tidy.
+
+</td>
+</tr>
+</table>
+
+<br>
+
+## ✨ Take the tour
+
+### All your terminals, one window
+
+Start Claude Code, Codex, or any program you like. The sidebar shows what every session is up to,
+**working**, **needs input** or **idle**, so you always know which one wants you.
+
+<img src="docs/images/terminals.png" width="100%" alt="The sessions sidebar with four sessions and their status, next to a terminal where Claude Code finished adding rate limiting">
+
+### See exactly what changed
+
+Switch to the **Diff** tab to see every change in that folder against `main`, or any branch you
+pick. New and uncommitted files are included, code is coloured, and the full file is one click away.
+
+<img src="docs/images/review-diff.png" width="100%" alt="The diff of src/server/app.ts showing the full file, with a comment under line 9">
+
+### Comment like it's a pull request
+
+Click the **+** next to a line, or drag across several lines, and write what should change. Your
+comments wait until you're ready to send them.
+
+<img src="docs/images/comment-range.png" width="100%" alt="A comment on lines 24 to 26 and the comment box open on lines 28 to 32">
+
+### Send your notes back in one click
+
+Press **Paste into terminal** (⌘↵) and every comment lands in the agent's prompt, with its file and
+line. Nothing runs until you press Enter. Want a clean slate? Hand them to a new sub-session instead.
+
+<table>
+<tr>
+<td width="50%"><img src="docs/images/send-to-session.png" alt="Three review comments pasted into Claude Code in the same session"></td>
+<td width="50%"><img src="docs/images/send-to-sub-session.png" alt="The same comments handed to review-1, a new sub-session with a clean context"></td>
+</tr>
+<tr>
+<td align="center"><sub><b>To the same agent</b>, which picks up right where it was</sub></td>
+<td align="center"><sub><b>To a clean sub-session</b>, with only your notes as context</sub></td>
+</tr>
+</table>
+
+### Branch out without the mess
+
+Start a sub-session in the same folder, or in a new **git worktree** on its own branch, so parallel
+work never collides. Sessions nest as deep as you need, and a lime rail traces each one back to
+where it started.
+
+<img src="docs/images/new-worktree.png" width="100%" alt="The New sub-session panel with New worktree picked, showing the folder and branch it will create">
+
+### Previews for more than code
+
+Images, SVGs, 3D models, Markdown and CSV files show up as what they are, before and after, side by
+side. Drag a 3D model to turn it around.
+
+<table>
+<tr>
+<td width="50%"><img src="docs/images/grid-preview-3d.png" alt="A 3D mug model, before and after a redesign, side by side"></td>
+<td width="50%"><img src="docs/images/grid-preview-image.png" alt="An app icon, before and after, side by side"></td>
+</tr>
+<tr>
+<td align="center"><sub><b>3D models</b>: STL, OBJ, PLY, glTF, GLB</sub></td>
+<td align="center"><sub><b>Images</b>: PNG, JPEG, GIF, WebP, BMP, ICO, SVG</sub></td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/images/grid-preview-markdown.png" alt="A Markdown file drawn formatted, with a table and a checklist"></td>
+<td width="50%"><img src="docs/images/grid-preview-table.png" alt="A CSV file drawn as a table"></td>
+</tr>
+<tr>
+<td align="center"><sub><b>Markdown</b>, drawn the way GitHub shows it</sub></td>
+<td align="center"><sub><b>CSV and TSV</b>, as a proper table</sub></td>
+</tr>
+</table>
+
+### Dark or light
+
+Pick one, or follow your system. Both themes come straight from the Lemonade design system.
+
+<img src="docs/images/theme-split.png" width="100%" alt="The same review screen, half in the dark theme and half in the light theme">
+
+### The little things
+
+<table>
+<tr>
+<td width="33%" valign="top"><img src="docs/images/touch-keep-awake.png" alt="Settings with Keep awake turned on"><br><b>Keep awake</b><br><sub>Your computer won't sleep or lock while an agent is working.</sub></td>
+<td width="33%" valign="top"><img src="docs/images/touch-session-menu.png" alt="The right-click menu of a session"><br><b>Right-click menu</b><br><sub>Rename a session, copy its folder, or branch off from it.</sub></td>
+<td width="33%" valign="top"><img src="docs/images/touch-update.png" alt="The update panel downloading a new version"><br><b>Updates itself</b><br><sub>One click to update, and your sessions come right back.</sub></td>
+</tr>
+<tr>
+<td width="33%" valign="top"><img src="docs/images/touch-narrow.png" alt="A narrow window with the sessions shown as a drawer"><br><b>Fits small windows</b><br><sub>On a narrow window the sidebar slides in as a drawer.</sub></td>
+<td width="33%" valign="top"><img src="docs/images/touch-rename.png" alt="Renaming a session in place"><br><b>Rename in place</b><br><sub>No dialogs. Type the new name right where the old one was.</sub></td>
+<td width="33%" valign="top"><img src="docs/images/touch-worktree.png" alt="The worktree folder and branch shown before creating them"><br><b>No surprises</b><br><sub>See the folder and branch a worktree will get before it exists.</sub></td>
+</tr>
+</table>
+
+And a few more:
+
+- 🔁 **Sessions come back.** Quit and reopen: every session returns in the folder it was in, with its
+  last output on screen. Claude Code conversations pick up where they left off.
+- 🔗 **Clickable links.** Ctrl-click (or ⌘-click) any web address in the terminal to open it.
+- ⌨️ **Every keyboard works.** Accents, dead keys and input methods type just like anywhere else.
+- 🌍 **Speaks your language.** English and Portuguese, following your system.
+
+See everything in the **[feature guide](docs/FEATURES.md)**.
+
+<br>
+
+## 📦 Get it
+
+Lemonade Code is free. Pick your platform:
+
+| Platform | Install |
 |---|---|
-| `build-logic/convention` | `lemonadecode.kmp.base` (desktop target, Metro, `explicitApi()`, return-value checker, Spotless), `.library`, `.compose`, `.uimodel`, `.feature`, `.serialization`. |
-| `platform/core` | `LemonadeCodeResult` and `safeSuspendRunCatching` (rethrows cancellation). |
-| `platform/di-core` | `AppScope`. |
-| `platform/architecture-core` / `-test` | `LemonadeCodeCoroutineDispatchers`, the app `CoroutineScope`, `AppInitializer`; test dispatchers. |
-| `platform/presenter-core` / `-test` | `LemonadeCodePresenter<Model>`, `PresenterHost` (Molecule, immediate mode), `presenterAsState`; `presenter.test { }`, `awaitItemWhere`, `yieldUntil`. |
-| `platform/localization-core` | `LemonadeCodeString`: text a presenter puts in a Model, resolved by the UI. |
-| `platform/preferences-core` / `-test` | `PreferenceStore`, a JSON file in the user's app-data folder. |
-| `platform/process-core` | `ProcessRunner`, `UserShell`, `HomeDirectory`. |
-| `platform/terminal` | `TerminalSession` (pty4j + JediTerm's emulator) and `TerminalView`, a Compose renderer. |
-| `platform/syntax-core` | Lightweight code colouring for the diff. |
-| `platform/power-core` | Keep-awake (`caffeinate` on macOS, `systemd-inhibit` on Linux, PowerShell calling `SetThreadExecutionState` on Windows). |
-| `platform/designsystem` | `LemonadeCodeTheme` over Lemonade, plus tooltips, popovers, a slot segmented control. |
-| `domainEntities` | Sessions, reviews, diffs, settings. No dependencies. |
-| `data/git/{api,impl,fake}` | `GitDataSource` over the `git` command: merge-base diffs with whole-file context, untracked files, worktrees. |
-| `sessions/{api,impl,fake}` | `SessionService`: opens login shells in PTYs, follows each shell's folder and branch, infers working / needs input / idle / exited, plans and starts sub-sessions. `SessionTerminals` exposes the terminals to the UI. |
-| `review/{api,impl,fake}` | `ReviewService`: diff and comments per checkout, the review text, pasting it into the session or into a review sub-session. |
-| `settings/{api,impl,fake}` | `SettingsService` (persisted) and the keep-awake coordinator. |
-| `updates/{api,impl,fake}` | `UpdateService`: finds a newer GitHub release for this install, downloads and checks it, and hands over to a helper that swaps it in after the app quits. See RELEASING.md. |
-| `workspace/uimodel` | `WorkspaceModel` + `WorkspaceEvent` and the localized strings (`composeResources`, English and Portuguese). |
-| `workspace/ui` | The composables: `WorkspaceContent(model, terminal)` and its parts. Pure rendering. |
-| `workspace/impl` | `WorkspacePresenter`, the Model mapper, `WorkspaceScreen` (presenter + live terminals), and the showcase built from fixtures through the same mapper. |
-| `apps/desktop` | The Metro `AppGraph`, `main`, packaging. |
-| `sample` | The showcase app and screenshot renderer. |
+| **macOS** (Apple Silicon or Intel) | `brew install --cask williankl/tap/lemonade-code`, or the DMG from [Releases](https://github.com/williankl/loupe/releases/latest) |
+| **Windows** (x64) | The MSI from [Releases](https://github.com/williankl/loupe/releases/latest). No admin rights needed. |
+| **Ubuntu** | `sudo snap install lemonade-code --classic`, or from the App Center |
+| **Ubuntu, Debian** | The `.deb` from [Releases](https://github.com/williankl/loupe/releases/latest): `sudo apt install ./lemonade-code_*_amd64.deb` |
+| **Any Linux** (x64) | The `.tar.gz` from [Releases](https://github.com/williankl/loupe/releases/latest). Unpack it anywhere and run `lemonade-code/bin/Lemonade Code`. |
 
-Dependency rules, as in the reference app: `api` depends only on `platform/*` and the domain;
-`impl` on its own `api`, other features' `api`, data `api`s and `platform/*`; never `impl` on
-`impl`. Bindings are contributed with `@ContributesBinding(AppScope::class)` next to their
-implementation; `AppGraph` is the only place they meet.
+You'll also want `git` installed, so the Diff tab has something to show. Step-by-step help, updates
+and uninstalling are in the **[install guide](docs/INSTALL.md)**.
 
-**Presenters.** `WorkspacePresenter.present()` collects the services' `StateFlow`s, keeps only UI
-state (selection, popovers, composer, folded rows), and returns an immutable `WorkspaceModel` with a
-remembered `eventSink`. `WorkspaceScreen` wires it with `presenterAsState` and draws
-`WorkspaceContent`. Errors become a `model.error` banner; presenters never throw.
+<br>
 
-**Localization.** All copy is in `workspace/uimodel/src/commonMain/composeResources/values*/strings.xml`.
-Presenters put `LemonadeCodeString`s in the Model (`Res.string.x.asLemonadeCodeString(args)`), composables call
-`resolve()` or `stringResource`. The language follows the system locale.
+## 🍋 Built with Lemonade
 
-**Tests.** Fakes in `:fake` modules, Turbine for flows, Molecule for presenters. Integration tests
-run real `git` and real PTYs; `AppGraphSmokeTest` builds the real graph, runs a shell and draws the
-window offscreen (`apps/desktop/build/smoke/app.png`). UI tests run headless with Compose's test
-rules: `WorkspaceContentUiTest` clicks, hovers, drags and types through every design screen and
-checks the events; `WorkspaceFlowUiTest` drives the real presenter and UI together over fakes
-(open a terminal, comment on a line, paste it, settings, sub-sessions, ⌘W); the terminal tests
-type into `TerminalView` and check the cursor follows the text and blinks.
+<table>
+<tr>
+<td>
 
-## How it works
+Lemonade Code looks and feels the way it does thanks to
+**[Lemonade](https://github.com/teya-engineering/lemonade-design-system)**, the open-source design
+system from **[Teya](https://github.com/teya-engineering)**.
 
-- **Sessions** run `$SHELL -l` in a pseudo-terminal, starting at `~`. Every second Lemonade Code reads the
-  shell's current folder from the OS (`lsof` on macOS, `/proc` on Linux) and asks git for its
-  checkout and branch, so the session name, top bar, diff and comments follow your `cd`s. On
-  Windows a session runs PowerShell (`pwsh`, else Windows PowerShell, else `cmd.exe`) in a ConPTY,
-  with your profile, and its prompt also reports the folder to the terminal (OSC 9;9).
-- **Status** shows only while an agent reports it; a plain terminal shows none. Lemonade Code answers the
-  program-status probe (OSC 7501) that Claude Code sends at startup, then Claude reports its own
-  state and one per background agent: anything blocked (a permission, a question, an error) shows
-  *needs input*, else anything working shows *working* (so a background agent counts while the main
-  one waits), else *idle*. Reports go away when the agent quits, or once the shell has the terminal
-  back if it crashed.
-- **Sending comments** pastes the text with bracketed-paste markers and does not press Enter, so
-  nothing runs at a shell prompt; you submit it in whatever program you're running.
-- **Worktrees** go next to the repository: `storefront.worktrees/sub-1` on branch
-  `<parent-branch>-sub-1`.
-- **The diff** is the working tree against its merge base with a branch, untracked files
-  included: the parent session's branch for a sub-session, else the default branch (origin's
-  HEAD, else `main`, else `master`). The branch next to "vs" in the Diff tab picks another one;
-  the list starts with the default branch, then the parent session's, then the rest as git lists
-  them. It refreshes when you open it, when you press refresh, and when the agent in the terminal
-  finishes working.
-- **The session list** shows each session's agent (or its shell when no agent is running) and its
-  branch (or its folder outside git), e.g. `claude · feat/rate-limit`.
-- **Settings** live in `~/Library/Application Support/Lemonade Code/preferences.json` (macOS),
-  `~/.config/lemonade-code/preferences.json` (Linux), `%APPDATA%\Lemonade Code\preferences.json`
-  (Windows). A settings folder from when the app was
-  called Loupe is moved there on first launch.
-- **Updates.** Installed from a release file (DMG, MSI, .deb or tar.gz), the app checks GitHub for
-  a newer release at launch and every 6 hours, and an Update button shows next to Settings when
-  there is one. Homebrew and the Snap Store update their installs themselves.
-- **Sessions come back.** Quitting saves every session (name, sub-session tree, the folder its
-  shell was in, the last 1,000 lines it showed) to `sessions.json` next to the settings, then ends
-  them and whatever runs in them. The next launch opens each one again in a fresh shell in that
-  folder, with its output above the new prompt; a folder that's gone falls back to home. A Claude
-  Code conversation that was running is resumed with `claude --resume <id>`: Lemonade Code reads which one
-  from Claude's own `~/.claude/sessions/<pid>.json`. One you quit yourself isn't. The file is also
-  kept up to date while Lemonade Code runs, so a crash keeps the sessions, just not their output.
+Every colour, the Figtree typeface, every spacing step, corner radius and shadow comes from
+Lemonade's design tokens. Buttons, tags, switches, segmented controls, text fields, toasts, spinners,
+badges and icons are Lemonade components, and the light and dark themes are Lemonade's own. The app
+even takes its name from it.
 
-## Not done yet
+Lemonade ships one design language to **Compose Multiplatform**, **SwiftUI** and the **web**, under
+the Apache 2.0 license. If you build apps on any of those, it's well worth a look, and a ⭐.
 
-- Mouse reporting to full-screen programs (the mouse always selects text).
-- Running programs don't survive quitting: shells start fresh and only Claude Code is resumed.
-- Status needs the agent to report it. Claude Code does; agents that don't show no status.
-- Detekt isn't set up; formatting is enforced with Spotless/ktlint.
-- Send-bar buttons are single-line (Lemonade's `Button` has a fixed height), so the design's
-  "this session" / "clean context" captions are dropped.
+**→ [teya-engineering/lemonade-design-system](https://github.com/teya-engineering/lemonade-design-system)**
+
+</td>
+</tr>
+</table>
+
+How the app uses Lemonade, and the few pieces it adds on top, is in the **[design notes](docs/DESIGN.md)**.
+
+<br>
+
+## 📚 Learn more
+
+| | |
+|---|---|
+| 🧭 **[Features](docs/FEATURES.md)** | Every feature, with screenshots, plus keyboard and mouse shortcuts |
+| 📦 **[Install](docs/INSTALL.md)** | Installing, updating and removing the app on each platform |
+| ⚙️ **[How it works](docs/HOW-IT-WORKS.md)** | What happens behind the scenes: sessions, status, worktrees, the diff |
+| 🎨 **[Design](docs/DESIGN.md)** | Lemonade, the themes, the icon and the layouts |
+| 🏗️ **[Architecture](docs/ARCHITECTURE.md)** | Modules, presenters, dependency injection and tests |
+| 🛠️ **[Development](docs/DEVELOPMENT.md)** | Building, running and testing it yourself |
+| 🗺️ **[Roadmap](docs/ROADMAP.md)** | What isn't done yet |
+| 🚀 **[Releasing](RELEASING.md)** | How a version gets from this repo to your computer |
+
+<br>
+
+<div align="center">
+<sub>Made with Kotlin, Compose Multiplatform and 🍋 <a href="https://github.com/teya-engineering/lemonade-design-system">Lemonade</a>.</sub>
+</div>

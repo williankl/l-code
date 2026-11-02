@@ -25,10 +25,11 @@ runs:
         version="$INPUT_VERSION"
         if [ -z "$version" ] && [ "$GITHUB_REF_TYPE" = tag ]; then version="${GITHUB_REF_NAME#v}"; fi
 
-        # DMGs need MAJOR of at least 1; MSIs need MAJOR and MINOR up to 255 and PATCH up to 65535.
-        if [[ ! "$version" =~ ^([1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] \
-          || (( BASH_REMATCH[1] > 255 || BASH_REMATCH[2] > 255 || BASH_REMATCH[3] > 65535 )); then
-          echo "::error::Version '$version' isn't MAJOR.MINOR.PATCH with MAJOR from 1 to 255, MINOR up to 255 and PATCH up to 65535."
+        # MSIs need MAJOR and MINOR up to 255 and PATCH up to 65535. 0.x versions are fine; 0.0.0 isn't.
+        if [[ ! "$version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] \
+          || (( BASH_REMATCH[1] > 255 || BASH_REMATCH[2] > 255 || BASH_REMATCH[3] > 65535 )) \
+          || [ "$version" = 0.0.0 ]; then
+          echo "::error::Version '$version' isn't MAJOR.MINOR.PATCH above 0.0.0, with MAJOR and MINOR up to 255 and PATCH up to 65535."
           exit 1
         fi
 

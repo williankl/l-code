@@ -63,6 +63,7 @@ The showcase can render every design screen to a PNG, without opening a window:
 ./gradlew :sample:renderScreens                # → sample/build/screens
 ./gradlew :sample:renderScreens -Ptheme=light  # light theme
 ./gradlew :sample:renderScreens -Plang=pt      # Portuguese
+./gradlew :sample:renderScreens -Plang=sk      # Slovak
 ```
 
 The images in [`docs/images`](images) come from these renders, resized and framed for the docs.
@@ -70,8 +71,10 @@ The images in [`docs/images`](images) come from these renders, resized and frame
 ## Strings
 
 All interface text is in `workspace/uimodel/src/commonMain/composeResources/`: `values/strings.xml`
-for English and `values-pt/strings.xml` for Portuguese. Add a `values-<language>` folder to add a
-language.
+for English, `values-pt/strings.xml` for Portuguese and `values-sk/strings.xml` for Slovak. Add a
+`values-<language>` folder to add a language; `TranslationsTest` fails until it has every string,
+with the same `%1$s`-style values as the English. Plurals take the forms the language needs, like
+Slovak's `one`, `few` and `other`.
 
 ## Releasing
 

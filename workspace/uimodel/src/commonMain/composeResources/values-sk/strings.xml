@@ -1,0 +1,221 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- Top bar and settings -->
+  <string name="app_name">Lemonade Code</string>
+  <string name="sessions_collapse">Zbaliť relácie</string>
+  <string name="sessions_expand">Rozbaliť relácie</string>
+  <string name="settings_title">Nastavenia</string>
+  <string name="settings_appearance">Vzhľad</string>
+  <string name="theme_dark">Tmavý</string>
+  <string name="theme_light">Svetlý</string>
+  <string name="theme_system">Systémový</string>
+  <string name="keep_awake_title">Nedovoliť spánok, kým relácie pracujú</string>
+  <string name="keep_awake_description">Zabráni tomu, aby počítač prešiel do režimu spánku a obrazovka stmavla alebo sa uzamkla, kým niektorá relácia pracuje.</string>
+  <string name="keep_awake_tag">Bez spánku · aktívne: %1$d</string>
+  <string name="keep_awake_off">Vypnuté · počítač môže prejsť do spánku</string>
+  <plurals name="keep_awake_active">
+    <item quantity="one">Teraz bez spánku · pracuje %1$d relácia</item>
+    <item quantity="few">Teraz bez spánku · pracujú %1$d relácie</item>
+    <item quantity="other">Teraz bez spánku · pracuje %1$d relácií</item>
+  </plurals>
+  <string name="keep_awake_idle">Zapnuté · žiadna relácia nepracuje, spánok je povolený</string>
+
+  <!-- Update -->
+  <string name="update_action">Aktualizovať</string>
+  <string name="update_action_busy">Aktualizuje sa…</string>
+  <string name="update_title">Je dostupná aktualizácia</string>
+  <string name="update_detail">Lemonade Code %1$s je pripravený na inštaláciu. Máte verziu %2$s.</string>
+  <string name="update_restart_note">Lemonade Code sa na dokončenie reštartuje. Relácie sa vrátia, ale programy, ktoré v nich bežia, sa zastavia.</string>
+  <string name="update_release_notes">Čo je nové</string>
+  <string name="update_install">Aktualizovať a reštartovať</string>
+  <string name="update_retry">Skúsiť znova</string>
+  <string name="update_downloading">Sťahuje sa… %1$s</string>
+  <string name="update_downloading_unknown">Sťahuje sa…</string>
+  <string name="update_restarting">Reštartuje sa…</string>
+  <string name="update_failed_download">Aktualizáciu sa nepodarilo stiahnuť. Skontrolujte pripojenie a skúste to znova.</string>
+  <string name="update_failed_checksum">Stiahnutý súbor nezodpovedal kontrolnému súčtu vydania, preto bol zahodený. Skúste to znova.</string>
+  <string name="update_failed_install">Aktualizáciu sa tu nepodarilo nainštalovať. Stiahnite si ju zo stránky vydania.</string>
+
+  <!-- Sessions -->
+  <string name="sessions_title">Relácie</string>
+  <string name="sessions_resize">Zmeniť šírku panela relácií</string>
+  <string name="action_new_session">Nová relácia</string>
+  <string name="status_working">pracuje</string>
+  <string name="status_needs_input">čaká na vás</string>
+  <string name="status_idle">nečinná</string>
+  <string name="status_exited">ukončená</string>
+  <string name="fold_hidden_count">skryté: %1$d</string>
+  <plurals name="fold_show">
+    <item quantity="one">Zobraziť %1$d podreláciu</item>
+    <item quantity="few">Zobraziť %1$d podrelácie</item>
+    <item quantity="other">Zobraziť %1$d podrelácií</item>
+  </plurals>
+  <plurals name="fold_hide">
+    <item quantity="one">Skryť %1$d podreláciu</item>
+    <item quantity="few">Skryť %1$d podrelácie</item>
+    <item quantity="other">Skryť %1$d podrelácií</item>
+  </plurals>
+  <!-- Session row subtitle: the agent (or shell), then the branch (or folder) -->
+  <string name="session_meta">%1$s · %2$s</string>
+
+  <!-- Session menu (right click) and rename -->
+  <string name="session_options">Možnosti relácie</string>
+  <string name="session_new_sub_same_folder">Nová podrelácia v aktuálnom worktree</string>
+  <string name="session_new_sub_worktree">Nová podrelácia v novom worktree</string>
+  <string name="session_sub_same_folder">Rovnaký priečinok</string>
+  <string name="session_sub_same_folder_branch">Rovnaký priečinok · %1$s</string>
+  <string name="session_sub_new_branch">Nová vetva z %1$s</string>
+  <string name="session_worktree_needs_repo">Vyžaduje git repozitár</string>
+  <string name="session_rename">Premenovať</string>
+  <string name="session_rename_action">Premenovať reláciu</string>
+  <string name="session_name_field">Názov relácie</string>
+  <string name="session_copy_path">Kopírovať cestu k priečinku</string>
+  <string name="session_path_copied">Skopírované: %1$s</string>
+  <string name="session_close">Zavrieť reláciu</string>
+
+  <!-- New session -->
+  <string name="action_new_terminal">Nový terminál</string>
+  <string name="no_sessions_title">Zatiaľ žiadne relácie</string>
+  <string name="no_sessions_detail">Každá relácia je terminál, ktorý začína vo vašom domovskom priečinku.</string>
+
+  <!-- Session header -->
+  <string name="view_terminal">Terminál</string>
+  <string name="view_diff">Diff</string>
+  <string name="tag_sub_session_same_folder">podrelácia · rovnaký priečinok</string>
+  <string name="tag_sub_session_worktree">podrelácia · worktree</string>
+
+  <!-- New sub-session -->
+  <string name="sub_session_title">Nová podrelácia</string>
+  <string name="sub_session_from">z relácie %1$s</string>
+  <string name="sub_session_location">Umiestnenie</string>
+  <string name="location_same_folder">Rovnaký priečinok</string>
+  <string name="location_new_worktree">Nový worktree</string>
+  <string name="branch_note_same">rovnaká vetva</string>
+  <string name="branch_note_new">nová vetva z %1$s</string>
+  <string name="sub_help_same">Zdieľa súbory aj vetvu s reláciou %1$s. Úpravy sa robia v tom istom pracovnom strome.</string>
+  <string name="sub_help_worktree">Vlastný priečinok aj vetva, takže úpravy sa nikdy nezrazia s reláciou %1$s.</string>
+  <string name="sub_help_no_repo">Tento priečinok nie je git repozitár, takže podrelácia ho môže iba zdieľať.</string>
+  <string name="worktree_branch_field">Vetva</string>
+  <string name="worktree_branch_invalid">Git takýto názov vetvy neprijme.</string>
+  <string name="worktree_branch_taken">Vetva s názvom %1$s už existuje.</string>
+  <string name="action_create_sub_session">Vytvoriť podreláciu</string>
+  <string name="action_cancel">Zrušiť</string>
+  <string name="action_dismiss">Zavrieť</string>
+
+  <!-- Diff review -->
+  <string name="diff_changes">Zmeny</string>
+  <string name="diff_vs">oproti</string>
+  <string name="diff_compare_with">Porovnať s</string>
+  <string name="diff_refresh">Obnoviť diff</string>
+  <string name="diff_source_working_tree">pracovný strom</string>
+  <plurals name="diff_summary_uncommitted">
+    <item quantity="one">vrátane necommitnutých zmien · %1$d súbor</item>
+    <item quantity="few">vrátane necommitnutých zmien · %1$d súbory</item>
+    <item quantity="other">vrátane necommitnutých zmien · %1$d súborov</item>
+  </plurals>
+  <plurals name="diff_summary">
+    <item quantity="one">%1$d súbor</item>
+    <item quantity="few">%1$d súbory</item>
+    <item quantity="other">%1$d súborov</item>
+  </plurals>
+  <string name="file_added">Pridaný</string>
+  <string name="file_modified">Zmenený</string>
+  <string name="file_deleted">Odstránený</string>
+  <string name="file_renamed">Premenovaný</string>
+  <string name="file_collapse">Zbaliť súbor</string>
+  <string name="file_expand">Rozbaliť súbor</string>
+  <string name="file_full">Celý súbor</string>
+  <string name="file_show_full">Zobraziť celý súbor</string>
+  <string name="file_show_full_link">zobraziť celý súbor</string>
+  <string name="file_binary">Binárny súbor, nezobrazuje sa</string>
+  <plurals name="file_comment_count">
+    <item quantity="one">%1$d komentár</item>
+    <item quantity="few">%1$d komentáre</item>
+    <item quantity="other">%1$d komentárov</item>
+  </plurals>
+  <plurals name="hunk_show_hidden">
+    <item quantity="one">Zobraziť %1$d skrytý riadok</item>
+    <item quantity="few">Zobraziť %1$d skryté riadky</item>
+    <item quantity="other">Zobraziť %1$d skrytých riadkov</item>
+  </plurals>
+  <plurals name="file_unchanged_below">
+    <item quantity="one">%1$d nezmenený riadok nižšie</item>
+    <item quantity="few">%1$d nezmenené riadky nižšie</item>
+    <item quantity="other">%1$d nezmenených riadkov nižšie</item>
+  </plurals>
+  <string name="comment_on_line">Komentár k %1$s</string>
+  <string name="comment_author_you">Vy</string>
+  <string name="comment_unsent">Neodoslaný</string>
+  <string name="comment_sent_to">Odoslaný do %1$s</string>
+  <string name="comment_in_session">V %1$s</string>
+  <string name="comment_delete">Odstrániť komentár</string>
+  <string name="comment_placeholder">Čo by sa tu malo zmeniť?</string>
+  <string name="action_add_comment">Pridať komentár</string>
+  <string name="message_loading_diff">Načítava sa diff…</string>
+  <string name="message_no_changes">Žiadne zmeny oproti %1$s</string>
+  <string name="message_not_repo">Toto nie je git repozitár</string>
+  <string name="message_not_repo_detail">Lemonade Code kontroluje zmeny v git repozitári.</string>
+  <string name="message_no_base">Vetva %1$s na porovnanie neexistuje</string>
+  <string name="message_no_base_detail">Stiahnite ju cez fetch alebo ju vytvorte a potom obnovte.</string>
+  <string name="message_diff_failed">Diff sa nepodarilo načítať</string>
+  <string name="message_terminal_closed">Terminál tejto relácie sa zavrel</string>
+
+  <!-- Send bar -->
+  <string name="send_preview_note">Text sa vloží do terminálu bez stlačenia Enter, takže sa nič nespustí, kým to neurobíte. Podrelácia dostane ten istý text.</string>
+  <string name="action_preview">Ukážka</string>
+  <string name="action_new_sub_session">Nová podrelácia</string>
+  <string name="action_send_to_terminal">Vložiť do terminálu</string>
+  <plurals name="send_unsent">
+    <item quantity="one">%1$d neodoslaný komentár</item>
+    <item quantity="few">%1$d neodoslané komentáre</item>
+    <item quantity="other">%1$d neodoslaných komentárov</item>
+  </plurals>
+  <plurals name="send_across_files">
+    <item quantity="one">v %1$d súbore</item>
+    <item quantity="few">v %1$d súboroch</item>
+    <item quantity="other">v %1$d súboroch</item>
+  </plurals>
+  <string name="send_all_delivered">Všetky komentáre sú doručené</string>
+  <string name="send_no_comments">Zatiaľ žiadne komentáre</string>
+  <string name="send_hint">Komentujte kliknutím na + vedľa riadka alebo potiahnutím cez viac riadkov</string>
+
+  <!-- Terminal transcript -->
+  <string name="terminal_running">beží…</string>
+
+  <!-- Errors -->
+  <string name="error_folder_missing">Tento priečinok už neexistuje: %1$s</string>
+  <string name="error_not_repo">Worktree sa dá vytvoriť iba v git repozitári.</string>
+  <string name="error_worktree">Worktree sa nepodarilo vytvoriť: %1$s</string>
+  <string name="error_launch">Reláciu sa nepodarilo spustiť: %1$s</string>
+  <string name="error_send">Komentáre sa nepodarilo odoslať: %1$s</string>
+
+  <!-- File previews -->
+  <string name="file_preview">Ukážka</string>
+  <string name="file_preview_hide">Zobraziť diff</string>
+  <string name="preview_before">Pred</string>
+  <string name="preview_after">Po</string>
+  <string name="preview_side_by_side">Vedľa seba</string>
+  <string name="preview_loading">Načítava sa ukážka…</string>
+  <string name="preview_too_large">Príliš veľký na ukážku (%1$s)</string>
+  <string name="preview_unreadable">Tento súbor sa nepodarilo vykresliť: %1$s</string>
+  <string name="preview_empty">Prázdny súbor</string>
+  <string name="preview_image_info">%1$d × %2$d · %3$s</string>
+  <string name="preview_model_hint">Potiahnutím otočíte · ⌘ alebo Ctrl + posúvanie mení priblíženie · dvojklikom obnovíte</string>
+  <string name="preview_model_partial">Zobrazuje sa %1$s z %2$s trojuholníkov</string>
+  <string name="preview_reset_view">Obnoviť zobrazenie</string>
+  <string name="preview_zoom_in">Priblížiť</string>
+  <string name="preview_zoom_out">Oddialiť</string>
+  <string name="preview_markdown_image">Obrázok: %1$s</string>
+  <string name="preview_markdown_truncated">Ukážka končí tu. Zvyšok súboru nájdete v diffe.</string>
+  <string name="error_preview">Súbor sa nepodarilo prečítať: %1$s</string>
+  <plurals name="preview_model_triangles">
+    <item quantity="one">%1$s trojuholník</item>
+    <item quantity="few">%1$s trojuholníky</item>
+    <item quantity="other">%1$s trojuholníkov</item>
+  </plurals>
+  <plurals name="preview_table_more_rows">
+    <item quantity="one">Ďalší %1$d riadok sa nezobrazuje</item>
+    <item quantity="few">Ďalšie %1$d riadky sa nezobrazujú</item>
+    <item quantity="other">Ďalších %1$d riadkov sa nezobrazuje</item>
+  </plurals>
+</resources>

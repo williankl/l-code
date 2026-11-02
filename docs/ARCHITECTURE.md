@@ -77,7 +77,7 @@ An `impl` never depends on another `impl`. Bindings are contributed with
 | `review/{api,impl,fake}` | `ReviewService`: the diff and comments per checkout, the review text, pasting it into the session or into a review sub-session. |
 | `settings/{api,impl,fake}` | `SettingsService` (persisted) and the keep-awake coordinator. |
 | `updates/{api,impl,fake}` | `UpdateService`: finds a newer GitHub release for this install, downloads and checks it, and hands over to a helper that swaps it in after the app quits. See [RELEASING.md](../RELEASING.md). |
-| `workspace/uimodel` | `WorkspaceModel`, `WorkspaceEvent` and the localized strings (`composeResources`, English and Portuguese). |
+| `workspace/uimodel` | `WorkspaceModel`, `WorkspaceEvent` and the localized strings (`composeResources`, English, Portuguese and Slovak). |
 | `workspace/ui` | The composables: `WorkspaceContent(model, terminal)` and its parts, including the file previews. Pure rendering. |
 | `workspace/impl` | `WorkspacePresenter`, the Model mapper, `WorkspaceScreen` (presenter plus live terminals), and the showcase built from fixtures through the same mapper. |
 | `apps/desktop` | The Metro `AppGraph`, `main`, and packaging. |
@@ -109,9 +109,10 @@ real app can't drift apart.
 ## Localization
 
 All copy lives in `workspace/uimodel/src/commonMain/composeResources/values*/strings.xml`, in
-English and Portuguese. Presenters put `LemonadeCodeString`s in the Model
+English, Portuguese and Slovak. Presenters put `LemonadeCodeString`s in the Model
 (`Res.string.x.asLemonadeCodeString(args)`), and composables call `resolve()` or `stringResource`.
-The language follows the system locale.
+The language follows the system locale. `TranslationsTest` checks that every language has every
+string and plural, with the same values filled in.
 
 ---
 

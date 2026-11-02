@@ -157,7 +157,7 @@ And a few more:
   last output on screen. Claude Code conversations pick up where they left off.
 - 🔗 **Clickable links.** Ctrl-click (or ⌘-click) any web address in the terminal to open it.
 - ⌨️ **Every keyboard works.** Accents, dead keys and input methods type just like anywhere else.
-- 🌍 **Speaks your language.** English and Portuguese, following your system.
+- 🌍 **Speaks your language.** English, Portuguese and Slovak, following your system.
 
 See everything in the **[feature guide](docs/FEATURES.md)**.
 

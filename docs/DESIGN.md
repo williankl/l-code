@@ -222,6 +222,7 @@ uses, so the app can be checked against the design side by side:
 ./gradlew :sample:renderScreens                # save each screen as a PNG in sample/build/screens
 ./gradlew :sample:renderScreens -Ptheme=light  # the same, in the light theme
 ./gradlew :sample:renderScreens -Plang=pt      # the same, in Portuguese
+./gradlew :sample:renderScreens -Plang=sk      # the same, in Slovak
 ```
 
 The screenshots in these docs come from those renders.

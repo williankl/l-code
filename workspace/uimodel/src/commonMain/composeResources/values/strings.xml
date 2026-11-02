@@ -10,7 +10,7 @@
   <string name="theme_light">Light</string>
   <string name="theme_system">System</string>
   <string name="keep_awake_title">Keep awake while sessions work</string>
-  <string name="keep_awake_description">Stops this computer from sleeping while any session is working. The display can still turn off.</string>
+  <string name="keep_awake_description">Stops this computer from sleeping, and its screen from dimming or locking, while any session is working.</string>
   <string name="keep_awake_tag">Keeping awake · %1$d working</string>
   <string name="keep_awake_off">Off · this computer can sleep</string>
   <plurals name="keep_awake_active">

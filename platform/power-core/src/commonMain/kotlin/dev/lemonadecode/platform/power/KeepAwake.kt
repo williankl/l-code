@@ -1,7 +1,7 @@
 package dev.lemonadecode.platform.power
 
 /**
- * Stops the computer from idle-sleeping while held. The display may still turn off.
+ * Stops the computer from sleeping, and its screen from dimming or locking, while held.
  * Holding twice is the same as holding once.
  */
 public interface KeepAwake {

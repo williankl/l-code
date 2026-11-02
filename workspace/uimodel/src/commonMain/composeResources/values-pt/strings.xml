@@ -10,7 +10,7 @@
   <string name="theme_light">Claro</string>
   <string name="theme_system">Sistema</string>
   <string name="keep_awake_title">Manter acordado enquanto as sessões trabalham</string>
-  <string name="keep_awake_description">Impede este computador de adormecer enquanto alguma sessão está a trabalhar. O ecrã pode desligar-se na mesma.</string>
+  <string name="keep_awake_description">Impede este computador de adormecer, e o ecrã de escurecer ou bloquear, enquanto alguma sessão está a trabalhar.</string>
   <string name="keep_awake_tag">A manter acordado · %1$d a trabalhar</string>
   <string name="keep_awake_off">Desligado · este computador pode adormecer</string>
   <plurals name="keep_awake_active">

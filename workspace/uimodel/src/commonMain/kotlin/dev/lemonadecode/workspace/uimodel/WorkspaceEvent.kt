@@ -20,8 +20,17 @@ public sealed interface WorkspaceEvent {
   public data class OpenSessionMenu(val sessionId: String) : WorkspaceEvent
   public data object DismissSessionMenu : WorkspaceEvent
 
-  /** Starts a sub-session of any session, straight away, and selects it. */
+  /**
+   * Starts a sub-session of any session and selects it. A new worktree goes on the branch typed in
+   * the session's menu.
+   */
   public data class CreateSubSessionFrom(val sessionId: String, val location: SubSessionLocation) : WorkspaceEvent
+
+  /** Turns the session's menu into a field for a new worktree's branch, filled with a suggestion. */
+  public data class StartNamingWorktree(val sessionId: String) : WorkspaceEvent
+
+  /** The branch typed for a new worktree so far, in the menu or in the sub-session panel. */
+  public data class SetWorktreeBranch(val name: String) : WorkspaceEvent
 
   /** Turns the session's menu into a name field. */
   public data class StartRenamingSession(val sessionId: String) : WorkspaceEvent

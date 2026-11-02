@@ -47,10 +47,10 @@ public data class SessionMenuModel(
   val branch: String?,
   /** False outside a git checkout, where a sub-session can only share the folder. */
   val worktreeAvailable: Boolean,
-  /** The branch a new worktree would be created on, e.g. `feat/rate-limit-sub-1`. */
-  val worktreeBranch: String?,
   /** Set while the menu shows the rename field instead of its items. */
   val rename: SessionRenameModel? = null,
+  /** Set while the menu asks for a new worktree's branch instead of showing its items. */
+  val newWorktree: WorktreeBranchModel? = null,
 )
 
 @Immutable

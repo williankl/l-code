@@ -142,9 +142,15 @@ A sub-session can start in one of two places:
 
 | | Same folder | New worktree |
 |---|---|---|
-| **Folder** | The parent's folder | A new folder next to the repository, like `storefront.worktrees/sub-1` |
-| **Branch** | The parent's branch | A new branch, like `feat/rate-limit-sub-1` |
+| **Folder** | The parent's folder | A new folder next to the repository, named after the branch, like `storefront.worktrees/generating-bugs` |
+| **Branch** | The parent's branch | A new branch you name, starting from the parent's |
 | **Good for** | Reviews and quick follow-ups | Parallel work that must never collide |
+
+A new worktree asks for its branch first, filled in with a playful suggestion like
+`worktree/generating-bugs`. Press **Enter** to keep it, or type over it: everything is yours to
+rename, `worktree/` included. The folder follows the name as you type. A name git won't take, or a
+branch that already exists, is caught before anything is created. The same field opens from a
+session's right-click menu.
 
 Before anything is created, the panel shows you the exact folder and branch you'll get.
 

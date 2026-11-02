@@ -22,6 +22,8 @@ import dev.lemonadecode.workspace.impl.showcase.ShowcaseFixtures
 import dev.lemonadecode.workspace.strings.Res
 import dev.lemonadecode.workspace.strings.session_path_copied
 import dev.lemonadecode.workspace.strings.update_failed_checksum
+import dev.lemonadecode.workspace.strings.worktree_branch_invalid
+import dev.lemonadecode.workspace.strings.worktree_branch_taken
 import dev.lemonadecode.workspace.uimodel.DiffRowModel
 import dev.lemonadecode.workspace.uimodel.SessionMenuModel
 import dev.lemonadecode.workspace.uimodel.SessionRenameModel
@@ -32,11 +34,13 @@ import dev.lemonadecode.workspace.uimodel.UpdateStatusModel
 import dev.lemonadecode.workspace.uimodel.WorkspaceContentModel
 import dev.lemonadecode.workspace.uimodel.WorkspaceEvent
 import dev.lemonadecode.workspace.uimodel.WorkspaceView
+import dev.lemonadecode.workspace.uimodel.WorktreeBranchModel
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
+import dev.lemonadecode.workspace.uimodel.SubSessionLocation as LocationModel
 
 class WorkspacePresenterTest {
   private val ar = SessionId("ar")
@@ -230,6 +234,83 @@ class WorkspacePresenterTest {
     }
   }
 
+  @Test
+  fun `a new worktree from the panel suggests a branch, follows what is typed and is created on it`() = runTest {
+    withSession()
+    sessions.worktreeBranchSuggestion = "worktree/generating-bugs"
+    presenter.test {
+      awaitItem().eventSink(WorkspaceEvent.ToggleNewSubSessionMenu)
+      awaitItemWhere { it.newSubSession.open }.eventSink(WorkspaceEvent.SetSubSessionLocation(LocationModel.NewWorktree))
+      val suggested = awaitItemWhere { it.newSubSession.worktreeBranch != null }
+      assertEquals(
+        WorktreeBranchModel(name = "worktree/generating-bugs", path = "~/code/storefront.worktrees/generating-bugs", problem = null, canCreate = true),
+        suggested.newSubSession.worktreeBranch,
+      )
+
+      suggested.eventSink(WorkspaceEvent.SetWorktreeBranch("feat/login"))
+      val typed = awaitItemWhere { it.newSubSession.worktreeBranch?.name == "feat/login" }
+      assertEquals("~/code/storefront.worktrees/login", typed.newSubSession.worktreeBranch?.path)
+
+      typed.eventSink(WorkspaceEvent.CreateSubSession)
+      // Enter held down, or pressed again while git works: still one worktree.
+      typed.eventSink(WorkspaceEvent.CreateSubSession)
+      val created = awaitItemWhere { it.header?.name == "sub-1" }
+      assertEquals(false, created.newSubSession.open)
+      assertEquals(listOf<String?>("feat/login"), sessions.started.map { it.branch })
+    }
+  }
+
+  @Test
+  fun `the panel suggests a fresh branch each time it opens`() = runTest {
+    withSession()
+    settings.update { it.copy(subSessionLocation = dev.lemonadecode.domain.session.SubSessionLocation.NewWorktree) }
+    sessions.worktreeBranchSuggestion = "worktree/herding-yaks"
+    presenter.test {
+      awaitItem().eventSink(WorkspaceEvent.ToggleNewSubSessionMenu)
+      awaitItemWhere { it.newSubSession.worktreeBranch?.name == "worktree/herding-yaks" }.eventSink(WorkspaceEvent.SetWorktreeBranch("typed"))
+      awaitItemWhere { it.newSubSession.worktreeBranch?.name == "typed" }.eventSink(WorkspaceEvent.DismissNewSubSessionMenu)
+      sessions.worktreeBranchSuggestion = "worktree/taming-gremlins"
+      awaitItemWhere { !it.newSubSession.open }.eventSink(WorkspaceEvent.ToggleNewSubSessionMenu)
+      awaitItemWhere { it.newSubSession.worktreeBranch?.name == "worktree/taming-gremlins" }
+    }
+  }
+
+  @Test
+  fun `a branch git won't take, or one it already has, isn't created`() = runTest {
+    withSession()
+    sessions.existingBranches = setOf("feat/taken")
+    presenter.test {
+      awaitItem().eventSink(WorkspaceEvent.ToggleNewSubSessionMenu)
+      awaitItemWhere { it.newSubSession.open }.eventSink(WorkspaceEvent.SetSubSessionLocation(LocationModel.NewWorktree))
+
+      awaitItemWhere { it.newSubSession.worktreeBranch != null }.eventSink(WorkspaceEvent.SetWorktreeBranch("my branch"))
+      val invalid = awaitItemWhere { it.newSubSession.worktreeBranch?.name == "my branch" }
+      assertEquals(Res.string.worktree_branch_invalid.asLemonadeCodeString(), invalid.newSubSession.worktreeBranch?.problem)
+      assertEquals(false, invalid.newSubSession.worktreeBranch?.canCreate)
+      invalid.eventSink(WorkspaceEvent.CreateSubSession)
+
+      invalid.eventSink(WorkspaceEvent.SetWorktreeBranch(""))
+      val blank = awaitItemWhere { it.newSubSession.worktreeBranch?.name == "" }
+      assertEquals(null, blank.newSubSession.worktreeBranch?.problem, "nothing to complain about yet")
+      assertEquals(false, blank.newSubSession.worktreeBranch?.canCreate)
+      blank.eventSink(WorkspaceEvent.CreateSubSession)
+
+      blank.eventSink(WorkspaceEvent.SetWorktreeBranch("feat/taken"))
+      awaitItemWhere { it.newSubSession.worktreeBranch?.name == "feat/taken" }.eventSink(WorkspaceEvent.CreateSubSession)
+      val taken = awaitItemWhere { it.newSubSession.worktreeBranch?.problem != null }
+      assertEquals(Res.string.worktree_branch_taken.asLemonadeCodeString("feat/taken"), taken.newSubSession.worktreeBranch?.problem)
+      assertEquals(false, taken.newSubSession.worktreeBranch?.canCreate)
+      assertEquals(true, taken.newSubSession.open, "the panel stays open to pick another name")
+      assertEquals(null, taken.error, "said under the field, not in a banner")
+      assertEquals(listOf<String?>("feat/taken"), sessions.started.map { it.branch }, "only a name git takes reaches it")
+
+      taken.eventSink(WorkspaceEvent.SetWorktreeBranch("feat/taken-2"))
+      val renamed = awaitItemWhere { it.newSubSession.worktreeBranch?.name == "feat/taken-2" }
+      assertEquals(null, renamed.newSubSession.worktreeBranch?.problem)
+      assertEquals(true, renamed.newSubSession.worktreeBranch?.canCreate)
+    }
+  }
+
   /** api-ratelimit with a sub-session and a grandchild, and checkout-flake outside a repository. */
   private fun withFamily() {
     sessions.setSessions(
@@ -271,7 +352,6 @@ class WorkspacePresenterTest {
           canStartSubSession = true,
           branch = ShowcaseFixtures.Branch,
           worktreeAvailable = true,
-          worktreeBranch = "${ShowcaseFixtures.Branch}-sub-1",
         ),
         sub.sessions.menu,
       )
@@ -286,17 +366,41 @@ class WorkspacePresenterTest {
   }
 
   @Test
-  fun `a sub-session from the menu starts under that session and gets selected`() = runTest {
+  fun `a new worktree from the menu asks for its branch, then starts under that session and gets selected`() = runTest {
     withFamily()
+    sessions.worktreeBranchSuggestion = "worktree/generating-bugs"
     presenter.test {
       awaitItem().eventSink(WorkspaceEvent.OpenSessionMenu("d2"))
-      awaitItemWhere { it.sessions.menu != null }
-        .eventSink(WorkspaceEvent.CreateSubSessionFrom("d2", dev.lemonadecode.workspace.uimodel.SubSessionLocation.NewWorktree))
+      awaitItemWhere { it.sessions.menu != null }.eventSink(WorkspaceEvent.StartNamingWorktree("d2"))
+      val naming = awaitItemWhere { it.sessions.menu?.newWorktree != null }
+      assertEquals("d2", naming.sessions.menu?.sessionId, "the field takes the menu's place")
+      assertEquals(
+        WorktreeBranchModel(name = "worktree/generating-bugs", path = "~/code/storefront.worktrees/generating-bugs", problem = null, canCreate = true),
+        naming.sessions.menu?.newWorktree,
+      )
+      assertTrue(sessions.started.isEmpty(), "nothing is created before the branch is named")
+
+      naming.eventSink(WorkspaceEvent.SetWorktreeBranch("fix/flaky-login"))
+      awaitItemWhere { it.sessions.menu?.newWorktree?.name == "fix/flaky-login" }
+        .eventSink(WorkspaceEvent.CreateSubSessionFrom("d2", LocationModel.NewWorktree))
       val created = awaitItemWhere { it.header?.name == "sub-1" }
       assertEquals(null, created.sessions.menu)
       val call = sessions.started.single()
-      assertEquals(SessionId("d2") to dev.lemonadecode.domain.session.SubSessionLocation.NewWorktree, call.parentId to call.location)
+      assertEquals(Triple(SessionId("d2"), dev.lemonadecode.domain.session.SubSessionLocation.NewWorktree, "fix/flaky-login"), Triple(call.parentId, call.location, call.branch))
       assertEquals(dev.lemonadecode.domain.session.SubSessionLocation.NewWorktree, settings.settings.value.subSessionLocation)
+    }
+  }
+
+  @Test
+  fun `closing the branch field closes the menu, and the menu opens on its items again`() = runTest {
+    withFamily()
+    presenter.test {
+      awaitItem().eventSink(WorkspaceEvent.OpenSessionMenu("d2"))
+      awaitItemWhere { it.sessions.menu != null }.eventSink(WorkspaceEvent.StartNamingWorktree("d2"))
+      awaitItemWhere { it.sessions.menu?.newWorktree != null }.eventSink(WorkspaceEvent.DismissSessionMenu)
+      awaitItemWhere { it.sessions.menu == null }.eventSink(WorkspaceEvent.OpenSessionMenu("d2"))
+      assertEquals(null, awaitItemWhere { it.sessions.menu != null }.sessions.menu?.newWorktree)
+      assertTrue(sessions.started.isEmpty())
     }
   }
 

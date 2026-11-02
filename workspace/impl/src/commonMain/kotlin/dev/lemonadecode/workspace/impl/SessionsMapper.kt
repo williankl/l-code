@@ -4,7 +4,6 @@ import dev.lemonadecode.domain.session.Session
 import dev.lemonadecode.domain.session.SessionId
 import dev.lemonadecode.domain.session.SessionPlacement
 import dev.lemonadecode.domain.session.SessionStatus
-import dev.lemonadecode.domain.session.SubSessionPlan
 import dev.lemonadecode.platform.localization.LemonadeCodeString
 import dev.lemonadecode.platform.localization.asLemonadeCodeString
 import dev.lemonadecode.platform.process.abbreviateHome
@@ -24,6 +23,7 @@ import dev.lemonadecode.workspace.uimodel.SessionTreeRowModel
 import dev.lemonadecode.workspace.uimodel.TreeConnectorModel
 import dev.lemonadecode.workspace.uimodel.TreeFoldModel
 import dev.lemonadecode.workspace.uimodel.TreeGuideModel
+import dev.lemonadecode.workspace.uimodel.WorktreeBranchModel
 import dev.lemonadecode.workspace.uimodel.SessionStatus as StatusModel
 
 /** Session list, tiles and header. */
@@ -77,14 +77,14 @@ internal object SessionsMapper {
 
   /**
    * The right-click menu of [session]. Sub-sessions can be started from it where the list nests
-   * them; [worktreePlan] names the branch a new worktree would get. [renaming] shows the name field.
+   * them. [renaming] shows the name field; [newWorktree], the field for a new worktree's branch.
    */
   fun menu(
     session: Session,
     style: NavigationStyle,
     home: String,
-    worktreePlan: SubSessionPlan?,
     renaming: Boolean,
+    newWorktree: WorktreeBranchModel? = null,
   ): SessionMenuModel {
     val folder = abbreviateHome(session.workingDirectory, home)
     return SessionMenuModel(
@@ -95,8 +95,8 @@ internal object SessionsMapper {
       canStartSubSession = style == NavigationStyle.Tree,
       branch = session.branch,
       worktreeAvailable = session.repositoryRoot != null,
-      worktreeBranch = worktreePlan?.takeIf { it.createsBranch }?.branch,
       rename = if (renaming) SessionRenameModel(name = session.displayName, automaticName = session.name) else null,
+      newWorktree = newWorktree,
     )
   }
 

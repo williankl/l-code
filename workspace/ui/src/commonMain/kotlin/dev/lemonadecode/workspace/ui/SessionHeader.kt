@@ -226,6 +226,16 @@ private fun NewSubSessionPopover(
         size = LemonadeSegmentedControlSize.Medium,
         modifier = Modifier.fillMaxWidth(),
       )
+      val worktreeBranch = menu.worktreeBranch
+      if (worktreeBranch != null) {
+        WorktreeBranchField(
+          branch = worktreeBranch,
+          onCreate = { onEvent(WorkspaceEvent.CreateSubSession) },
+          onCancel = { onEvent(WorkspaceEvent.DismissNewSubSessionMenu) },
+          onEvent = onEvent,
+          modifier = Modifier.fillMaxWidth(),
+        )
+      }
       Column(
         verticalArrangement = Arrangement.spacedBy(2.dp),
         modifier = Modifier
@@ -233,9 +243,10 @@ private fun NewSubSessionPopover(
           .background(colors.background.bgSubtle, LemonadeTheme.shapes.radius300)
           .padding(horizontal = spaces.spacing300, vertical = spaces.spacing200),
       ) {
-        Mono(text = menu.path, style = mono, color = code.path)
+        // A new worktree's branch is in the field above; its folder follows what is typed there.
+        Mono(text = worktreeBranch?.path ?: menu.path, style = mono, color = code.path)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(rememberCharWidth(mono))) {
-          Mono(text = menu.branch, style = mono, color = code.branch)
+          if (worktreeBranch == null) Mono(text = menu.branch, style = mono, color = code.branch)
           Mono(text = menu.branchNote.resolve(), style = mono, color = colors.content.contentSecondary)
         }
       }
@@ -262,6 +273,7 @@ private fun NewSubSessionPopover(
         variant = LemonadeButtonVariant.Primary,
         type = LemonadeButtonType.Solid,
         size = LemonadeButtonSize.Small,
+        enabled = menu.worktreeBranch?.canCreate ?: true,
       )
     }
   }

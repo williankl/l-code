@@ -50,8 +50,10 @@ import dev.lemonadecode.platform.designsystem.ContextMenuDivider
 import dev.lemonadecode.platform.designsystem.ContextMenuHeader
 import dev.lemonadecode.platform.designsystem.ContextMenuItem
 import dev.lemonadecode.platform.designsystem.ContextMenuPopover
+import dev.lemonadecode.platform.designsystem.LemonadeCodeTheme
 import dev.lemonadecode.workspace.strings.Res
 import dev.lemonadecode.workspace.strings.action_cancel
+import dev.lemonadecode.workspace.strings.action_create_sub_session
 import dev.lemonadecode.workspace.strings.session_close
 import dev.lemonadecode.workspace.strings.session_copy_path
 import dev.lemonadecode.workspace.strings.session_name_field
@@ -68,6 +70,7 @@ import dev.lemonadecode.workspace.uimodel.SessionMenuModel
 import dev.lemonadecode.workspace.uimodel.SessionRenameModel
 import dev.lemonadecode.workspace.uimodel.SubSessionLocation
 import dev.lemonadecode.workspace.uimodel.WorkspaceEvent
+import dev.lemonadecode.workspace.uimodel.WorktreeBranchModel
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
 
@@ -147,7 +150,8 @@ internal fun Modifier.sessionActions(
 /**
  * The right-click menu of a session, opened at [offset] inside its row or tile; just under the top
  * when it was opened without the pointer. It names the session and its folder, then offers its
- * actions; Rename swaps the actions for a name field in the same panel.
+ * actions; Rename swaps the actions for a name field in the same panel, and a new worktree for a
+ * field naming its branch.
  */
 @Composable
 internal fun SessionMenu(
@@ -161,10 +165,11 @@ internal fun SessionMenu(
   ContextMenuPopover(offset = offset ?: fallback, onDismissRequest = { onEvent(WorkspaceEvent.DismissSessionMenu) }) {
     ContextMenuHeader(title = menu.title, detail = menu.location)
     val rename = menu.rename
-    if (rename == null) {
-      SessionMenuItems(menu, clipboard, onEvent)
-    } else {
-      RenameForm(sessionId = menu.sessionId, rename = rename, onEvent = onEvent)
+    val newWorktree = menu.newWorktree
+    when {
+      rename != null -> RenameForm(sessionId = menu.sessionId, rename = rename, onEvent = onEvent)
+      newWorktree != null -> NewWorktreeForm(sessionId = menu.sessionId, branch = newWorktree, onEvent = onEvent)
+      else -> SessionMenuItems(menu, clipboard, onEvent)
     }
   }
 }
@@ -202,17 +207,17 @@ private fun SessionMenuItems(
         ?: stringResource(Res.string.session_sub_same_folder),
       onClick = { onEvent(WorkspaceEvent.CreateSubSessionFrom(id, SubSessionLocation.SameFolder)) },
     )
-    val worktreeBranch = menu.worktreeBranch
+    val branch = menu.branch
     ContextMenuItem(
       label = stringResource(Res.string.session_new_sub_worktree),
       icon = LemonadeIcons.ArrowSplit,
       detail = when {
         !menu.worktreeAvailable -> stringResource(Res.string.session_worktree_needs_repo)
-        worktreeBranch != null -> stringResource(Res.string.session_sub_new_branch, worktreeBranch)
+        branch != null -> stringResource(Res.string.session_sub_new_branch, branch)
         else -> null
       },
       enabled = menu.worktreeAvailable,
-      onClick = { onEvent(WorkspaceEvent.CreateSubSessionFrom(id, SubSessionLocation.NewWorktree)) },
+      onClick = { onEvent(WorkspaceEvent.StartNamingWorktree(id)) },
     )
   }
 }
@@ -283,4 +288,48 @@ private fun RenameForm(
     }
   }
   LaunchedEffect(sessionId) { focusRequester.requestFocus() }
+}
+
+/**
+ * The branch field the menu turns into for a new worktree, with the folder it will get. Enter or
+ * Create starts it, Esc or Cancel closes the menu.
+ */
+@Composable
+private fun NewWorktreeForm(
+  sessionId: String,
+  branch: WorktreeBranchModel,
+  onEvent: (WorkspaceEvent) -> Unit,
+) {
+  val spaces = LemonadeTheme.spaces
+  val create = { onEvent(WorkspaceEvent.CreateSubSessionFrom(sessionId, SubSessionLocation.NewWorktree)) }
+  val cancel = { onEvent(WorkspaceEvent.DismissSessionMenu) }
+  Column(
+    verticalArrangement = Arrangement.spacedBy(spaces.spacing300),
+    modifier = Modifier.fillMaxWidth().padding(start = spaces.spacing200, end = spaces.spacing200, top = spaces.spacing100, bottom = spaces.spacing200),
+  ) {
+    Column(verticalArrangement = Arrangement.spacedBy(spaces.spacing100)) {
+      WorktreeBranchField(branch = branch, onCreate = create, onCancel = cancel, onEvent = onEvent, modifier = Modifier.fillMaxWidth())
+      Mono(text = branch.path, style = LemonadeCodeTheme.typography.codeSmall, color = LemonadeCodeTheme.code.path)
+    }
+    Row(
+      horizontalArrangement = Arrangement.spacedBy(spaces.spacing200, Alignment.End),
+      modifier = Modifier.fillMaxWidth(),
+    ) {
+      LemonadeUi.Button(
+        label = stringResource(Res.string.action_cancel),
+        onClick = cancel,
+        variant = LemonadeButtonVariant.Neutral,
+        type = LemonadeButtonType.Subtle,
+        size = LemonadeButtonSize.Small,
+      )
+      LemonadeUi.Button(
+        label = stringResource(Res.string.action_create_sub_session),
+        onClick = create,
+        variant = LemonadeButtonVariant.Primary,
+        type = LemonadeButtonType.Solid,
+        size = LemonadeButtonSize.Small,
+        enabled = branch.canCreate,
+      )
+    }
+  }
 }

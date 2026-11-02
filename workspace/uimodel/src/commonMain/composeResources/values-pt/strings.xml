@@ -61,7 +61,7 @@
   <string name="session_new_sub_worktree">Nova subsessão numa nova worktree</string>
   <string name="session_sub_same_folder">Mesma pasta</string>
   <string name="session_sub_same_folder_branch">Mesma pasta · %1$s</string>
-  <string name="session_sub_new_branch">Novo branch %1$s</string>
+  <string name="session_sub_new_branch">Novo branch a partir de %1$s</string>
   <string name="session_worktree_needs_repo">Precisa de um checkout git</string>
   <string name="session_rename">Renomear</string>
   <string name="session_rename_action">Renomear sessão</string>
@@ -92,6 +92,9 @@
   <string name="sub_help_same">Partilha ficheiros e branch com %1$s. As alterações ficam na mesma árvore de trabalho.</string>
   <string name="sub_help_worktree">Pasta e branch próprios, para que as alterações nunca colidam com %1$s.</string>
   <string name="sub_help_no_repo">Esta pasta não é um checkout git, por isso uma subsessão só a pode partilhar.</string>
+  <string name="worktree_branch_field">Branch</string>
+  <string name="worktree_branch_invalid">O git não aceita este nome de branch.</string>
+  <string name="worktree_branch_taken">Já existe um branch chamado %1$s.</string>
   <string name="action_create_sub_session">Criar subsessão</string>
   <string name="action_cancel">Cancelar</string>
   <string name="action_dismiss">Fechar</string>

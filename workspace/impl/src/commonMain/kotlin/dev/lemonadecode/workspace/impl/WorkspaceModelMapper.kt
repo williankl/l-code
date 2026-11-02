@@ -2,6 +2,7 @@ package dev.lemonadecode.workspace.impl
 
 import dev.lemonadecode.domain.review.CommentStatus
 import dev.lemonadecode.domain.review.Review
+import dev.lemonadecode.domain.session.BranchName
 import dev.lemonadecode.domain.session.Session
 import dev.lemonadecode.domain.session.SessionStatus
 import dev.lemonadecode.domain.session.SubSessionLocation
@@ -27,6 +28,8 @@ import dev.lemonadecode.workspace.strings.sub_help_worktree
 import dev.lemonadecode.workspace.strings.update_failed_checksum
 import dev.lemonadecode.workspace.strings.update_failed_download
 import dev.lemonadecode.workspace.strings.update_failed_install
+import dev.lemonadecode.workspace.strings.worktree_branch_invalid
+import dev.lemonadecode.workspace.strings.worktree_branch_taken
 import dev.lemonadecode.workspace.uimodel.KeepAwakeStatusModel
 import dev.lemonadecode.workspace.uimodel.NewSubSessionModel
 import dev.lemonadecode.workspace.uimodel.SessionsPanelModel
@@ -40,6 +43,7 @@ import dev.lemonadecode.workspace.uimodel.WorkspaceContentModel
 import dev.lemonadecode.workspace.uimodel.WorkspaceEvent
 import dev.lemonadecode.workspace.uimodel.WorkspaceModel
 import dev.lemonadecode.workspace.uimodel.WorkspaceView
+import dev.lemonadecode.workspace.uimodel.WorktreeBranchModel
 import dev.lemonadecode.workspace.uimodel.SubSessionLocation as LocationModel
 
 /** Everything the workspace Model is built from. */
@@ -55,7 +59,7 @@ internal data class WorkspaceInput(
   val homeDirectory: String,
   /** What has loaded for the files whose preview is on screen, by path. */
   val previews: Map<String, PreviewLoad> = emptyMap(),
-  /** The worktree a sub-session started from the open session menu would get. */
+  /** The worktree the open session menu's branch field would create. */
   val menuWorktreePlan: SubSessionPlan? = null,
   val update: UpdateState = UpdateState.None,
 )
@@ -88,8 +92,10 @@ internal object WorkspaceModelMapper {
             session = session,
             style = view.navigationStyle,
             home = input.homeDirectory,
-            worktreePlan = input.menuWorktreePlan,
             renaming = view.renaming == session.id,
+            newWorktree = view.worktreeBranch?.takeIf { view.namingWorktree == session.id }?.let {
+              worktreeBranch(it, input.menuWorktreePlan, view.takenBranch, input.homeDirectory)
+            },
           )
         },
       ),
@@ -171,8 +177,25 @@ internal object WorkspaceModelMapper {
         else -> Res.string.sub_help_same.asLemonadeCodeString(name)
       },
       worktreeAvailable = selected?.repositoryRoot != null,
+      worktreeBranch = input.view.worktreeBranch?.takeIf { worktree }?.let { worktreeBranch(it, plan, input.view.takenBranch, input.homeDirectory) },
     )
   }
+
+  /** The field naming a new worktree's branch: [name] as typed, going where [plan] says. */
+  private fun worktreeBranch(name: String, plan: SubSessionPlan?, taken: String?, home: String): WorktreeBranchModel = WorktreeBranchModel(
+    name = name,
+    path = plan?.workingDirectory?.let { abbreviateHome(it, home) }.orEmpty(),
+    problem = when {
+      name.isEmpty() -> null
+      !BranchName.isValid(name) -> Res.string.worktree_branch_invalid.asLemonadeCodeString()
+      name == taken -> Res.string.worktree_branch_taken.asLemonadeCodeString(name)
+      else -> null
+    },
+    canCreate = canUseWorktreeBranch(name, taken),
+  )
+
+  /** Whether a new worktree can go on [name]: git takes it, and didn't say it already has it ([taken]). */
+  fun canUseWorktreeBranch(name: String, taken: String?): Boolean = BranchName.isValid(name) && name != taken
 
   fun ThemePreference.toModel(): ThemeOption = when (this) {
     ThemePreference.Dark -> ThemeOption.Dark

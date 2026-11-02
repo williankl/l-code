@@ -55,6 +55,14 @@ internal data class WorkspaceViewState(
   val sessionMenu: SessionId? = null,
   /** The session whose menu shows the name field; the text itself stays in the field until saved. */
   val renaming: SessionId? = null,
+  /** The branch typed for a new worktree, while the sub-session panel or a session's menu asks for one. */
+  val worktreeBranch: String? = null,
+  /** The session whose menu asks for a new worktree's branch instead of showing its items. */
+  val namingWorktree: SessionId? = null,
+  /** A branch git already has, from the last try; said under the field while that name stays typed. */
+  val takenBranch: String? = null,
+  /** A sub-session is on its way: another Enter or click waits for it rather than starting a second. */
+  val startingSubSession: Boolean = false,
   val error: LemonadeCodeString? = null,
   val toast: LemonadeCodeString? = null,
 )

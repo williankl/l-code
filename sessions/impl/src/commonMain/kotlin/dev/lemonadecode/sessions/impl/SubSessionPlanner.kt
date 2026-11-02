@@ -7,11 +7,12 @@ import dev.lemonadecode.domain.session.SubSessionLocation
 import dev.lemonadecode.domain.session.SubSessionPlan
 
 /**
- * Names and places sub-sessions. Worktrees go next to the repository, in a
- * `<repo>.worktrees/` folder, on a branch named after the parent's branch and the sub-session.
+ * Names and places sub-sessions. Worktrees go next to the repository, in a `<repo>.worktrees/`
+ * folder, on the branch the user typed, in a folder named after its last part; with none typed, on
+ * a branch named after the parent's branch and the sub-session.
  */
 internal object SubSessionPlanner {
-  fun plan(parent: Session, existing: List<Session>, location: SubSessionLocation, prefix: String): SubSessionPlan? {
+  fun plan(parent: Session, existing: List<Session>, location: SubSessionLocation, prefix: String, branch: String? = null): SubSessionPlan? {
     val name = nextName(existing, prefix)
     return when (location) {
       SubSessionLocation.SameFolder -> SubSessionPlan(
@@ -32,8 +33,8 @@ internal object SubSessionPlanner {
         SubSessionPlan(
           name = name,
           location = location,
-          workingDirectory = "$folder/$name",
-          branch = parent.branch?.let { "$it-$name" } ?: "lemonade-code/$name",
+          workingDirectory = "$folder/${branch?.substringAfterLast('/') ?: name}",
+          branch = branch ?: parent.branch?.let { "$it-$name" } ?: "lemonade-code/$name",
           createsBranch = true,
           baseBranch = parent.branch,
         )

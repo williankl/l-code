@@ -17,6 +17,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performMouseInput
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.rightClick
 import androidx.compose.ui.test.runDesktopComposeUiTest
@@ -147,11 +148,30 @@ class WorkspaceFlowUiTest {
       onNodeWithContentDescription("New sub-session").performClick()
       waitFor(hasText("New worktree"))
       onNodeWithText("New worktree").performClick()
-      waitFor(hasText("feat/rate-limit-sub-1"))
-      onNodeWithText("Create sub-session").performClick()
+      waitFor(hasSetTextAction() and hasText("worktree/testing-things"))
+      onNode(hasSetTextAction()).performTextReplacement("feat/login")
+      waitFor(hasText("~/code/storefront.worktrees/login"))
+      onNode(hasSetTextAction()).performKeyInput { pressKey(Key.Enter) }
       waitFor(hasText("sub-session · worktree"))
-      assertEquals(SubSessionLocation.NewWorktree, sessions.started.single().location)
+      val call = sessions.started.single()
+      assertEquals(SubSessionLocation.NewWorktree to "feat/login", call.location to call.branch)
       assertEquals(SubSessionLocation.NewWorktree, settings.settings.value.subSessionLocation)
+    }
+  }
+
+  @Test
+  fun `right click starts a worktree on the suggested branch with just Enter`() {
+    sessions.setSessions(listOf(ShowcaseFixtures.session("ar", "api-ratelimit"), ShowcaseFixtures.session("cf", "checkout-flake")))
+    sessions.worktreeBranchSuggestion = "worktree/generating-bugs"
+    flow {
+      onNodeWithText("checkout-flake").performMouseInput { rightClick(center) }
+      waitFor(hasText("New sub-session in new worktree"))
+      onNodeWithText("New sub-session in new worktree").performClick()
+      waitFor(hasSetTextAction() and hasText("worktree/generating-bugs"))
+      onNode(hasSetTextAction()).performKeyInput { pressKey(Key.Enter) }
+      waitFor(hasText("sub-session · worktree"))
+      val call = sessions.started.single()
+      assertEquals(SessionId("cf") to "worktree/generating-bugs", call.parentId to call.branch)
     }
   }
 

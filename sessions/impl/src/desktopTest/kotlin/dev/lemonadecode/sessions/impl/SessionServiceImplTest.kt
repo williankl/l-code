@@ -11,6 +11,7 @@ import dev.lemonadecode.platform.core.getOrNull
 import dev.lemonadecode.platform.process.HomeDirectory
 import dev.lemonadecode.platform.terminal.TerminalLaunch
 import dev.lemonadecode.platform.terminal.TerminalSession
+import dev.lemonadecode.sessions.api.SessionError
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
@@ -280,6 +281,41 @@ class SessionServiceImplTest {
     service.close(parent)
     assertTrue(service.sessions.value.isEmpty())
     assertEquals(null, registry.terminal(review))
+  }
+
+  @Test
+  fun `a worktree goes on the branch the user typed, in a folder named after it`() = runBlocking<Unit> {
+    git.checkoutResult = LemonadeCodeResult.success(GitCheckout(root = home.path, branch = "main"))
+    val parent = service.openTerminal().getOrNull()!!
+    // The fake git creates nothing, and the shell needs its folder.
+    val folder = File(home.parentFile, "${home.name}.worktrees/generating-bugs").apply { mkdirs() }
+    val id = service.startSubSession(parent, SubSessionLocation.NewWorktree, branch = "worktree/generating-bugs").getOrNull()!!
+    assertEquals(FakeGitDataSource.WorktreeCall(home.path, folder.path, "worktree/generating-bugs", "main"), git.worktreeCalls.single())
+    val session = service.sessions.value.single { it.id == id }
+    assertEquals("worktree/generating-bugs", session.branch)
+    assertEquals("sub-1", session.name)
+  }
+
+  @Test
+  fun `a branch git already has, or a name it won't take, creates nothing`() = runBlocking<Unit> {
+    git.checkoutResult = LemonadeCodeResult.success(GitCheckout(root = home.path, branch = "main"))
+    git.branchesResult = LemonadeCodeResult.success(listOf("main", "worktree/generating-bugs"))
+    val parent = service.openTerminal().getOrNull()!!
+    assertEquals(
+      LemonadeCodeResult.failure(SessionError.BranchExists("worktree/generating-bugs")),
+      service.startSubSession(parent, SubSessionLocation.NewWorktree, branch = "worktree/generating-bugs"),
+    )
+    assertEquals(
+      LemonadeCodeResult.failure(SessionError.InvalidBranch("my branch")),
+      service.startSubSession(parent, SubSessionLocation.NewWorktree, branch = "my branch"),
+    )
+    assertTrue(git.worktreeCalls.isEmpty())
+    assertEquals(listOf(parent), service.sessions.value.map { it.id })
+  }
+
+  @Test
+  fun `suggested worktree branches are playful names under worktree`() {
+    assertTrue(Regex("worktree/[a-z]+-[a-z]+").matches(service.suggestWorktreeBranch()))
   }
 
   private fun TerminalSession.screen(): String {

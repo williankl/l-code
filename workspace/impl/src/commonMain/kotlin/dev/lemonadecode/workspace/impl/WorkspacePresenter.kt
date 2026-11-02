@@ -29,6 +29,7 @@ import dev.lemonadecode.platform.localization.asLemonadeCodeString
 import dev.lemonadecode.platform.presenter.LemonadeCodePresenter
 import dev.lemonadecode.platform.process.HomeDirectory
 import dev.lemonadecode.review.api.ReviewService
+import dev.lemonadecode.sessions.api.SessionError
 import dev.lemonadecode.sessions.api.SessionService
 import dev.lemonadecode.settings.api.SettingsService
 import dev.lemonadecode.updates.api.UpdateService
@@ -97,7 +98,32 @@ public class WorkspacePresenter internal constructor(
             state.copy(
               sessionMenu = state.sessionMenu?.takeUnless { it in closing },
               renaming = state.renaming?.takeUnless { it in closing },
+              namingWorktree = state.namingWorktree?.takeUnless { it in closing },
             )
+          }
+        }
+
+        /**
+         * Starts a sub-session of [parentId], a new worktree on [branch] when given, and selects it.
+         * Nothing happens while another is on its way, or for a branch that can't be used.
+         */
+        fun startSubSession(parentId: SessionId, location: SubSessionLocation, branch: String?) {
+          if (view.startingSubSession || (branch != null && !WorkspaceModelMapper.canUseWorktreeBranch(branch, view.takenBranch))) return
+          update { it.copy(startingSubSession = true) }
+          scope.launch {
+            settingsService.update { it.copy(subSessionLocation = location) }
+            val started = sessionService.startSubSession(parentId, location, branch = branch)
+            update { it.copy(startingSubSession = false) }
+            when (started) {
+              is LemonadeCodeResult.Success -> update {
+                it.selecting(started.value).copy(subSessionMenu = null, worktreeBranch = null, namingWorktree = null, view = WorkspaceView.Terminal)
+              }
+              is LemonadeCodeResult.Failure -> when (val error = started.error) {
+                // Said under the field, which stays open for another name.
+                is SessionError.BranchExists -> update { it.copy(takenBranch = error.branch) }
+                else -> fail(ErrorMessages.of(error))
+              }
+            }
           }
         }
 
@@ -123,21 +149,19 @@ public class WorkspacePresenter internal constructor(
           is WorkspaceEvent.OpenSessionMenu -> sessionOf(event.sessionId)?.let { session ->
             update { it.closingPopovers().copy(sessionMenu = session.id) }
           }
-          WorkspaceEvent.DismissSessionMenu -> update { it.copy(sessionMenu = null, renaming = null) }
-          is WorkspaceEvent.CreateSubSessionFrom -> {
-            val parent = sessionOf(event.sessionId)
+          WorkspaceEvent.DismissSessionMenu -> update { it.copy(sessionMenu = null, renaming = null, namingWorktree = null, worktreeBranch = null) }
+          is WorkspaceEvent.CreateSubSessionFrom -> sessionOf(event.sessionId)?.let { parent ->
             val location = event.location.toDomain()
-            update { it.copy(sessionMenu = null) }
-            if (parent != null) {
-              scope.launch {
-                settingsService.update { it.copy(subSessionLocation = location) }
-                when (val started = sessionService.startSubSession(parent.id, location)) {
-                  is LemonadeCodeResult.Success -> update { it.selecting(started.value).copy(view = WorkspaceView.Terminal) }
-                  is LemonadeCodeResult.Failure -> fail(ErrorMessages.of(started.error))
-                }
-              }
-            }
+            val naming = view.namingWorktree == parent.id && location == SubSessionLocation.NewWorktree
+            // The branch field stays open until the worktree exists, to say what was wrong with the name.
+            if (!naming) update { it.copy(sessionMenu = null) }
+            startSubSession(parent.id, location, branch = view.worktreeBranch.takeIf { naming })
           }
+          // The menu stays open around the branch field, where it was.
+          is WorkspaceEvent.StartNamingWorktree -> sessionOf(event.sessionId)?.takeIf { it.repositoryRoot != null }?.let { session ->
+            update { it.closingPopovers().copy(sessionMenu = session.id, namingWorktree = session.id, worktreeBranch = sessionService.suggestWorktreeBranch()) }
+          }
+          is WorkspaceEvent.SetWorktreeBranch -> update { if (it.worktreeBranch != null) it.copy(worktreeBranch = event.name) else it }
           // The menu stays open around the name field, where it was.
           is WorkspaceEvent.StartRenamingSession -> sessionOf(event.sessionId)?.let { session ->
             update { it.closingPopovers().copy(sessionMenu = session.id, renaming = session.id) }
@@ -179,25 +203,19 @@ public class WorkspacePresenter internal constructor(
           WorkspaceEvent.OpenParentSession -> current?.parentId?.let { parent -> update { it.selecting(parent) } }
           WorkspaceEvent.ToggleNewSubSessionMenu -> update {
             if (it.subSessionMenu != null) {
-              it.copy(subSessionMenu = null)
+              it.copy(subSessionMenu = null, worktreeBranch = null)
             } else {
               val remembered = settingsService.settings.value.subSessionLocation
               val location = if (current?.repositoryRoot == null) SubSessionLocation.SameFolder else remembered
-              it.closingPopovers().copy(subSessionMenu = location)
+              it.closingPopovers().copy(subSessionMenu = location, worktreeBranch = sessionService.suggestWorktreeBranch())
             }
           }
-          WorkspaceEvent.DismissNewSubSessionMenu -> update { it.copy(subSessionMenu = null) }
+          WorkspaceEvent.DismissNewSubSessionMenu -> update { it.copy(subSessionMenu = null, worktreeBranch = null) }
           is WorkspaceEvent.SetSubSessionLocation -> update { if (it.subSessionMenu != null) it.copy(subSessionMenu = event.location.toDomain()) else it }
           WorkspaceEvent.CreateSubSession -> {
             val location = view.subSessionMenu
             if (current != null && location != null) {
-              scope.launch {
-                settingsService.update { it.copy(subSessionLocation = location) }
-                when (val started = sessionService.startSubSession(current.id, location)) {
-                  is LemonadeCodeResult.Success -> update { it.selecting(started.value).copy(subSessionMenu = null, view = WorkspaceView.Terminal) }
-                  is LemonadeCodeResult.Failure -> fail(ErrorMessages.of(started.error))
-                }
-              }
+              startSubSession(current.id, location, branch = view.worktreeBranch.takeIf { location == SubSessionLocation.NewWorktree })
             }
           }
           is WorkspaceEvent.SelectView -> {
@@ -323,8 +341,8 @@ public class WorkspacePresenter internal constructor(
       review = review,
       settings = settings,
       view = view,
-      subSessionPlan = selectedId?.let { sessionService.planSubSession(it, subSessionLocation) },
-      menuWorktreePlan = view.sessionMenu?.let { sessionService.planSubSession(it, SubSessionLocation.NewWorktree) },
+      subSessionPlan = selectedId?.let { sessionService.planSubSession(it, subSessionLocation, branch = view.worktreeBranch) },
+      menuWorktreePlan = view.namingWorktree?.let { sessionService.planSubSession(it, SubSessionLocation.NewWorktree, branch = view.worktreeBranch) },
       pendingMessage = if (view.previewOpen) selectedId?.let(reviewService::pendingMessage) else null,
       homeDirectory = homeDirectory.path,
       previews = previewLoads,
@@ -401,7 +419,16 @@ private fun WorkspaceViewState.selecting(id: SessionId): WorkspaceViewState = co
   basePickerOpen = false,
 )
 
-private fun WorkspaceViewState.closingPopovers(): WorkspaceViewState = copy(settingsOpen = false, updateOpen = false, subSessionMenu = null, sessionMenu = null, basePickerOpen = false)
+private fun WorkspaceViewState.closingPopovers(): WorkspaceViewState = copy(
+  settingsOpen = false,
+  updateOpen = false,
+  subSessionMenu = null,
+  sessionMenu = null,
+  basePickerOpen = false,
+  namingWorktree = null,
+  worktreeBranch = null,
+  takenBranch = null,
+)
 
 /** How long a toast stays up, as in the design. */
 internal const val ToastMillis: Long = 2_200

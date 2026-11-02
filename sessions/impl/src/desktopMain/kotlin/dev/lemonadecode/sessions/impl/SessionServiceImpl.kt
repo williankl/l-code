@@ -1,6 +1,7 @@
 package dev.lemonadecode.sessions.impl
 
 import dev.lemonadecode.data.git.GitDataSource
+import dev.lemonadecode.domain.session.BranchName
 import dev.lemonadecode.domain.session.Session
 import dev.lemonadecode.domain.session.SessionId
 import dev.lemonadecode.domain.session.SessionOrigin
@@ -45,6 +46,7 @@ import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
+import kotlin.random.Random
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
@@ -97,11 +99,13 @@ internal class SessionServiceImpl(
     }
   }
 
-  override fun planSubSession(parentId: SessionId, location: SubSessionLocation, namePrefix: String): SubSessionPlan? {
+  override fun planSubSession(parentId: SessionId, location: SubSessionLocation, namePrefix: String, branch: String?): SubSessionPlan? {
     val sessions = state.value
     val parent = sessions.firstOrNull { it.id == parentId } ?: return null
-    return SubSessionPlanner.plan(parent, sessions, location, namePrefix)
+    return SubSessionPlanner.plan(parent, sessions, location, namePrefix, branch)
   }
+
+  override fun suggestWorktreeBranch(): String = WorktreeNames.suggest(Random.Default)
 
   override suspend fun startSubSession(
     parentId: SessionId,
@@ -109,12 +113,17 @@ internal class SessionServiceImpl(
     initialInput: String?,
     origin: SessionOrigin,
     namePrefix: String,
+    branch: String?,
   ): LemonadeCodeResult<SessionId, SessionError> {
     val parent = state.value.firstOrNull { it.id == parentId } ?: return LemonadeCodeResult.failure(SessionError.UnknownSession)
-    val plan = planSubSession(parentId, location, namePrefix)
+    // Checked here too: a name like `../x` would put the folder somewhere else entirely.
+    if (branch != null && !BranchName.isValid(branch)) return LemonadeCodeResult.failure(SessionError.InvalidBranch(branch))
+    val plan = planSubSession(parentId, location, namePrefix, branch)
       ?: return LemonadeCodeResult.failure(SessionError.NotARepository)
     if (plan.createsBranch) {
       val root = parent.repositoryRoot ?: return LemonadeCodeResult.failure(SessionError.NotARepository)
+      val taken = git.branches(root).getOrNull().orEmpty()
+      if (plan.branch in taken) return LemonadeCodeResult.failure(SessionError.BranchExists(plan.branch.orEmpty()))
       val created = git.addWorktree(root, plan.workingDirectory, plan.branch.orEmpty(), plan.baseBranch ?: "HEAD")
       if (created is LemonadeCodeResult.Failure) return LemonadeCodeResult.failure(SessionError.WorktreeFailed(created.error.toString()))
     }

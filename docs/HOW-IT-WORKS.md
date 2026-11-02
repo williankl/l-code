@@ -93,13 +93,17 @@ nothing else.
 
 ## Worktrees
 
-A sub-session in a **new worktree** gets its own folder next to the repository, and its own branch
-named after the parent's:
+A sub-session in a **new worktree** gets its own branch, named by you, and its own folder next to
+the repository, named after the branch's last part. The branch starts from the parent's:
 
 ```
-~/code/storefront                     ← the repository, on feat/rate-limit
-~/code/storefront.worktrees/sub-1     ← the sub-session, on feat/rate-limit-sub-1
+~/code/storefront                               ← the repository, on feat/rate-limit
+~/code/storefront.worktrees/generating-bugs     ← the sub-session, on worktree/generating-bugs
 ```
+
+The name starts out as a playful suggestion, `worktree/` plus two random words. Lemonade Code checks
+it against git's rules for branch names and against the branches the repository already has before
+running `git worktree add`, so a bad name leaves nothing half-made behind.
 
 Both share one git history, so the work can be merged back like any branch, but edits in one never
 touch the other.

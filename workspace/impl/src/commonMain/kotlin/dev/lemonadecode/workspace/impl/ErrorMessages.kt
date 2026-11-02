@@ -12,6 +12,8 @@ import dev.lemonadecode.workspace.strings.error_preview
 import dev.lemonadecode.workspace.strings.error_send
 import dev.lemonadecode.workspace.strings.error_worktree
 import dev.lemonadecode.workspace.strings.message_terminal_closed
+import dev.lemonadecode.workspace.strings.worktree_branch_invalid
+import dev.lemonadecode.workspace.strings.worktree_branch_taken
 
 /** What the user reads when a session or review action fails. */
 internal object ErrorMessages {
@@ -20,6 +22,8 @@ internal object ErrorMessages {
     SessionError.NotARepository -> Res.string.error_not_repo.asLemonadeCodeString()
     SessionError.UnknownSession -> Res.string.message_terminal_closed.asLemonadeCodeString()
     is SessionError.WorktreeFailed -> Res.string.error_worktree.asLemonadeCodeString(error.message)
+    is SessionError.BranchExists -> Res.string.worktree_branch_taken.asLemonadeCodeString(error.branch)
+    is SessionError.InvalidBranch -> Res.string.worktree_branch_invalid.asLemonadeCodeString()
     is SessionError.LaunchFailed -> Res.string.error_launch.asLemonadeCodeString(error.message)
   }
 

@@ -61,7 +61,7 @@
   <string name="session_new_sub_worktree">New sub-session in new worktree</string>
   <string name="session_sub_same_folder">Same folder</string>
   <string name="session_sub_same_folder_branch">Same folder · %1$s</string>
-  <string name="session_sub_new_branch">New branch %1$s</string>
+  <string name="session_sub_new_branch">New branch from %1$s</string>
   <string name="session_worktree_needs_repo">Needs a git checkout</string>
   <string name="session_rename">Rename</string>
   <string name="session_rename_action">Rename session</string>
@@ -92,6 +92,9 @@
   <string name="sub_help_same">Shares files and branch with %1$s. Edits land in the same working tree.</string>
   <string name="sub_help_worktree">Its own folder and branch, so edits never collide with %1$s.</string>
   <string name="sub_help_no_repo">This folder isn’t a git checkout, so a sub-session can only share it.</string>
+  <string name="worktree_branch_field">Branch</string>
+  <string name="worktree_branch_invalid">Git won’t take this as a branch name.</string>
+  <string name="worktree_branch_taken">There’s already a branch called %1$s.</string>
   <string name="action_create_sub_session">Create sub-session</string>
   <string name="action_cancel">Cancel</string>
   <string name="action_dismiss">Dismiss</string>

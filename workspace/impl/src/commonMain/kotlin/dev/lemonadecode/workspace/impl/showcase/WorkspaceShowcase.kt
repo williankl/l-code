@@ -55,13 +55,14 @@ public enum class WorkspaceShowcase(
   NarrowDrawer("n1", "Narrow, sessions open as a drawer", "Below 960dp the sessions column becomes a drawer over a scrim.", widthDp = 860),
   NarrowWrap("n2", "Narrow, drawer closed, toolbars wrap", "The info dot on the sessions toggle flags a session that needs input.", widthDp = 860),
   SessionTree("2a", "Tree with lineage rails", "bench-redis, four levels down. The path to it is lit in brand lime."),
-  ChoosingWorktree("3a·tree", "Choosing a worktree", "The new sub-session panel previews the folder and branch before anything is created."),
+  ChoosingWorktree("3a·tree", "Choosing a worktree", "The new sub-session panel suggests a branch to keep or type over, and previews its folder before anything is created."),
   AfterCreatingBoth("3b·tree", "After creating both kinds", "sub-1 shares the folder; sub-2 runs in its own worktree on its own branch."),
   SettingsOpen("4a", "Settings open, an agent working", "Appearance and keep awake. The top bar tag shows keep awake is holding the machine up."),
   LightKeepAwake("4b", "Light theme, keep awake on", "The same diff review in the light palette."),
   MultiLineComment("5a", "A range comment posted, another range selected", "rateLimit.ts:24–26 has a range comment; 28–32 is selected with the composer open."),
   SessionMenu("6a", "Menu on lua-script", "Right-click a session: the menu names it and its folder, and the row holds a ring."),
   RenamingSession("6b", "Renaming in place", "Rename swaps the menu’s actions for a name field."),
+  NamingWorktree("6c", "Naming a new worktree", "New sub-session in new worktree swaps the menu’s actions for a branch field, filled with a suggestion."),
   UpdateAvailable("7a", "An update is out", "Installed from a release file, the app offers the newer version next to Settings; the panel downloads it and restarts."),
   ;
 
@@ -182,6 +183,8 @@ private fun treeScene(
   plan: SubSessionPlan? = null,
   sessionMenu: SessionId? = null,
   renaming: Boolean = false,
+  worktreeBranch: String? = null,
+  namingWorktree: Boolean = false,
   extraTranscripts: Map<String, List<TerminalLineModel>> = emptyMap(),
 ) = scene(
   sessions = sessions,
@@ -194,10 +197,12 @@ private fun treeScene(
       subSessionMenu = menu,
       sessionMenu = sessionMenu,
       renaming = sessionMenu?.takeIf { renaming },
+      namingWorktree = sessionMenu?.takeIf { namingWorktree },
+      worktreeBranch = worktreeBranch,
     )
   },
   plan = plan,
-  menuPlan = sessionMenu?.let { SubSessionPlan("sub-1", SubSessionLocation.NewWorktree, "$Repo.worktrees/sub-1", "feat/rate-limit-sub-1", true, "feat/rate-limit") },
+  menuPlan = worktreeBranch?.takeIf { namingWorktree }?.let { worktreePlan(it) },
   transcripts = baseTranscripts + mapOf(
     "d2" to ShowcaseTranscripts.blank("review-1"),
     "d3" to ShowcaseTranscripts.blank("atomic-refill"),
@@ -206,6 +211,11 @@ private fun treeScene(
     "r2" to ShowcaseTranscripts.subSession("api-ratelimit", listOf(comment("app", 9))),
   ) + extraTranscripts,
 )
+
+private const val SuggestedBranch = "worktree/generating-bugs"
+
+/** A new worktree on [branch], in a folder named after its last part. */
+private fun worktreePlan(branch: String) = SubSessionPlan("sub-1", SubSessionLocation.NewWorktree, "$Repo.worktrees/${branch.substringAfterLast('/')}", branch, true, "feat/rate-limit")
 
 private fun sceneFor(showcase: WorkspaceShowcase): Scene = when (showcase) {
   WorkspaceShowcase.AgentFinishes -> scene()
@@ -225,7 +235,8 @@ private fun sceneFor(showcase: WorkspaceShowcase): Scene = when (showcase) {
   WorkspaceShowcase.SessionTree -> treeScene()
   WorkspaceShowcase.ChoosingWorktree -> treeScene(
     menu = SubSessionLocation.NewWorktree,
-    plan = SubSessionPlan("sub-1", SubSessionLocation.NewWorktree, "$Repo.worktrees/sub-1", "feat/rate-limit-sub-1", true, "feat/rate-limit"),
+    plan = worktreePlan(SuggestedBranch),
+    worktreeBranch = SuggestedBranch,
   )
   WorkspaceShowcase.AfterCreatingBoth -> {
     val sameFolder = session("s1", "sub-1", parent = "d4")
@@ -262,6 +273,7 @@ private fun sceneFor(showcase: WorkspaceShowcase): Scene = when (showcase) {
   )
   WorkspaceShowcase.SessionMenu -> treeScene(sessionMenu = SessionId("d3"))
   WorkspaceShowcase.RenamingSession -> treeScene(sessionMenu = SessionId("d3"), renaming = true)
+  WorkspaceShowcase.NamingWorktree -> treeScene(sessionMenu = SessionId("d3"), worktreeBranch = SuggestedBranch, namingWorktree = true)
   WorkspaceShowcase.UpdateAvailable -> scene().let { scene ->
     val update = UpdateState.Available(
       current = AppVersion(1, 2, 0),

@@ -34,12 +34,19 @@ public class FakeSessionService(initial: List<Session> = emptyList()) : SessionS
   public var shutDown: Boolean = false
   public var nextId: Int = 1
 
+  /** What [suggestWorktreeBranch] answers. */
+  public var worktreeBranchSuggestion: String = "worktree/testing-things"
+
+  /** Branches git already has: starting a worktree on one fails. */
+  public var existingBranches: Set<String> = emptySet()
+
   public data class StartCall(
     val parentId: SessionId,
     val location: SubSessionLocation,
     val initialInput: String?,
     val origin: SessionOrigin,
     val namePrefix: String,
+    val branch: String? = null,
   )
 
   public fun setSessions(sessions: List<Session>) {
@@ -75,15 +82,15 @@ public class FakeSessionService(initial: List<Session> = emptyList()) : SessionS
     return LemonadeCodeResult.success(id)
   }
 
-  override fun planSubSession(parentId: SessionId, location: SubSessionLocation, namePrefix: String): SubSessionPlan? {
+  override fun planSubSession(parentId: SessionId, location: SubSessionLocation, namePrefix: String, branch: String?): SubSessionPlan? {
     val parent = state.value.firstOrNull { it.id == parentId } ?: return null
     val name = generateSequence(1) { it + 1 }.map { "$namePrefix-$it" }.first { n -> state.value.none { it.name == n } }
     val worktree = location == SubSessionLocation.NewWorktree
     return SubSessionPlan(
       name = name,
       location = location,
-      workingDirectory = if (worktree) "${parent.repositoryRoot}.worktrees/$name" else parent.workingDirectory,
-      branch = if (worktree) "${parent.branch}-$name" else parent.branch,
+      workingDirectory = if (worktree) "${parent.repositoryRoot}.worktrees/${branch?.substringAfterLast('/') ?: name}" else parent.workingDirectory,
+      branch = if (worktree) branch ?: "${parent.branch}-$name" else parent.branch,
       createsBranch = worktree,
       baseBranch = parent.branch,
     )
@@ -95,10 +102,12 @@ public class FakeSessionService(initial: List<Session> = emptyList()) : SessionS
     initialInput: String?,
     origin: SessionOrigin,
     namePrefix: String,
+    branch: String?,
   ): LemonadeCodeResult<SessionId, SessionError> {
-    started += StartCall(parentId, location, initialInput, origin, namePrefix)
+    started += StartCall(parentId, location, initialInput, origin, namePrefix, branch)
     val parent = state.value.firstOrNull { it.id == parentId } ?: return LemonadeCodeResult.failure(SessionError.UnknownSession)
-    val plan = planSubSession(parentId, location, namePrefix) ?: return LemonadeCodeResult.failure(SessionError.NotARepository)
+    val plan = planSubSession(parentId, location, namePrefix, branch) ?: return LemonadeCodeResult.failure(SessionError.NotARepository)
+    if (plan.createsBranch && plan.branch in existingBranches) return LemonadeCodeResult.failure(SessionError.BranchExists(plan.branch.orEmpty()))
     val id = SessionId("sub-${nextId++}")
     state.update {
       it + parent.copy(
@@ -114,6 +123,8 @@ public class FakeSessionService(initial: List<Session> = emptyList()) : SessionS
     }
     return LemonadeCodeResult.success(id)
   }
+
+  override fun suggestWorktreeBranch(): String = worktreeBranchSuggestion
 
   override fun paste(id: SessionId, text: String): LemonadeCodeResult<Unit, SessionError> {
     pasted += id to text

@@ -32,6 +32,24 @@ class SubSessionPlannerTest {
   }
 
   @Test
+  fun `a worktree on a branch of the user's own is named after its last part`() {
+    val root = session("ar", "api-ratelimit")
+    val plan = SubSessionPlanner.plan(root, listOf(root), SubSessionLocation.NewWorktree, "sub", branch = "worktree/generating-bugs")
+    assertEquals("/code/storefront.worktrees/generating-bugs", plan?.workingDirectory)
+    assertEquals("worktree/generating-bugs", plan?.branch)
+    assertEquals("feat/rate-limit", plan?.baseBranch)
+    assertEquals("sub-1", plan?.name)
+  }
+
+  @Test
+  fun `the same folder keeps the parent's branch whatever was typed`() {
+    val root = session("ar", "api-ratelimit")
+    val plan = SubSessionPlanner.plan(root, listOf(root), SubSessionLocation.SameFolder, "sub", branch = "worktree/generating-bugs")
+    assertEquals("/code/storefront", plan?.workingDirectory)
+    assertEquals("feat/rate-limit", plan?.branch)
+  }
+
+  @Test
   fun `a worktree of a worktree stays in the same worktrees folder`() {
     val parent = session("w", "sub-1", placement = SessionPlacement.Worktree, dir = "/code/storefront.worktrees/sub-1")
     val plan = SubSessionPlanner.plan(parent, listOf(parent), SubSessionLocation.NewWorktree, "sub")

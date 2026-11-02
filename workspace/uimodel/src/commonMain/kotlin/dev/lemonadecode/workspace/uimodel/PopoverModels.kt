@@ -62,6 +62,21 @@ public data class NewSubSessionModel(
   val help: LemonadeCodeString,
   /** False outside a git checkout, where only the same folder is possible. */
   val worktreeAvailable: Boolean = true,
+  /** The branch field, while a new worktree is picked. */
+  val worktreeBranch: WorktreeBranchModel? = null,
+)
+
+/** The field naming a new worktree's branch, in the sub-session panel or in a session's menu. */
+@Immutable
+public data class WorktreeBranchModel(
+  /** The branch typed so far. The field starts with a playful one, like `worktree/generating-bugs`. */
+  val name: String,
+  /** Where the worktree will be, with `~` for home: a folder named after the branch's last part. */
+  val path: String,
+  /** Why the worktree can't be created on this branch; null when it can, or while nothing is typed. */
+  val problem: LemonadeCodeString?,
+  /** False while the name is blank, or one git won't take or already has. */
+  val canCreate: Boolean,
 )
 
 public enum class SubSessionLocation { SameFolder, NewWorktree }

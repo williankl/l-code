@@ -7,9 +7,13 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.Clipboard
 import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.DesktopComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.MouseButton
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertWidthIsEqualTo
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
@@ -30,6 +34,7 @@ import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.rightClick
 import androidx.compose.ui.test.runDesktopComposeUiTest
 import androidx.compose.ui.test.withKeyDown
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.width
 import dev.lemonadecode.platform.designsystem.LemonadeCodeTheme
@@ -39,6 +44,7 @@ import dev.lemonadecode.workspace.impl.showcase.WorkspaceShowcase
 import dev.lemonadecode.workspace.impl.showcase.WorkspaceShowcaseContent
 import dev.lemonadecode.workspace.strings.Res
 import dev.lemonadecode.workspace.strings.update_failed_download
+import dev.lemonadecode.workspace.strings.worktree_branch_invalid
 import dev.lemonadecode.workspace.ui.TerminalTranscript
 import dev.lemonadecode.workspace.ui.WorkspaceContent
 import dev.lemonadecode.workspace.uimodel.SessionMenuModel
@@ -262,10 +268,50 @@ class WorkspaceContentUiTest {
 
   @Test
   fun `the sub-session panel switches location, creates and cancels`() = show(WorkspaceShowcase.ChoosingWorktree) {
-    onNodeWithText("~/code/storefront.worktrees/sub-1").assertExists()
+    onNodeWithText("~/code/storefront.worktrees/generating-bugs").assertExists()
     expect(WorkspaceEvent.SetSubSessionLocation(SubSessionLocation.SameFolder)) { onNodeWithText("Same folder").performClick() }
     expect(WorkspaceEvent.CreateSubSession) { onNodeWithText("Create sub-session").performClick() }
     expect(WorkspaceEvent.DismissNewSubSessionMenu) { onNodeWithText("Cancel").performClick() }
+  }
+
+  @Test
+  fun `the panel's branch field starts focused on the suggestion, creates on Enter and closes on Escape`() = show(WorkspaceShowcase.ChoosingWorktree) {
+    val field = onNode(hasSetTextAction() and hasText("Branch"))
+    field.assertIsFocused()
+    // Typing replaces the playful part and keeps `worktree/`.
+    field.assert(SemanticsMatcher.expectValue(SemanticsProperties.TextSelectionRange, TextRange("worktree/".length, "worktree/generating-bugs".length)))
+    expect(WorkspaceEvent.SetWorktreeBranch("feat/login")) { field.performTextReplacement("feat/login") }
+    expect(WorkspaceEvent.CreateSubSession) { field.performKeyInput { pressKey(Key.Enter) } }
+    expect(WorkspaceEvent.DismissNewSubSessionMenu) { field.performKeyInput { pressKey(Key.Escape) } }
+  }
+
+  @Test
+  fun `a branch that can't be used says why, and neither Enter nor Create starts it`() = show(
+    WorkspaceShowcase.ChoosingWorktree,
+    edit = { model ->
+      val branch = model.newSubSession.worktreeBranch!!.copy(name = "my branch", problem = Res.string.worktree_branch_invalid.asLemonadeCodeString(), canCreate = false)
+      model.copy(newSubSession = model.newSubSession.copy(worktreeBranch = branch))
+    },
+  ) {
+    onNodeWithText("Git won’t take this as a branch name.").assertExists()
+    onNodeWithText("Create sub-session").assertIsNotEnabled()
+    events.clear()
+    onNode(hasSetTextAction() and hasText("Branch")).performKeyInput { pressKey(Key.Enter) }
+    waitForIdle()
+    assertEquals(emptyList(), events)
+  }
+
+  @Test
+  fun `the menu's branch field creates on Enter or Create and closes on Escape or Cancel`() = show(WorkspaceShowcase.NamingWorktree, edit = { it }) {
+    onNodeWithText("Copy folder path").assertDoesNotExist()
+    onNodeWithText("~/code/storefront.worktrees/generating-bugs").assertExists()
+    val field = onNode(hasSetTextAction() and hasText("Branch"))
+    field.assertIsFocused()
+    expect(WorkspaceEvent.SetWorktreeBranch("fix/flaky")) { field.performTextReplacement("fix/flaky") }
+    expect(WorkspaceEvent.CreateSubSessionFrom("d3", SubSessionLocation.NewWorktree)) { field.performKeyInput { pressKey(Key.Enter) } }
+    expect(WorkspaceEvent.DismissSessionMenu) { field.performKeyInput { pressKey(Key.Escape) } }
+    expect(WorkspaceEvent.CreateSubSessionFrom("d3", SubSessionLocation.NewWorktree)) { onNodeWithText("Create sub-session").performClick() }
+    expect(WorkspaceEvent.DismissSessionMenu) { onNodeWithText("Cancel").performClick() }
   }
 
   @Test
@@ -320,9 +366,9 @@ class WorkspaceContentUiTest {
     show(WorkspaceShowcase.SessionMenu, edit = { it }, clipboard = clipboard) {
       onNodeWithText("~/code/storefront · feat/rate-limit").assertExists()
       onNodeWithText("Same folder · feat/rate-limit").assertExists()
-      onNodeWithText("New branch feat/rate-limit-sub-1").assertExists()
+      onNodeWithText("New branch from feat/rate-limit").assertExists()
       expect(WorkspaceEvent.CreateSubSessionFrom("d3", SubSessionLocation.SameFolder)) { onNodeWithText("New sub-session in current worktree").performClick() }
-      expect(WorkspaceEvent.CreateSubSessionFrom("d3", SubSessionLocation.NewWorktree)) { onNodeWithText("New sub-session in new worktree").performClick() }
+      expect(WorkspaceEvent.StartNamingWorktree("d3")) { onNodeWithText("New sub-session in new worktree").performClick() }
       expect(WorkspaceEvent.StartRenamingSession("d3")) { onNodeWithText("Rename").performClick() }
       expect(WorkspaceEvent.CopiedSessionPath(ShowcaseFixtures.Repo)) { onNodeWithText("Copy folder path").performClick() }
       assertEquals(ShowcaseFixtures.Repo, clipboard.text)
@@ -339,7 +385,6 @@ class WorkspaceContentUiTest {
       canStartSubSession = true,
       branch = null,
       worktreeAvailable = false,
-      worktreeBranch = null,
     )
     show(WorkspaceShowcase.SessionTree, edit = { it.copy(sessions = it.sessions.copy(menu = menu)) }) {
       onNodeWithText("Same folder").assertExists()

@@ -32,6 +32,14 @@ public class FakeReviewService : ReviewService {
   public var fileContents: Map<Pair<String, FileVersion>, LemonadeCodeResult<FileContent, ReviewError>> = emptyMap()
   public val fileContentCalls: MutableList<Pair<String, FileVersion>> = mutableListOf()
 
+  /** What [checkoutFile] returns per path and side; anything not listed is [FileContent.Missing]. */
+  public var checkoutFiles: Map<Pair<String, FileVersion>, LemonadeCodeResult<FileContent, ReviewError>> = emptyMap()
+  public val checkoutFileCalls: MutableList<Pair<String, FileVersion>> = mutableListOf()
+
+  /** What [webImage] returns per address; anything not listed fails. */
+  public var webImages: Map<String, LemonadeCodeResult<FileContent, ReviewError>> = emptyMap()
+  public val webImageCalls: MutableList<String> = mutableListOf()
+
   public fun setReview(sessionId: SessionId, review: Review) {
     reviews.update { it + (sessionId to review) }
   }
@@ -81,5 +89,19 @@ public class FakeReviewService : ReviewService {
   ): LemonadeCodeResult<FileContent, ReviewError> {
     fileContentCalls += path to version
     return fileContents[path to version] ?: LemonadeCodeResult.success(FileContent.Missing)
+  }
+
+  override suspend fun checkoutFile(
+    sessionId: SessionId,
+    path: String,
+    version: FileVersion,
+  ): LemonadeCodeResult<FileContent, ReviewError> {
+    checkoutFileCalls += path to version
+    return checkoutFiles[path to version] ?: LemonadeCodeResult.success(FileContent.Missing)
+  }
+
+  override suspend fun webImage(url: String): LemonadeCodeResult<FileContent, ReviewError> {
+    webImageCalls += url
+    return webImages[url] ?: LemonadeCodeResult.failure(ReviewError.ReadFailed("$url isn't set up in the fake"))
   }
 }

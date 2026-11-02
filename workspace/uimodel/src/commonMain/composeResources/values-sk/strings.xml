@@ -207,6 +207,12 @@
   <string name="preview_zoom_out">Oddialiť</string>
   <string name="preview_markdown_image">Obrázok: %1$s</string>
   <string name="preview_markdown_truncated">Ukážka končí tu. Zvyšok súboru nájdete v diffe.</string>
+  <string name="preview_markdown_details">Podrobnosti</string>
+  <string name="preview_markdown_alert_note">Poznámka</string>
+  <string name="preview_markdown_alert_tip">Tip</string>
+  <string name="preview_markdown_alert_important">Dôležité</string>
+  <string name="preview_markdown_alert_warning">Upozornenie</string>
+  <string name="preview_markdown_alert_caution">Pozor</string>
   <string name="error_preview">Súbor sa nepodarilo prečítať: %1$s</string>
   <plurals name="preview_model_triangles">
     <item quantity="one">%1$s trojuholník</item>

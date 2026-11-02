@@ -10,5 +10,8 @@ kotlin {
       implementation(libs.compose.components.resources)
       implementation(libs.kotlinx.serialization.json)
     }
+    getByName("desktopMain").dependencies {
+      implementation(libs.jsvg)
+    }
   }
 }

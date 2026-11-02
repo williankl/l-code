@@ -2,14 +2,26 @@ package dev.lemonadecode.workspace.ui.preview
 
 /** A Markdown document as blocks: what [MarkdownParser] reads and [MarkdownPreview] draws. */
 internal sealed interface MarkdownBlock {
-  data class Heading(val level: Int, val content: List<MarkdownInline>) : MarkdownBlock
+  /** [align] comes from an HTML heading's `align` attribute. */
+  data class Heading(
+    val level: Int,
+    val content: List<MarkdownInline>,
+    val align: MarkdownAlignment? = null,
+  ) : MarkdownBlock
 
-  data class Paragraph(val content: List<MarkdownInline>) : MarkdownBlock
+  /** [align] comes from an HTML `<p align>`. */
+  data class Paragraph(
+    val content: List<MarkdownInline>,
+    val align: MarkdownAlignment? = null,
+  ) : MarkdownBlock
 
   /** A fenced or indented code block; [language] is the first word after the fence, or empty. */
   data class Code(val language: String, val text: String) : MarkdownBlock
 
   data class Quote(val blocks: List<MarkdownBlock>) : MarkdownBlock
+
+  /** A GitHub alert: a quote whose first line is a marker like `[!NOTE]`. */
+  data class Alert(val kind: MarkdownAlertKind, val blocks: List<MarkdownBlock>) : MarkdownBlock
 
   /** [start] is the first number of an ordered list. A loose list spaces its items like paragraphs. */
   data class ListBlock(
@@ -26,8 +38,21 @@ internal sealed interface MarkdownBlock {
     val rows: List<List<List<MarkdownInline>>>,
   ) : MarkdownBlock
 
-  /** Raw HTML, shown as written. */
-  data class Html(val text: String) : MarkdownBlock
+  /** An HTML container such as `<div align="center">`; its [align] carries on to everything inside. */
+  data class Section(val align: MarkdownAlignment?, val blocks: List<MarkdownBlock>) : MarkdownBlock
+
+  /** An HTML `<table>`. Unlike a Markdown table, its cells hold blocks: pictures, headings, lists. */
+  data class HtmlTable(val rows: List<List<MarkdownTableCell>>) : MarkdownBlock
+
+  /** `<details>`: the [summary] shows and the [blocks] fold away, unless [open]. */
+  data class Details(
+    val summary: List<MarkdownInline>,
+    val open: Boolean,
+    val blocks: List<MarkdownBlock>,
+  ) : MarkdownBlock
+
+  /** Empty lines, from `<br>` tags between blocks. */
+  data class Spacer(val lines: Int) : MarkdownBlock
 
   data object ThematicBreak : MarkdownBlock
 }
@@ -36,6 +61,27 @@ internal sealed interface MarkdownBlock {
 internal data class MarkdownListItem(val checked: Boolean?, val blocks: List<MarkdownBlock>)
 
 internal enum class MarkdownAlignment { Start, Center, End }
+
+internal enum class MarkdownVerticalAlignment { Top, Middle, Bottom }
+
+/** The five kinds of GitHub alert, in the order GitHub documents them. */
+internal enum class MarkdownAlertKind { Note, Tip, Important, Warning, Caution }
+
+/** A cell of an HTML table; [width] is the `width` attribute, which sets its column's share. */
+internal data class MarkdownTableCell(
+  val header: Boolean,
+  val align: MarkdownAlignment?,
+  val verticalAlign: MarkdownVerticalAlignment,
+  val width: MarkdownLength?,
+  val blocks: List<MarkdownBlock>,
+)
+
+/** An HTML `width` or `height`: `112` or `112px` is [Pixels], `50%` is [Percent]. */
+internal sealed interface MarkdownLength {
+  data class Pixels(val value: Float) : MarkdownLength
+
+  data class Percent(val value: Float) : MarkdownLength
+}
 
 internal sealed interface MarkdownInline {
   data class Text(val text: String) : MarkdownInline
@@ -48,14 +94,28 @@ internal sealed interface MarkdownInline {
 
   data class Strikethrough(val children: List<MarkdownInline>) : MarkdownInline
 
+  /** `<u>` and `<ins>`. */
+  data class Underline(val children: List<MarkdownInline>) : MarkdownInline
+
+  /** `<sub>`, `<sup>` and `<small>`: smaller text, lowered or raised by [shift]. */
+  data class Small(val children: List<MarkdownInline>, val shift: MarkdownTextShift) : MarkdownInline
+
   data class Link(val destination: String, val children: List<MarkdownInline>) : MarkdownInline
 
-  data class Image(val source: String, val alt: String) : MarkdownInline
+  /** [width] and [height] come from an HTML `<img>`; Markdown's `![alt](src)` has neither. */
+  data class Image(
+    val source: String,
+    val alt: String,
+    val width: MarkdownLength? = null,
+    val height: MarkdownLength? = null,
+  ) : MarkdownInline
 
   data object SoftBreak : MarkdownInline
 
   data object HardBreak : MarkdownInline
 }
+
+internal enum class MarkdownTextShift { None, Down, Up }
 
 /** The text of [inlines] without formatting, e.g. for an image's alt text. */
 internal fun plainText(inlines: List<MarkdownInline>): String = buildString { appendPlain(inlines) }
@@ -68,6 +128,8 @@ private fun StringBuilder.appendPlain(inlines: List<MarkdownInline>) {
       is MarkdownInline.Emphasis -> appendPlain(inline.children)
       is MarkdownInline.Strong -> appendPlain(inline.children)
       is MarkdownInline.Strikethrough -> appendPlain(inline.children)
+      is MarkdownInline.Underline -> appendPlain(inline.children)
+      is MarkdownInline.Small -> appendPlain(inline.children)
       is MarkdownInline.Link -> appendPlain(inline.children)
       is MarkdownInline.Image -> append(inline.alt)
       MarkdownInline.SoftBreak, MarkdownInline.HardBreak -> append(' ')
@@ -109,18 +171,18 @@ private fun frontMatterEnd(lines: List<String>): Int {
 private const val MaxDepth = 32
 
 /** A block read from the lines, or null for one that shows nothing, and the line after it. */
-private class Read(val block: MarkdownBlock?, val next: Int)
+private class Read(val item: MarkdownItem?, val next: Int)
 
 private class BlockReader(
   private val definitions: MutableMap<String, String>,
   private val inline: (String) -> List<MarkdownInline>,
 ) {
   fun read(lines: List<String>, depth: Int): List<MarkdownBlock> {
-    val blocks = mutableListOf<MarkdownBlock>()
+    val blocks = mutableListOf<MarkdownItem>()
     val paragraph = mutableListOf<String>()
     fun closeParagraph() {
       if (paragraph.isEmpty()) return
-      paragraphText(paragraph)?.let { blocks += MarkdownBlock.Paragraph(inline(it)) }
+      paragraphText(paragraph)?.let { blocks += MarkdownItem.Block(MarkdownBlock.Paragraph(inline(it))) }
       paragraph.clear()
     }
 
@@ -139,7 +201,7 @@ private class BlockReader(
           val text = paragraphText(paragraph)
           paragraph.clear()
           if (text != null) {
-            blocks += MarkdownBlock.Heading(level, inline(text))
+            blocks += MarkdownItem.Block(MarkdownBlock.Heading(level, inline(text)))
             i++
             continue
           }
@@ -148,7 +210,7 @@ private class BlockReader(
       val read = readBlock(lines, i, interrupting = paragraph.isNotEmpty(), depth = depth)
       if (read != null) {
         closeParagraph()
-        read.block?.let { blocks += it }
+        read.item?.let { blocks += it }
         i = read.next
       } else {
         paragraph += line
@@ -156,7 +218,7 @@ private class BlockReader(
       }
     }
     closeParagraph()
-    return blocks
+    return assembleHtml(blocks)
   }
 
   private fun readBlock(lines: List<String>, start: Int, interrupting: Boolean, depth: Int): Read? {
@@ -165,8 +227,8 @@ private class BlockReader(
     if (indent >= 4) return if (interrupting) null else readIndentedCode(lines, start)
     val rest = line.substring(indent)
     fenceOf(rest)?.let { return readFence(lines, start, indent, it) }
-    atxHeading(rest)?.let { (level, text) -> return Read(MarkdownBlock.Heading(level, inline(text)), start + 1) }
-    if (isThematicBreak(rest)) return Read(MarkdownBlock.ThematicBreak, start + 1)
+    atxHeading(rest)?.let { (level, text) -> return Read(MarkdownItem.Block(MarkdownBlock.Heading(level, inline(text))), start + 1) }
+    if (isThematicBreak(rest)) return Read(MarkdownItem.Block(MarkdownBlock.ThematicBreak), start + 1)
     if (depth < MaxDepth && rest.startsWith('>')) return readQuote(lines, start, depth)
     if (depth < MaxDepth) {
       listMarker(line)?.let { marker ->
@@ -185,7 +247,7 @@ private class BlockReader(
       i++
     }
     val text = lines.subList(start, end).joinToString("\n") { it.drop(4) }
-    return Read(MarkdownBlock.Code("", text), end)
+    return Read(MarkdownItem.Block(MarkdownBlock.Code("", text)), end)
   }
 
   private fun readFence(lines: List<String>, start: Int, indent: Int, fence: Fence): Read {
@@ -199,7 +261,7 @@ private class BlockReader(
       code += line.drop(minOf(indent, lineIndent))
     }
     val language = fence.info.substringBefore(' ').substringBefore('\t')
-    return Read(MarkdownBlock.Code(language, code.joinToString("\n")), i)
+    return Read(MarkdownItem.Block(MarkdownBlock.Code(language, code.joinToString("\n"))), i)
   }
 
   private fun readQuote(lines: List<String>, start: Int, depth: Int): Read {
@@ -224,7 +286,12 @@ private class BlockReader(
         break
       }
     }
-    return Read(MarkdownBlock.Quote(read(inner, depth + 1)), i)
+    // GitHub turns a quote into an alert when its first line is just the marker.
+    val alert = inner.firstOrNull()?.let { AlertMarker.matchEntire(it.trim()) }?.let { match ->
+      MarkdownAlertKind.entries.first { it.name.equals(match.groupValues[1], ignoreCase = true) }
+    }
+    if (alert != null) return Read(MarkdownItem.Block(MarkdownBlock.Alert(alert, read(inner.drop(1), depth + 1))), i)
+    return Read(MarkdownItem.Block(MarkdownBlock.Quote(read(inner, depth + 1))), i)
   }
 
   private fun readList(lines: List<String>, start: Int, first: ListMarker, depth: Int): Read {
@@ -288,7 +355,7 @@ private class BlockReader(
       marker = following
       i = next
     }
-    return Read(MarkdownBlock.ListBlock(first.ordered, first.number, loose, items), i)
+    return Read(MarkdownItem.Block(MarkdownBlock.ListBlock(first.ordered, first.number, loose, items)), i)
   }
 
   private fun readHtml(lines: List<String>, start: Int): Read {
@@ -313,7 +380,7 @@ private class BlockReader(
     }
     val html = text.joinToString("\n")
     // Comments aren't content; GitHub doesn't show them either.
-    return Read(if (HtmlComment.matches(html.trim())) null else MarkdownBlock.Html(html), i)
+    return Read(if (HtmlComment.matches(html.trim())) null else MarkdownItem.Html(html), i)
   }
 
   private fun readTable(lines: List<String>, start: Int): Read? {
@@ -331,7 +398,7 @@ private class BlockReader(
       rows += List(header.size) { inline(cells.getOrElse(it) { "" }) }
       i++
     }
-    return Read(MarkdownBlock.Table(alignments, header.map(inline), rows), i)
+    return Read(MarkdownItem.Block(MarkdownBlock.Table(alignments, header.map(inline), rows)), i)
   }
 
   /** The paragraph's text once any link reference definitions at its start are taken out. */
@@ -498,10 +565,12 @@ private fun listMarker(raw: String): ListMarker? {
 
 private val TaskMarker = Regex("^\\[([ xX])](?:[ \\t]+|$)")
 
-private const val TagName = "[A-Za-z][A-Za-z0-9-]*"
-private const val Attribute = "\\s+[A-Za-z_:][A-Za-z0-9_.:-]*(?:\\s*=\\s*(?:[^\\s\"'=<>`]+|'[^']*'|\"[^\"]*\"))?"
-private val OpenTag = "<$TagName(?:$Attribute)*\\s*/?>"
-private val CloseTag = "</$TagName\\s*>"
+private val AlertMarker = Regex("\\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)]", RegexOption.IGNORE_CASE)
+
+internal const val TagName = "[A-Za-z][A-Za-z0-9-]*"
+internal const val Attribute = "\\s+[A-Za-z_:][A-Za-z0-9_.:-]*(?:\\s*=\\s*(?:[^\\s\"'=<>`]+|'[^']*'|\"[^\"]*\"))?"
+private const val OpenTag = "<$TagName(?:$Attribute)*\\s*/?>"
+private const val CloseTag = "</$TagName\\s*>"
 private val HtmlComment = Regex("<!--[\\s\\S]*?-->")
 private val HtmlTagStart = Regex("^</?($TagName)(?=[\\s/>]|$)")
 private val CompleteTagLine = Regex("^(?:$OpenTag|$CloseTag)\\s*$")
@@ -621,6 +690,9 @@ private class InlineReader(private val definitions: Map<String, String>) {
     }
 
     class Node(val inline: MarkdownInline) : Piece
+
+    /** An HTML tag in the text, like `<kbd>`; paired with its closing tag once the text is read. */
+    class Tag(val name: String, val closing: Boolean, val empty: Boolean, val attributes: Map<String, String>) : Piece
   }
 
   private inner class Scan(private val src: String) {
@@ -686,7 +758,9 @@ private class InlineReader(private val definitions: Map<String, String>) {
     /** At a newline: a hard break after two spaces or a backslash, else a soft one. */
     private fun lineBreak(hard: Boolean) {
       while (buffer.isNotEmpty() && buffer.last() == ' ') buffer.setLength(buffer.length - 1)
-      add(if (hard) MarkdownInline.HardBreak else MarkdownInline.SoftBreak)
+      // A newline right after `<br>` is part of that break, not a space at the start of the next line.
+      val afterBreak = buffer.isEmpty() && (pieces.lastOrNull() as? Piece.Node)?.inline == MarkdownInline.HardBreak
+      if (!afterBreak) add(if (hard) MarkdownInline.HardBreak else MarkdownInline.SoftBreak)
       i++
       while (i < src.length && src[i] == ' ') i++
     }
@@ -848,7 +922,7 @@ private class InlineReader(private val definitions: Map<String, String>) {
       return src.substring(start + 1, k) to k + 1
     }
 
-    /** An autolink, a `<br>` or an inline tag (kept as text); false when `<` is just a character. */
+    /** An autolink, a `<br>` or an inline HTML tag; false when `<` is just a character. */
     private fun angle(): Boolean {
       if (src.startsWith("<!--", i)) {
         val close = src.indexOf("-->", i + 4)
@@ -867,10 +941,25 @@ private class InlineReader(private val definitions: Map<String, String>) {
           while (buffer.isNotEmpty() && buffer.last() == ' ') buffer.setLength(buffer.length - 1)
           add(MarkdownInline.HardBreak)
         }
-        InlineTag.matches(src.substring(i, close + 1)) -> buffer.append(src, i, close + 1)
-        else -> return false
+        else -> return htmlTag()
       }
       i = close + 1
+      return true
+    }
+
+    /** An inline HTML tag at `<`, kept as a [Piece.Tag] to pair up later. */
+    private fun htmlTag(): Boolean {
+      val closing = InlineCloseTag.matchAt(src, i)
+      val opening = if (closing == null) InlineOpenTag.matchAt(src, i) else null
+      val match = closing ?: opening ?: return false
+      flush()
+      val name = match.groupValues[1].lowercase()
+      pieces += if (closing != null) {
+        Piece.Tag(name, closing = true, empty = false, attributes = emptyMap())
+      } else {
+        Piece.Tag(name, closing = false, empty = match.groupValues[3] == "/" || name in VoidHtmlTags, attributes = htmlAttributes(match.groupValues[2]))
+      }
+      i += match.value.length
       return true
     }
 
@@ -983,25 +1072,56 @@ private class InlineReader(private val definitions: Map<String, String>) {
     }
   }
 
-  /** Turns what's left into inlines: unmatched delimiters and brackets become plain text. */
+  /**
+   * Turns what's left into inlines: unmatched delimiters and brackets become plain text, and HTML
+   * tags wrap what's between them and their closing tag. A tag that's never closed is dropped.
+   */
   private fun finish(pieces: List<Piece>): List<MarkdownInline> {
-    val out = mutableListOf<MarkdownInline>()
-    fun text(value: String) {
-      if (value.isEmpty()) return
+    class Frame(val tag: Piece.Tag?) {
+      val out = mutableListOf<MarkdownInline>()
+    }
+    val frames = mutableListOf(Frame(null))
+    fun add(inline: MarkdownInline) {
+      val out = frames.last().out
       val last = out.lastOrNull()
-      if (last is MarkdownInline.Text) out[out.lastIndex] = MarkdownInline.Text(last.text + value) else out += MarkdownInline.Text(value)
+      when {
+        inline is MarkdownInline.Text && inline.text.isEmpty() -> Unit
+        inline is MarkdownInline.Text && last is MarkdownInline.Text -> out[out.lastIndex] = MarkdownInline.Text(last.text + inline.text)
+        else -> out += inline
+      }
+    }
+    fun closeTop() {
+      val frame = frames.removeAt(frames.lastIndex)
+      frame.out.forEach(::add)
     }
     pieces.forEach { piece ->
       when (piece) {
-        is Piece.Text -> text(piece.text)
-        is Piece.Delimiter -> text(piece.char.toString().repeat(piece.count))
-        is Piece.Bracket -> text(if (piece.image) "![" else "[")
-        is Piece.Node -> out += piece.inline
+        is Piece.Text -> add(MarkdownInline.Text(piece.text))
+        is Piece.Delimiter -> add(MarkdownInline.Text(piece.char.toString().repeat(piece.count)))
+        is Piece.Bracket -> add(MarkdownInline.Text(if (piece.image) "![" else "["))
+        is Piece.Node -> add(piece.inline)
+        is Piece.Tag -> when {
+          piece.empty -> htmlInline(piece.name, piece.attributes, emptyList()).forEach(::add)
+          !piece.closing -> if (frames.size < MaxInlineTagDepth) frames += Frame(piece)
+          else -> {
+            val open = frames.indexOfLast { it.tag?.name == piece.name }
+            if (open > 0) {
+              while (frames.size > open + 1) closeTop()
+              val frame = frames.removeAt(frames.lastIndex)
+              val tag = checkNotNull(frame.tag)
+              htmlInline(tag.name, tag.attributes, frame.out).forEach(::add)
+            }
+          }
+        }
       }
     }
-    return out
+    while (frames.size > 1) closeTop()
+    return frames[0].out
   }
 }
+
+/** Inline tags nested deeper than this are dropped, so odd input can't build a huge tree. */
+private const val MaxInlineTagDepth = 32
 
 private val UriAutolink = Regex("[A-Za-z][A-Za-z0-9+.-]{1,31}:[^\\s<>]*")
 private val EmailAutolink = Regex(
@@ -1009,8 +1129,9 @@ private val EmailAutolink = Regex(
     "(?:\\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*",
 )
 private val BreakTag = Regex("br\\s*/?", RegexOption.IGNORE_CASE)
-private val InlineTag = Regex("$OpenTag|$CloseTag")
-private val EntityPattern = Regex("&(?:#[0-9]{1,7}|#[xX][0-9a-fA-F]{1,6}|[A-Za-z][A-Za-z0-9]{1,31});")
+private val InlineOpenTag = Regex("<($TagName)((?:$Attribute)*)\\s*(/?)>")
+private val InlineCloseTag = Regex("</($TagName)\\s*>")
+internal val EntityPattern = Regex("&(?:#[0-9]{1,7}|#[xX][0-9a-fA-F]{1,6}|[A-Za-z][A-Za-z0-9]{1,31});")
 private val NamedEntities = mapOf(
   "amp" to "&", "lt" to "<", "gt" to ">", "quot" to "\"", "apos" to "'", "nbsp" to "\u00A0",
   "copy" to "©", "reg" to "®", "trade" to "™", "hellip" to "…", "mdash" to "—", "ndash" to "–",
@@ -1020,7 +1141,7 @@ private val NamedEntities = mapOf(
   "harr" to "↔", "euro" to "€", "pound" to "£", "yen" to "¥", "cent" to "¢", "check" to "✓",
 )
 
-private fun decodeEntity(entity: String): String? {
+internal fun decodeEntity(entity: String): String? {
   val body = entity.substring(1, entity.length - 1)
   if (!body.startsWith('#')) return NamedEntities[body]
   val hex = body.length > 1 && (body[1] == 'x' || body[1] == 'X')

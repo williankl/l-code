@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -33,9 +34,11 @@ import dev.lemonadecode.workspace.strings.preview_too_large
 import dev.lemonadecode.workspace.uimodel.DiffFileModel
 import dev.lemonadecode.workspace.uimodel.FilePreviewContentModel
 import dev.lemonadecode.workspace.uimodel.FilePreviewModel
+import dev.lemonadecode.workspace.uimodel.PreviewAssetLoader
 import dev.lemonadecode.workspace.uimodel.PreviewKindModel
 import dev.lemonadecode.workspace.uimodel.PreviewLayout
 import dev.lemonadecode.workspace.uimodel.PreviewSideModel
+import dev.lemonadecode.workspace.uimodel.PreviewVersion
 import dev.lemonadecode.workspace.uimodel.WorkspaceEvent
 import org.jetbrains.compose.resources.stringResource
 
@@ -48,6 +51,7 @@ internal fun FilePreviewBody(
   preview: FilePreviewModel,
   onEvent: (WorkspaceEvent) -> Unit,
   modifier: Modifier = Modifier,
+  assets: PreviewAssetLoader = PreviewAssetLoader.None,
 ) {
   val radius = LemonadeTheme.radius.radius500
   val spaces = LemonadeTheme.spaces
@@ -65,14 +69,18 @@ internal fun FilePreviewBody(
     when (val content = preview.content) {
       FilePreviewContentModel.Loading -> PreviewMessage(stringResource(Res.string.preview_loading), loading = true)
       is FilePreviewContentModel.Failed -> PreviewMessage(content.message.resolve())
-      is FilePreviewContentModel.Ready -> when (preview.layout) {
-        // Added and deleted files only have one side.
-        null -> PreviewSide(content.after ?: content.before, preview.kind)
-        PreviewLayout.Before -> PreviewSide(content.before, preview.kind)
-        PreviewLayout.After -> PreviewSide(content.after, preview.kind)
-        PreviewLayout.SideBySide -> Row(horizontalArrangement = Arrangement.spacedBy(spaces.spacing400)) {
-          LabelledSide(stringResource(Res.string.preview_before), content.before, preview.kind, Modifier.weight(1f))
-          LabelledSide(stringResource(Res.string.preview_after), content.after, preview.kind, Modifier.weight(1f))
+      is FilePreviewContentModel.Ready -> {
+        val before = SideSource(file.path, PreviewVersion.Before, assets)
+        val after = SideSource(file.path, PreviewVersion.After, assets)
+        when (preview.layout) {
+          // Added and deleted files only have one side.
+          null -> if (content.after != null) PreviewSide(content.after, preview.kind, after) else PreviewSide(content.before, preview.kind, before)
+          PreviewLayout.Before -> PreviewSide(content.before, preview.kind, before)
+          PreviewLayout.After -> PreviewSide(content.after, preview.kind, after)
+          PreviewLayout.SideBySide -> Row(horizontalArrangement = Arrangement.spacedBy(spaces.spacing400)) {
+            LabelledSide(stringResource(Res.string.preview_before), content.before, preview.kind, before, Modifier.weight(1f))
+            LabelledSide(stringResource(Res.string.preview_after), content.after, preview.kind, after, Modifier.weight(1f))
+          }
         }
       }
     }
@@ -102,6 +110,7 @@ private fun LabelledSide(
   label: String,
   side: PreviewSideModel?,
   kind: PreviewKindModel,
+  source: SideSource,
   modifier: Modifier = Modifier,
 ) {
   Column(verticalArrangement = Arrangement.spacedBy(LemonadeTheme.spaces.spacing200), modifier = modifier) {
@@ -110,14 +119,18 @@ private fun LabelledSide(
       textStyle = LemonadeTheme.typography.bodyXSmallSemiBold,
       color = LemonadeTheme.colors.content.contentSecondary,
     )
-    PreviewSide(side, kind)
+    PreviewSide(side, kind, source)
   }
 }
+
+/** Where one side of a file was read from, for the files it refers to, like a README's pictures. */
+private class SideSource(val path: String, val version: PreviewVersion, val assets: PreviewAssetLoader)
 
 @Composable
 private fun PreviewSide(
   side: PreviewSideModel?,
   kind: PreviewKindModel,
+  source: SideSource,
 ) {
   when (side) {
     // The file doesn't exist on this side.
@@ -130,7 +143,10 @@ private fun PreviewSide(
         PreviewKindModel.Image -> ImagePreview(side.bytes)
         PreviewKindModel.Vector -> SvgPreview(side.bytes)
         PreviewKindModel.Model -> ModelPreview(side.bytes, side.extension)
-        PreviewKindModel.Markdown -> MarkdownPreview(side.bytes)
+        PreviewKindModel.Markdown -> MarkdownPreview(
+          bytes = side.bytes,
+          images = remember(source.path, source.version, source.assets) { MarkdownImageSource(source.path, source.version, source.assets) },
+        )
         PreviewKindModel.Table -> TablePreview(side.bytes, side.extension)
       }
     }

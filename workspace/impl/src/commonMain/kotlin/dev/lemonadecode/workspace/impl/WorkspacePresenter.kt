@@ -37,6 +37,7 @@ import dev.lemonadecode.workspace.impl.WorkspaceModelMapper.toDomain
 import dev.lemonadecode.workspace.impl.WorkspaceModelMapper.toPreference
 import dev.lemonadecode.workspace.strings.Res
 import dev.lemonadecode.workspace.strings.session_path_copied
+import dev.lemonadecode.workspace.uimodel.PreviewAssetLoader
 import dev.lemonadecode.workspace.uimodel.WorkspaceEvent
 import dev.lemonadecode.workspace.uimodel.WorkspaceModel
 import dev.lemonadecode.workspace.uimodel.WorkspaceView
@@ -78,6 +79,10 @@ public class WorkspacePresenter internal constructor(
     var previewGeneration by remember { mutableIntStateOf(0) }
     val previewLoads = remember(selectedId) { mutableStateMapOf<String, PreviewLoad>() }
     LoadPreviews(selectedId, review, DiffMapper.openPreviews(review, view), previewGeneration, previewLoads)
+    // A new reader each time the diff is re-read, so a README's pictures are read again too.
+    val previewAssets = remember(selectedId, previewGeneration) {
+      selectedId?.let { ReviewPreviewAssets(reviewService, it) } ?: PreviewAssetLoader.None
+    }
 
     RefreshWhenTerminalSettles(selected, onRefresh = { previewGeneration++ })
 
@@ -346,6 +351,7 @@ public class WorkspacePresenter internal constructor(
       pendingMessage = if (view.previewOpen) selectedId?.let(reviewService::pendingMessage) else null,
       homeDirectory = homeDirectory.path,
       previews = previewLoads,
+      previewAssets = previewAssets,
       update = updateState,
     )
     return WorkspaceModelMapper.map(input, eventSink)

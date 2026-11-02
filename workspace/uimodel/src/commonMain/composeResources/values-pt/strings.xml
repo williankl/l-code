@@ -197,6 +197,12 @@
   <string name="preview_zoom_out">Diminuir zoom</string>
   <string name="preview_markdown_image">Imagem: %1$s</string>
   <string name="preview_markdown_truncated">A pré-visualização para aqui. Mostre o diff para ver o resto do arquivo.</string>
+  <string name="preview_markdown_details">Detalhes</string>
+  <string name="preview_markdown_alert_note">Nota</string>
+  <string name="preview_markdown_alert_tip">Dica</string>
+  <string name="preview_markdown_alert_important">Importante</string>
+  <string name="preview_markdown_alert_warning">Aviso</string>
+  <string name="preview_markdown_alert_caution">Cuidado</string>
   <string name="error_preview">Não foi possível ler o arquivo: %1$s</string>
   <plurals name="preview_model_triangles">
     <item quantity="one">%1$s triângulo</item>

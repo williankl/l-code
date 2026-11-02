@@ -40,6 +40,7 @@ import dev.lemonadecode.workspace.uimodel.DiffToolbarModel
 import dev.lemonadecode.workspace.uimodel.FileChangeKind
 import dev.lemonadecode.workspace.uimodel.FilePreviewContentModel
 import dev.lemonadecode.workspace.uimodel.FilePreviewModel
+import dev.lemonadecode.workspace.uimodel.PreviewAssetLoader
 import dev.lemonadecode.workspace.uimodel.PreviewKindModel
 import dev.lemonadecode.workspace.uimodel.PreviewLayout
 import dev.lemonadecode.workspace.uimodel.PreviewSideModel
@@ -65,6 +66,7 @@ internal object DiffMapper {
     view: WorkspaceViewState,
     pendingMessage: String?,
     previews: Map<String, PreviewLoad> = emptyMap(),
+    assets: PreviewAssetLoader = PreviewAssetLoader.None,
   ): WorkspaceContentModel {
     val toolbar = toolbar(review, view)
     return when (val diff = review?.diff ?: DiffState.Loading) {
@@ -82,7 +84,7 @@ internal object DiffMapper {
       is DiffState.Ready -> if (diff.snapshot.files.isEmpty()) {
         WorkspaceContentModel.Message(Res.string.message_no_changes.asLemonadeCodeString(diff.snapshot.baseRef), diffToolbar = toolbar)
       } else {
-        WorkspaceContentModel.Diff(review(diff.snapshot, review?.comments.orEmpty(), toolbar, view, pendingMessage, previews))
+        WorkspaceContentModel.Diff(review(diff.snapshot, review?.comments.orEmpty(), toolbar, view, pendingMessage, previews, assets))
       }
     }
   }
@@ -143,6 +145,7 @@ internal object DiffMapper {
     view: WorkspaceViewState,
     pendingMessage: String?,
     previews: Map<String, PreviewLoad>,
+    assets: PreviewAssetLoader,
   ): DiffReviewModel {
     val unsent = comments.filter { it.status == CommentStatus.Unsent }
     val fileCount = snapshot.files.size
@@ -164,6 +167,7 @@ internal object DiffMapper {
         canSend = unsent.isNotEmpty(),
         preview = pendingMessage?.takeIf { view.previewOpen && unsent.isNotEmpty() },
       ),
+      assets = assets,
     )
   }
 

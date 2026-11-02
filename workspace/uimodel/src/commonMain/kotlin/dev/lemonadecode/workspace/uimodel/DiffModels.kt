@@ -1,6 +1,7 @@
 package dev.lemonadecode.workspace.uimodel
 
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.Stable
 import dev.lemonadecode.platform.localization.LemonadeCodeString
 
 @Immutable
@@ -8,7 +9,33 @@ public data class DiffReviewModel(
   val toolbar: DiffToolbarModel,
   val files: List<DiffFileModel>,
   val sendBar: SendBarModel,
+  /** Reads what previews refer to, like the pictures in a README. */
+  val assets: PreviewAssetLoader = PreviewAssetLoader.None,
 )
+
+/**
+ * Reads the files a preview refers to, like the pictures in a README, for the session whose diff
+ * is shown. [None] reads nothing, so pictures show their alt text instead.
+ */
+@Stable
+public interface PreviewAssetLoader {
+  /** [path], from the checkout's root, as it is on the [version] side of the change; null when it can't be read. */
+  public suspend fun checkoutFile(path: String, version: PreviewVersion): ByteArray?
+
+  /** A picture on the web, like a README's badges; null when it can't be fetched. */
+  public suspend fun webImage(url: String): ByteArray?
+
+  public companion object {
+    public val None: PreviewAssetLoader = object : PreviewAssetLoader {
+      override suspend fun checkoutFile(path: String, version: PreviewVersion): ByteArray? = null
+
+      override suspend fun webImage(url: String): ByteArray? = null
+    }
+  }
+}
+
+/** The side of a change a preview draws. */
+public enum class PreviewVersion { Before, After }
 
 /** The bar over the diff: what is compared with which branch, and a summary. */
 @Immutable

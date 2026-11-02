@@ -32,6 +32,7 @@ import dev.lemonadecode.workspace.strings.worktree_branch_invalid
 import dev.lemonadecode.workspace.strings.worktree_branch_taken
 import dev.lemonadecode.workspace.uimodel.KeepAwakeStatusModel
 import dev.lemonadecode.workspace.uimodel.NewSubSessionModel
+import dev.lemonadecode.workspace.uimodel.PreviewAssetLoader
 import dev.lemonadecode.workspace.uimodel.SessionsPanelModel
 import dev.lemonadecode.workspace.uimodel.SettingsModel
 import dev.lemonadecode.workspace.uimodel.ThemeOption
@@ -59,6 +60,8 @@ internal data class WorkspaceInput(
   val homeDirectory: String,
   /** What has loaded for the files whose preview is on screen, by path. */
   val previews: Map<String, PreviewLoad> = emptyMap(),
+  /** Reads what previews refer to, like a README's pictures, for the selected session. */
+  val previewAssets: PreviewAssetLoader = PreviewAssetLoader.None,
   /** The worktree the open session menu's branch field would create. */
   val menuWorktreePlan: SubSessionPlan? = null,
   val update: UpdateState = UpdateState.None,
@@ -111,7 +114,7 @@ internal object WorkspaceModelMapper {
       content = when {
         selected == null -> WorkspaceContentModel.NoSessions
         view.view == WorkspaceView.Terminal -> WorkspaceContentModel.Terminal(selected.id.value)
-        else -> DiffMapper.content(input.review, view, input.pendingMessage, input.previews)
+        else -> DiffMapper.content(input.review, view, input.pendingMessage, input.previews, input.previewAssets)
       },
       settings = SettingsModel(
         open = view.settingsOpen,

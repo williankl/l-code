@@ -107,7 +107,7 @@ internal fun DiffPane(
           item(key = "body:${file.id}") {
             val preview = file.preview
             if (preview != null && preview.showing) {
-              FilePreviewBody(file = file, preview = preview, onEvent = onEvent)
+              FilePreviewBody(file = file, preview = preview, assets = review.assets, onEvent = onEvent)
             } else {
               DiffFileBody(file = file, onEvent = onEvent)
             }

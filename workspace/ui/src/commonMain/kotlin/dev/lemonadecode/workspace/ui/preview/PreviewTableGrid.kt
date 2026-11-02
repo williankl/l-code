@@ -23,9 +23,12 @@ private val GridLine = 1.dp
 
 /**
  * Cells in rows and columns, each column as wide as its widest cell up to [maxColumnWidth] and
- * each row as tall as its tallest. Row 0 is the header. Draws its own grid lines, header tint and
- * zebra rows, at its natural width: put it in a horizontal scroll. Not lazy, so callers cap
- * how many cells they pass.
+ * each row as tall as its tallest. The first [headerRows] rows are the header. Draws its own grid
+ * lines, header tint and zebra rows, at its natural width: put it in a horizontal scroll. Not
+ * lazy, so callers cap how many cells they pass.
+ *
+ * With [columnWeights] the table fills the width it's given instead, each column taking its
+ * share, the way an HTML table with `width` attributes does.
  */
 @Composable
 internal fun PreviewTableGrid(
@@ -34,7 +37,10 @@ internal fun PreviewTableGrid(
   cellPadding: PaddingValues,
   modifier: Modifier = Modifier,
   maxColumnWidth: Dp = 320.dp,
+  columnWeights: List<Float>? = null,
+  headerRows: Int = 1,
   alignment: (row: Int, column: Int) -> Alignment.Horizontal = { _, _ -> Alignment.Start },
+  verticalAlignment: (row: Int, column: Int) -> Alignment.Vertical = { _, _ -> Alignment.Top },
   cell: @Composable (row: Int, column: Int) -> Unit,
 ) {
   if (rows == 0 || columns == 0) return
@@ -48,8 +54,8 @@ internal fun PreviewTableGrid(
   val rowBackgrounds = @Composable {
     repeat(rows) { row ->
       val fill = when {
-        row == 0 -> header
-        row % 2 == 0 -> stripe
+        row < headerRows -> header
+        (row - headerRows) % 2 == 1 -> stripe
         else -> Color.Transparent
       }
       val last = row == rows - 1
@@ -77,16 +83,22 @@ internal fun PreviewTableGrid(
   Layout(
     contents = listOf(rowBackgrounds, columnLines, cells),
     modifier = modifier.clip(shape).border(GridLine, line, shape),
-  ) { (backgroundMeasurables, lineMeasurables, cellMeasurables), _ ->
+  ) { (backgroundMeasurables, lineMeasurables, cellMeasurables), constraints ->
     val gap = GridLine.roundToPx().coerceAtLeast(1)
+    val shares = columnWeights?.let { weights ->
+      val available = (if (constraints.hasBoundedWidth) constraints.maxWidth else FallbackFillWidth.roundToPx()) - gap * (columns - 1)
+      fillWidths(available.coerceAtLeast(columns), List(columns) { weights.getOrElse(it) { 1f } })
+    }
     val cellConstraints = Constraints(maxWidth = maxColumnWidth.roundToPx())
-    val placeables = cellMeasurables.map { it.measure(cellConstraints) }
-    val widths = IntArray(columns) { MinColumnWidth.roundToPx() }
+    val placeables = cellMeasurables.mapIndexed { index, measurable ->
+      measurable.measure(shares?.let { Constraints.fixedWidth(it[index % columns]) } ?: cellConstraints)
+    }
+    val widths = shares ?: IntArray(columns) { MinColumnWidth.roundToPx() }
     val heights = IntArray(rows)
     placeables.forEachIndexed { index, placeable ->
       val row = index / columns
       val column = index % columns
-      widths[column] = maxOf(widths[column], placeable.width)
+      if (shares == null) widths[column] = maxOf(widths[column], placeable.width)
       heights[row] = maxOf(heights[row], placeable.height)
     }
     val width = widths.sum() + gap * (columns - 1)
@@ -114,11 +126,22 @@ internal fun PreviewTableGrid(
         for (column in 0 until columns) {
           val placeable = placeables[row * columns + column]
           val offset = alignment(row, column).align(placeable.width, widths[column], layoutDirection)
-          placeable.place(x + offset, y)
+          placeable.place(x + offset, y + verticalAlignment(row, column).align(placeable.height, heights[row]))
           x += widths[column] + gap
         }
         y += heights[row] + gap
       }
     }
   }
+}
+
+/** Width a filling table takes when it's given no limit, as in a horizontal scroll. */
+private val FallbackFillWidth = 720.dp
+
+/** [available] split by [weights], every column at least 1 px, the rounding left to the last. */
+private fun fillWidths(available: Int, weights: List<Float>): IntArray {
+  val total = weights.sum().takeIf { it > 0f } ?: weights.size.toFloat()
+  val widths = IntArray(weights.size) { maxOf(1, (available * (weights[it].takeIf { w -> w > 0f } ?: (total / weights.size)) / total).toInt()) }
+  widths[widths.lastIndex] = maxOf(1, available - widths.sum() + widths.last())
+  return widths
 }

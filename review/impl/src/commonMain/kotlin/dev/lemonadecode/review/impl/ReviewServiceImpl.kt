@@ -59,6 +59,7 @@ internal class ReviewServiceImpl(
   private val loadDiff: LoadDiffUseCase,
   private val git: GitDataSource,
   private val scope: CoroutineScope,
+  private val web: WebImageSource,
 ) : ReviewService {
   private val loaded = MutableStateFlow(Loaded())
   private val comments = MutableStateFlow<Map<String, List<ReviewComment>>>(emptyMap())
@@ -68,6 +69,7 @@ internal class ReviewServiceImpl(
   private val refreshLocks = mutableMapOf<DiffKey, Mutex>()
   private val refreshLocksGuard = Mutex()
   private val nextCommentId = AtomicLong(0)
+  private val webImages = WebImageCache()
 
   @OptIn(ExperimentalCoroutinesApi::class)
   override fun review(sessionId: SessionId): Flow<Review> = combine(sessions.sessions, chosenBases) { list, chosen -> target(sessionId, list, chosen) }
@@ -185,24 +187,54 @@ internal class ReviewServiceImpl(
         git.readWorkingFile(key, file.path, ReviewService.MaxPreviewBytes)
       }
     }
-    return read
-      .map { blob ->
-        when (blob) {
-          GitBlob.Missing -> FileContent.Missing
-          is GitBlob.TooLarge -> FileContent.TooLarge(blob.sizeBytes)
-          is GitBlob.Content -> FileContent.Bytes(blob.bytes)
-        }
+    return read.asFileContent()
+  }
+
+  override suspend fun checkoutFile(
+    sessionId: SessionId,
+    path: String,
+    version: FileVersion,
+  ): LemonadeCodeResult<FileContent, ReviewError> {
+    val target = target(sessionId) ?: return LemonadeCodeResult.failure(ReviewError.UnknownSession)
+    if (!isCheckoutPath(path)) return LemonadeCodeResult.failure(ReviewError.ReadFailed("$path isn't a path inside the checkout"))
+    val read = when (version) {
+      FileVersion.Base -> {
+        val snapshot = (loaded.value.diffs[target.key] as? DiffState.Ready)?.snapshot
+        val mergeBase = snapshot?.mergeBase ?: return LemonadeCodeResult.failure(ReviewError.ReadFailed("The merge base isn't known"))
+        git.readFileAt(target.key.root, mergeBase, path, ReviewService.MaxPreviewBytes)
       }
-      .mapError { error ->
-        ReviewError.ReadFailed(
-          when (error) {
-            GitError.NotARepository -> "Not a git repository"
-            is GitError.RefNotFound -> "${error.ref} wasn't found"
-            is GitError.CommandFailed -> error.message
-            is GitError.Unavailable -> error.message
-          },
-        )
+      FileVersion.WorkingTree -> git.readWorkingFile(target.key.root, path, ReviewService.MaxPreviewBytes)
+    }
+    return read.asFileContent()
+  }
+
+  override suspend fun webImage(url: String): LemonadeCodeResult<FileContent, ReviewError> {
+    val scheme = url.substringBefore(':', missingDelimiterValue = "").lowercase()
+    if (scheme != "https" && scheme != "http") return LemonadeCodeResult.failure(ReviewError.ReadFailed("$url isn't a web address"))
+    webImages.get(url)?.let { return LemonadeCodeResult.success(it) }
+    return web.read(url, ReviewService.MaxWebImageBytes)
+      .map { content ->
+        if (content is FileContent.Bytes) webImages.put(url, content)
+        content
       }
+      .mapError { ReviewError.ReadFailed(it) }
+  }
+
+  private fun LemonadeCodeResult<GitBlob, GitError>.asFileContent(): LemonadeCodeResult<FileContent, ReviewError> = map { blob ->
+    when (blob) {
+      GitBlob.Missing -> FileContent.Missing
+      is GitBlob.TooLarge -> FileContent.TooLarge(blob.sizeBytes)
+      is GitBlob.Content -> FileContent.Bytes(blob.bytes)
+    }
+  }.mapError { error ->
+    ReviewError.ReadFailed(
+      when (error) {
+        GitError.NotARepository -> "Not a git repository"
+        is GitError.RefNotFound -> "${error.ref} wasn't found"
+        is GitError.CommandFailed -> error.message
+        is GitError.Unavailable -> error.message
+      },
+    )
   }
 
   /** Re-reads the checkout's branches and the diff of [key]. */

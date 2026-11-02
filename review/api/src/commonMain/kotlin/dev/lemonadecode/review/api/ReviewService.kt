@@ -52,9 +52,26 @@ public interface ReviewService {
     version: FileVersion,
   ): LemonadeCodeResult<FileContent, ReviewError>
 
+  /**
+   * Any file in [sessionId]'s checkout that a preview refers to, like a picture in a README, in
+   * the diff or not. [path] is from the checkout's root and can't lead out of it; the base side
+   * is read at the merge base.
+   */
+  public suspend fun checkoutFile(
+    sessionId: SessionId,
+    path: String,
+    version: FileVersion,
+  ): LemonadeCodeResult<FileContent, ReviewError>
+
+  /** A picture on the web that a preview shows, like a README's badges. Kept for a while once read. */
+  public suspend fun webImage(url: String): LemonadeCodeResult<FileContent, ReviewError>
+
   public companion object {
     /** Files bigger than this aren't read for previews. */
     public const val MaxPreviewBytes: Long = 64L * 1024 * 1024
+
+    /** Pictures on the web bigger than this aren't downloaded. */
+    public const val MaxWebImageBytes: Long = 10L * 1024 * 1024
   }
 }
 

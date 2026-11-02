@@ -197,6 +197,12 @@
   <string name="preview_zoom_out">Zoom out</string>
   <string name="preview_markdown_image">Image: %1$s</string>
   <string name="preview_markdown_truncated">The preview stops here. Show the diff for the rest of the file.</string>
+  <string name="preview_markdown_details">Details</string>
+  <string name="preview_markdown_alert_note">Note</string>
+  <string name="preview_markdown_alert_tip">Tip</string>
+  <string name="preview_markdown_alert_important">Important</string>
+  <string name="preview_markdown_alert_warning">Warning</string>
+  <string name="preview_markdown_alert_caution">Caution</string>
   <string name="error_preview">Couldn’t read the file: %1$s</string>
   <plurals name="preview_model_triangles">
     <item quantity="one">%1$s triangle</item>

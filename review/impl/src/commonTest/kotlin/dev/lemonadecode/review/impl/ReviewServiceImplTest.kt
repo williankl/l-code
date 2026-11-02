@@ -20,6 +20,7 @@ import dev.lemonadecode.domain.session.SessionStatus
 import dev.lemonadecode.platform.architecture.testing.FakeLemonadeCodeCoroutineDispatchers
 import dev.lemonadecode.platform.core.LemonadeCodeResult
 import dev.lemonadecode.platform.core.getOrNull
+import dev.lemonadecode.review.api.ReviewError
 import dev.lemonadecode.sessions.api.SessionService
 import dev.lemonadecode.sessions.fake.FakeSessionService
 import kotlinx.coroutines.test.runTest
@@ -70,7 +71,9 @@ class ReviewServiceImplTest {
     uncommittedResult = LemonadeCodeResult.success(true)
   }
 
-  private fun service(scope: kotlinx.coroutines.CoroutineScope) = ReviewServiceImpl(sessions, LoadDiffUseCase(git, FakeLemonadeCodeCoroutineDispatchers()), git, scope)
+  private val web = FakeWebImageSource()
+
+  private fun service(scope: kotlinx.coroutines.CoroutineScope) = ReviewServiceImpl(sessions, LoadDiffUseCase(git, FakeLemonadeCodeCoroutineDispatchers()), git, scope, web)
 
   @Test
   fun `loads the diff with untracked files when first observed`() = runTest {
@@ -206,6 +209,47 @@ class ReviewServiceImplTest {
     service.refresh(id)
     assertEquals(FileContent.Missing, service.fileContent(id, "src/new.ts", FileVersion.Base).getOrNull())
     assertIs<dev.lemonadecode.review.api.ReviewError.ReadFailed>((service.fileContent(id, "nope.ts", FileVersion.Base) as LemonadeCodeResult.Failure).error)
+  }
+
+  @Test
+  fun `reads any checkout file a preview refers to, on either side`() = runTest {
+    git.mergeBaseResult = LemonadeCodeResult.success("abc123")
+    git.committedFiles = mapOf("abc123:docs/images/hero.png" to byteArrayOf(1))
+    git.workingFiles = mapOf("docs/images/hero.png" to byteArrayOf(2))
+    val service = service(backgroundScope)
+    service.refresh(id)
+
+    // Not in the diff, unlike what fileContent reads.
+    val before = assertIs<FileContent.Bytes>(service.checkoutFile(id, "docs/images/hero.png", FileVersion.Base).getOrNull())
+    assertContentEquals(byteArrayOf(1), before.bytes)
+    val after = assertIs<FileContent.Bytes>(service.checkoutFile(id, "docs/images/hero.png", FileVersion.WorkingTree).getOrNull())
+    assertContentEquals(byteArrayOf(2), after.bytes)
+    assertEquals(FileContent.Missing, service.checkoutFile(id, "docs/nope.png", FileVersion.WorkingTree).getOrNull())
+  }
+
+  @Test
+  fun `checkout files can't be read from outside the checkout`() = runTest {
+    git.workingFiles = mapOf("../secret" to byteArrayOf(1), "/etc/passwd" to byteArrayOf(1), "abc:x" to byteArrayOf(1))
+    val service = service(backgroundScope)
+    service.refresh(id)
+    listOf("../secret", "/etc/passwd", "a/../../secret", "abc:x", "a\\b", "", "a//b").forEach { path ->
+      assertIs<ReviewError.ReadFailed>((service.checkoutFile(id, path, FileVersion.WorkingTree) as LemonadeCodeResult.Failure).error, path)
+    }
+    assertEquals(ReviewError.UnknownSession, (service.checkoutFile(SessionId("nobody"), "a.png", FileVersion.WorkingTree) as LemonadeCodeResult.Failure).error)
+  }
+
+  @Test
+  fun `web pictures are read once and kept`() = runTest {
+    val url = "https://img.shields.io/badge/free"
+    web.images = mapOf(url to FileContent.Bytes(byteArrayOf(7)))
+    val service = service(backgroundScope)
+
+    assertContentEquals(byteArrayOf(7), assertIs<FileContent.Bytes>(service.webImage(url).getOrNull()).bytes)
+    assertContentEquals(byteArrayOf(7), assertIs<FileContent.Bytes>(service.webImage(url).getOrNull()).bytes)
+    assertEquals(listOf(url), web.reads)
+    assertIs<ReviewError.ReadFailed>((service.webImage("https://gone.dev/x.png") as LemonadeCodeResult.Failure).error)
+    assertIs<ReviewError.ReadFailed>((service.webImage("file:///etc/passwd") as LemonadeCodeResult.Failure).error)
+    assertEquals(listOf(url, "https://gone.dev/x.png"), web.reads)
   }
 
   /** Skips reviews still loading. */

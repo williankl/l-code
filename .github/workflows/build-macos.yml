@@ -86,7 +86,9 @@ jobs:
           fi
           ./gradlew "${tasks[@]}" "${props[@]}"
           mkdir -p dist
-          cp "apps/desktop/build/compose/binaries/main/dmg/Lemonade Code-$VERSION.dmg" "dist/Lemonade-Code-$VERSION-macos-${{ matrix.arch }}.dmg"
+          # Named after the bundle's version, which is 1.x for a 0.x release (see apps/desktop/build.gradle.kts).
+          dmgs=(apps/desktop/build/compose/binaries/main/dmg/*.dmg)
+          cp "${dmgs[0]}" "dist/Lemonade-Code-$VERSION-macos-${{ matrix.arch }}.dmg"
 
       - name: Check the DMG passes Gatekeeper
         if: env.SIGN == 'true'

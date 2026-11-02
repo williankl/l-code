@@ -32,22 +32,36 @@ tasks.withType<Test>().configureEach {
   jvmArgs("-Djava.awt.headless=true")
 }
 
+// Release builds stamp the tag's version with -PappVersion=1.2.3 (see RELEASING.md).
+val appVersion: String = providers.gradleProperty("appVersion").getOrElse("1.0.0")
+
+// jpackage won't build a macOS app whose version starts with 0, so the bundle carries a 0.x version
+// as 1.x (0.2.3 becomes 1.2.3). The app itself reads its real version from lemonadecode.version.
+val macBundleVersion: String = appVersion.split('.').let { parts ->
+  if (parts.first() == "0") (listOf("1") + parts.drop(1)).joinToString(".") else appVersion
+}
+
 compose.desktop {
   application {
     mainClass = "dev.lemonadecode.app.MainKt"
-    jvmArgs("--enable-native-access=ALL-UNNAMED", "--add-opens=java.desktop/sun.awt.X11=ALL-UNNAMED")
+    jvmArgs(
+      "--enable-native-access=ALL-UNNAMED",
+      "--add-opens=java.desktop/sun.awt.X11=ALL-UNNAMED",
+      // What the update check compares with releases; jpackage's own property is 1.x for a 0.x Mac build.
+      "-Dlemonadecode.version=$appVersion",
+    )
 
     nativeDistributions {
       targetFormats(TargetFormat.Dmg, TargetFormat.Deb, TargetFormat.Msi)
       packageName = "Lemonade Code"
-      // Release builds stamp the tag's version with -PappVersion=1.2.3 (see RELEASING.md).
-      packageVersion = providers.gradleProperty("appVersion").getOrElse("1.0.0")
+      packageVersion = appVersion
       description = "A terminal IDE for reviewing work"
       // Drawn by icons/make_icons.py.
       macOS {
         // Signing and notarization are switched on from the command line by the release workflow
         // (the compose.desktop.mac.* Gradle properties), so local builds stay unsigned.
         bundleID = "dev.lemonadecode.app"
+        packageVersion = macBundleVersion
         iconFile.set(project.file("icons/lemonade-code.icns"))
       }
       linux {

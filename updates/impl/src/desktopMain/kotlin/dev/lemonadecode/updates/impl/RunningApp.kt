@@ -16,7 +16,8 @@ internal class RunningApp :
     osName = System.getProperty("os.name").orEmpty(),
     osArch = System.getProperty("os.arch").orEmpty(),
     appPath = System.getProperty("jpackage.app-path"),
-    appVersion = System.getProperty("jpackage.app-version"),
+    // The build stamps the real version here; jpackage's is 1.x for a 0.x version on macOS.
+    appVersion = System.getProperty("lemonadecode.version") ?: System.getProperty("jpackage.app-version"),
     exists = { File(it).exists() },
   )
 

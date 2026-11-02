@@ -8,7 +8,9 @@ then update themselves.
 
 1. Tag and push: `git tag v1.2.0 && git push origin v1.2.0`. Versions are `MAJOR.MINOR.PATCH`
    above `0.0.0`, with `MAJOR` and `MINOR` up to 255 and `PATCH` up to 65535 (MSI rules), so `0.x`
-   versions such as `0.0.1` work too.
+   versions such as `0.0.1` work too. jpackage won't build a Mac app whose version starts with 0,
+   so a `0.x` Mac bundle says `1.x` in Finder; the files, the release and the app's update check
+   all use the real version.
 2. The **Release** workflow builds every platform at once and drafts a GitHub release with the
    files, a `SHA256SUMS` file and notes that start with a download table, one row per platform,
    followed by the changes since the last release. The run's summary shows the same table.

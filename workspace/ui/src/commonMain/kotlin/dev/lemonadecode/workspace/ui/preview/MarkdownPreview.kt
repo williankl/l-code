@@ -451,6 +451,7 @@ private fun PictureContent(
         modifier = modifier,
       )
       is Picture.Vector -> Image(painter = picture.painter, contentDescription = description, contentScale = ContentScale.Fit, modifier = modifier)
+      is Picture.Animated -> AnimatedImage(picture.animation, modifier.semantics { contentDescription = description })
     }
     PictureState.Loading -> Box(
       modifier = modifier

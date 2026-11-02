@@ -167,13 +167,18 @@ chip in the file's header switches between the preview and the text diff.
 
 | Kind | Files | Shown as |
 |---|---|---|
-| Images | PNG, JPEG, GIF, WebP, BMP, ICO | Before and after, side by side |
+| Images | PNG, JPEG, GIF, WebP, BMP, ICO | Before and after, side by side. Animated GIFs and WebPs play, with a pause button and a bar to scrub through their frames |
+| Videos | MP4, MOV, M4V, WebM, MKV, AVI, OGV, MPEG | Before and after, side by side, with play, pause and a seek bar. They loop and play without sound |
 | Vector art | SVG | Before and after, side by side |
 | 3D models | STL, OBJ, PLY, glTF, GLB | Before and after, side by side. Drag to turn, ⌘ or Ctrl + scroll to zoom, double-click to reset |
-| Documents | Markdown | Formatted, the way GitHub shows it: tables, task lists, quotes, code blocks |
+| Documents | Markdown | Formatted, the way GitHub shows it: tables, task lists, quotes, alerts, code blocks, and the HTML READMEs use, like centered blocks, tables of screenshots and `<details>` |
 | Data | CSV, TSV | A table |
 
 Switch between **Before**, **After** and **Side by side** for any file that changed on both sides.
+
+Pictures in a Markdown file show too. Pictures from the repository are read from the same side of
+the change as the document, so the **Before** side shows the pictures as they were. Pictures from the
+web, like badges, are downloaded when the preview opens.
 
 <img src="images/preview-3d.png" width="100%" alt="A 3D mug model before and after, side by side">
 

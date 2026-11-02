@@ -144,5 +144,7 @@ How to run them is in [Development](DEVELOPMENT.md).
 | [pty4j](https://github.com/JetBrains/pty4j) | Pseudo-terminals on macOS, Linux and Windows |
 | [JediTerm](https://github.com/JetBrains/jediterm) | The terminal emulator behind `TerminalView` |
 | [Turbine](https://github.com/cashapp/turbine) | Testing flows |
+| [JavaCV](https://github.com/bytedeco/javacv) and [FFmpeg](https://ffmpeg.org) | Playing videos in file previews (FFmpeg's LGPL build, for the platform the app is built on) |
+| [JSVG](https://github.com/weisJ/jsvg) | Drawing SVGs that have text, like badges, which Skia's SVG renderer leaves out |
 
 Versions are in [`gradle/libs.versions.toml`](../gradle/libs.versions.toml).

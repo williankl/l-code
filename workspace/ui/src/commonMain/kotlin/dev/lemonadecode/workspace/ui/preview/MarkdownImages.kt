@@ -1,6 +1,7 @@
 package dev.lemonadecode.workspace.ui.preview
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.produceState
@@ -142,6 +143,12 @@ internal sealed interface Picture {
   ) : Picture
 
   class Vector(val painter: Painter, override val width: Float, override val height: Float) : Picture
+
+  /** An animated GIF or WebP, which plays the way a browser plays it. Closed once it's off screen. */
+  class Animated(val animation: ImageAnimation) : Picture {
+    override val width: Float get() = animation.width.toFloat()
+    override val height: Float get() = animation.height.toFloat()
+  }
 }
 
 internal sealed interface PictureState {
@@ -158,6 +165,17 @@ internal sealed interface PictureState {
  */
 @Composable
 internal fun rememberPicture(source: String): State<PictureState> {
+  val state = loadPicture(source)
+  // An animation holds a decoder: close it once another picture or nothing replaces it.
+  val current = state.value
+  DisposableEffect(current) {
+    onDispose { ((current as? PictureState.Ready)?.picture as? Picture.Animated)?.animation?.close() }
+  }
+  return state
+}
+
+@Composable
+private fun loadPicture(source: String): State<PictureState> {
   val images = LocalMarkdownImages.current
   val density = LocalDensity.current.density
   val address = remember(source, images) { images.resolve(source) }
@@ -197,7 +215,7 @@ internal fun decodePicture(bytes: ByteArray, density: Float): Picture? = try {
     val size = painter.intrinsicSize.takeIf { it.isSpecified && it.width > 0f && it.height > 0f }
     Picture.Vector(painter, size?.width ?: 300f, size?.height ?: 150f)
   } else {
-    Picture.Raster(bytes.decodeToImageBitmap())
+    decodeAnimation(bytes)?.let(Picture::Animated) ?: Picture.Raster(bytes.decodeToImageBitmap())
   }
 } catch (e: CancellationException) {
   throw e

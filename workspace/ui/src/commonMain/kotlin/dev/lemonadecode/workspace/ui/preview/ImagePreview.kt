@@ -23,6 +23,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.isSpecified
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
@@ -165,9 +166,9 @@ internal fun AnimatedImage(
 @Composable
 internal fun SvgPreview(bytes: ByteArray) {
   val density = LocalDensity.current
-  val decoded by produceState<Decoded<Painter>>(Decoded.Loading, bytes, density) {
+  val decoded by produceState<Decoded<SvgDrawing>>(Decoded.Loading, bytes, density) {
     value = withContext(Dispatchers.Default) {
-      runCatching { bytes.decodeToSvgPainter(Density(1f)) }
+      runCatching { decodeSvg(bytes, density.density) }
         .fold({ Decoded.Ready(it) }, { Decoded.Failed(it.message ?: it::class.simpleName.orEmpty()) })
     }
   }
@@ -175,24 +176,39 @@ internal fun SvgPreview(bytes: ByteArray) {
     Decoded.Loading -> PreviewMessage(stringResource(Res.string.preview_loading), loading = true)
     is Decoded.Failed -> PreviewMessage(stringResource(Res.string.preview_unreadable, state.reason))
     is Decoded.Ready -> {
-      val painter = state.value
-      // Decoded at density 1, so the intrinsic size is the SVG's own width and height.
-      val intrinsic = painter.intrinsicSize.takeIf { it.isSpecified && it.width > 0 && it.height > 0 } ?: Size(256f, 256f)
+      val drawing = state.value
       Picture(
-        widthPx = intrinsic.width * density.density,
-        heightPx = intrinsic.height * density.density,
+        widthPx = drawing.width * density.density,
+        heightPx = drawing.height * density.density,
         info = stringResource(
           Res.string.preview_image_info,
-          intrinsic.width.roundToInt(),
-          intrinsic.height.roundToInt(),
+          drawing.width.roundToInt(),
+          drawing.height.roundToInt(),
           formatBytes(bytes.size.toLong()),
         ),
         pixelatedWhenSmall = false,
       ) { modifier, _ ->
-        Image(painter = painter, contentDescription = null, contentScale = ContentScale.Fit, modifier = modifier)
+        Image(painter = drawing.painter, contentDescription = null, contentScale = ContentScale.Fit, modifier = modifier)
       }
     }
   }
+}
+
+/** An SVG ready to draw, and its own width and height. */
+private class SvgDrawing(val painter: Painter, val width: Float, val height: Float)
+
+/**
+ * An SVG with text is drawn into a bitmap, at twice the screen's density so it stays sharp when
+ * shown bigger: Skia's SVG renderer in Compose leaves text out. Anything else stays a vector.
+ */
+@OptIn(ExperimentalResourceApi::class)
+private fun decodeSvg(bytes: ByteArray, density: Float): SvgDrawing {
+  val withText = if (svgHasText(bytes)) rasterizeSvg(bytes, scale = density * 2f) else null
+  if (withText != null) return SvgDrawing(BitmapPainter(withText.image), withText.width, withText.height)
+  val painter = bytes.decodeToSvgPainter(Density(1f))
+  // Decoded at density 1, so the intrinsic size is the SVG's own width and height.
+  val intrinsic = painter.intrinsicSize.takeIf { it.isSpecified && it.width > 0 && it.height > 0 } ?: Size(256f, 256f)
+  return SvgDrawing(painter, intrinsic.width, intrinsic.height)
 }
 
 /**

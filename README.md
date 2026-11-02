@@ -108,8 +108,8 @@ where it started.
 
 ### Previews for more than code
 
-Images, SVGs, 3D models, Markdown and CSV files show up as what they are, before and after, side by
-side. Drag a 3D model to turn it around.
+Images, SVGs, videos, 3D models, Markdown and CSV files show up as what they are, before and after,
+side by side. GIFs and videos play, and you can drag a 3D model to turn it around.
 
 <table>
 <tr>
@@ -118,7 +118,7 @@ side. Drag a 3D model to turn it around.
 </tr>
 <tr>
 <td align="center"><sub><b>3D models</b>: STL, OBJ, PLY, glTF, GLB</sub></td>
-<td align="center"><sub><b>Images</b>: PNG, JPEG, GIF, WebP, BMP, ICO, SVG</sub></td>
+<td align="center"><sub><b>Images and videos</b>: PNG, JPEG, GIF, WebP, SVG, MP4, MOV, WebM and more</sub></td>
 </tr>
 <tr>
 <td width="50%"><img src="docs/images/grid-preview-markdown.png" alt="A Markdown file drawn formatted, with a table and a checklist"></td>

@@ -47,6 +47,10 @@ Every second, Lemonade Code asks the operating system which folder each shell is
 macOS, `/proc` on Linux), then asks git which repository and branch that folder belongs to. That's
 how the session name, the top bar, the diff and your comments keep up with every `cd`.
 
+While a program the shell started holds the terminal, Lemonade Code asks for that program's folder
+instead. A program can move without the shell: Claude Code entering a worktree changes its own folder
+and leaves the shell's where it was. Once the program quits, the shell's folder counts again.
+
 On Windows, the PowerShell prompt reports its folder to the terminal itself (with the OSC 9;9
 escape sequence).
 
@@ -111,7 +115,7 @@ touch the other.
 ## Saving and restoring sessions
 
 When you quit, Lemonade Code saves every session to `sessions.json`, next to your settings: its name,
-its place in the tree, the folder its shell was in, and the last 1,000 lines it showed. Then it ends
+its place in the tree, the folder it was in, and the last 1,000 lines it showed. Then it ends
 the sessions and whatever was running in them.
 
 At the next launch each session opens again in a fresh shell in the same folder, with its old output

@@ -144,13 +144,15 @@ public class TerminalSession(launch: TerminalLaunch) : AutoCloseable {
   public val pid: Long get() = process.pid()
 
   /**
-   * The program's current folder, read from the OS; where it can't be (Windows), the one the shell
-   * last reported, if it exists here. Null when it can't be told.
+   * The current folder of the program the shell started that holds the terminal, else the shell's
+   * own, read from the OS. A program that moves without the shell, like Claude Code entering a
+   * worktree, is followed too. Where the OS can't be asked (Windows), the folder the shell last
+   * reported, if it exists here. Null when it can't be told. Blocks while it asks the OS.
    */
   public fun currentDirectory(): String? {
     if (!process.isAlive) return null
-    if (ProcessDirectory.isSupported) return ProcessDirectory.of(process.pid())
-    return reportedDirectory?.takeIf { File(it).isDirectory }
+    if (!ProcessDirectory.isSupported) return reportedDirectory?.takeIf { File(it).isDirectory }
+    return programGroup()?.let(ProcessDirectory::of) ?: ProcessDirectory.of(process.pid())
   }
 
   /**
@@ -193,9 +195,11 @@ public class TerminalSession(launch: TerminalLaunch) : AutoCloseable {
    */
   public fun foregroundProgram(): String? {
     if (!process.isAlive) return null
-    val group = ForegroundProcess.groupOf(process.pid())?.takeIf { it != process.pid() } ?: return null
-    return ForegroundProcess.nameOf(group)
+    return programGroup()?.let(ForegroundProcess::nameOf)
   }
+
+  /** The process group of the program the shell started that holds the terminal; null while the shell does. */
+  private fun programGroup(): Long? = ForegroundProcess.groupOf(process.pid())?.takeIf { it != process.pid() }
 
   init {
     // Cells inside an OSC 8 link get tagged with where it points, for the view to open.

@@ -17,6 +17,8 @@ public data class WorkspaceModel(
   val content: WorkspaceContentModel,
   val settings: SettingsModel,
   val newSubSession: NewSubSessionModel,
+  /** The Devices panel while it's open; null when closed or the Mobile plugin is off. */
+  val devices: DevicesPanelModel? = null,
   /** Brief problem report, e.g. a worktree that couldn't be created. */
   val error: LemonadeCodeString? = null,
   /** A short confirmation shown at the bottom for a moment, e.g. after copying a path. */
@@ -32,8 +34,10 @@ public data class TopBarModel(
   val keepAwakeLabel: LemonadeCodeString?,
   /** Drives the info dot on the sessions toggle when the drawer is closed. */
   val anySessionNeedsInput: Boolean,
-  /** The Update button next to Settings; null while there's no update to install. */
-  val update: UpdateModel? = null,
+  /** An update waits: the gear carries a dot. */
+  val updateAttention: Boolean = false,
+  /** The phone button; null while the Mobile plugin is off. */
+  val devices: DevicesButtonModel? = null,
 )
 
 public enum class WorkspaceView { Terminal, Diff }

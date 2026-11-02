@@ -12,7 +12,7 @@ import dev.lemonadecode.workspace.ui.toThemeMode
 @Composable
 private fun ShowcasePreview(showcase: WorkspaceShowcase) {
   LemonadeCodeTheme(mode = showcase.model().settings.theme.toThemeMode()) {
-    Box(modifier = Modifier.size(width = showcase.widthDp.dp, height = 900.dp)) {
+    Box(modifier = Modifier.size(width = showcase.widthDp.dp, height = showcase.heightDp.dp)) {
       WorkspaceShowcaseContent(showcase)
     }
   }
@@ -53,3 +53,63 @@ private fun LightKeepAwakePreview() = ShowcasePreview(WorkspaceShowcase.LightKee
 @Preview
 @Composable
 private fun MultiLineCommentPreview() = ShowcasePreview(WorkspaceShowcase.MultiLineComment)
+
+@Preview
+@Composable
+private fun SettingsListPreview() = ShowcasePreview(WorkspaceShowcase.SettingsList)
+
+@Preview
+@Composable
+private fun SettingsLanguagePreview() = ShowcasePreview(WorkspaceShowcase.SettingsLanguage)
+
+@Preview
+@Composable
+private fun SettingsPluginsPreview() = ShowcasePreview(WorkspaceShowcase.SettingsPlugins)
+
+@Preview
+@Composable
+private fun SettingsUpdatesPreview() = ShowcasePreview(WorkspaceShowcase.SettingsUpdates)
+
+@Preview
+@Composable
+private fun DeviceListPreview() = ShowcasePreview(WorkspaceShowcase.DeviceList)
+
+@Preview
+@Composable
+private fun DeviceSideBySidePreview() = ShowcasePreview(WorkspaceShowcase.DeviceSideBySide)
+
+@Preview
+@Composable
+private fun DeviceTabsPreview() = ShowcasePreview(WorkspaceShowcase.DeviceTabs)
+
+@Preview
+@Composable
+private fun PairPlatformPreview() = ShowcasePreview(WorkspaceShowcase.PairPlatform)
+
+@Preview
+@Composable
+private fun PairMethodPreview() = ShowcasePreview(WorkspaceShowcase.PairMethod)
+
+@Preview
+@Composable
+private fun PairCodePreview() = ShowcasePreview(WorkspaceShowcase.PairCode)
+
+@Preview
+@Composable
+private fun PairedPreview() = ShowcasePreview(WorkspaceShowcase.Paired)
+
+@Preview
+@Composable
+private fun DisplayMainPreview() = ShowcasePreview(WorkspaceShowcase.DisplayMain)
+
+@Preview
+@Composable
+private fun DisplayDevicesPreview() = ShowcasePreview(WorkspaceShowcase.DisplayDevices)
+
+@Preview
+@Composable
+private fun DiffFileListPreview() = ShowcasePreview(WorkspaceShowcase.DiffFileList)
+
+@Preview
+@Composable
+private fun DiffBasePickerPreview() = ShowcasePreview(WorkspaceShowcase.DiffBasePicker)

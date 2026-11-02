@@ -15,6 +15,7 @@ import dev.lemonadecode.domain.review.LineSide
 import dev.lemonadecode.domain.review.Review
 import dev.lemonadecode.domain.review.ReviewComment
 import dev.lemonadecode.domain.session.SessionId
+import dev.lemonadecode.mobile.fake.FakeMobileService
 import dev.lemonadecode.platform.core.LemonadeCodeResult
 import dev.lemonadecode.platform.presenter.testing.awaitItemWhere
 import dev.lemonadecode.platform.presenter.testing.test
@@ -55,7 +56,8 @@ class WorkspacePreviewTest {
       override val path: String = ShowcaseFixtures.Home
     },
     FakeUpdateService(),
-  )
+    FakeMobileService(),
+  ) { 0L }
 
   private val logo = FileDiff("art/logo.png", null, FileChange.Modified, "PNG", emptyList(), isBinary = true)
   private val readme = FileDiff(

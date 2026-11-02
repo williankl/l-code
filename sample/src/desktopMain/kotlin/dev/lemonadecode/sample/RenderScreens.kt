@@ -12,7 +12,6 @@ import org.jetbrains.skia.EncodedImageFormat
 import java.io.File
 
 private const val Scale = 2f
-private const val FrameHeightDp = 900
 private const val FrameNanos = 16_000_000L
 
 /**
@@ -41,7 +40,7 @@ public fun main(args: Array<String>) {
   WorkspaceShowcase.entries.forEach { sample ->
     ImageComposeScene(
       width = (sample.widthDp * Scale).toInt(),
-      height = (FrameHeightDp * Scale).toInt(),
+      height = (sample.heightDp * Scale).toInt(),
       density = Density(Scale),
     ) {
       LemonadeCodeTheme(mode = forced ?: sample.model().settings.theme.toThemeMode()) {

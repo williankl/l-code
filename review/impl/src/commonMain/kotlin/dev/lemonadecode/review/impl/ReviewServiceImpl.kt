@@ -3,6 +3,7 @@ package dev.lemonadecode.review.impl
 import dev.lemonadecode.data.git.GitBlob
 import dev.lemonadecode.data.git.GitDataSource
 import dev.lemonadecode.data.git.GitError
+import dev.lemonadecode.domain.review.BranchTip
 import dev.lemonadecode.domain.review.CommentId
 import dev.lemonadecode.domain.review.CommentStatus
 import dev.lemonadecode.domain.review.DiffState
@@ -86,6 +87,8 @@ internal class ReviewServiceImpl(
             comments = allComments[target.key.root].orEmpty(),
             base = diff.baseRef() ?: target.key.base ?: refs?.default,
             bases = baseOptions(refs?.default, target.parentBranch, refs?.all.orEmpty()),
+            defaultBranch = refs?.default,
+            branchTips = refs?.tips.orEmpty(),
           )
         }
           .distinctUntilChanged()
@@ -245,6 +248,7 @@ internal class ReviewServiceImpl(
       val refs = Branches(
         default = git.defaultBranch(key.root).getOrNull(),
         all = git.branches(key.root).getOrElse { emptyList() },
+        tips = git.branchTips(key.root).getOrElse { emptyMap() }.mapValues { (_, tip) -> BranchTip(tip.committedAtMillis, tip.author) },
       )
       val state = loadDiff(key.root, key.base)
       loaded.update { it.copy(diffs = it.diffs + (key to state), branches = it.branches + (key.root to refs)) }
@@ -298,7 +302,7 @@ internal class ReviewServiceImpl(
   private data class Target(val key: DiffKey, val parentBranch: String?)
 
   /** A checkout's default branch, if it has one, and its local branches as git lists them. */
-  private data class Branches(val default: String?, val all: List<String>)
+  private data class Branches(val default: String?, val all: List<String>, val tips: Map<String, BranchTip> = emptyMap())
 
   /** What git said last: every diff read, and each checkout's branches. One state, so they change together. */
   private data class Loaded(

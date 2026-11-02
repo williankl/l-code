@@ -38,6 +38,16 @@ class GitCliDataSourceTest {
   }
 
   @Test
+  fun `tells when each branch last got a commit and who made it`() = runTest {
+    val repo = newRepository()
+    val tips = dataSource.branchTips(repo.path).getOrNull().orEmpty()
+    assertEquals(setOf("feature", "main"), tips.keys)
+    val main = tips.getValue("main")
+    assertEquals("Lemonade Code Test", main.author)
+    assertTrue(main.committedAtMillis > 0 && main.committedAtMillis % 1000 == 0L)
+  }
+
+  @Test
   fun `reports a folder outside git`() = runTest {
     val folder = Files.createTempDirectory("lemonade-code-plain").toFile()
     assertEquals(LemonadeCodeResult.failure(GitError.NotARepository), dataSource.checkout(folder.path))

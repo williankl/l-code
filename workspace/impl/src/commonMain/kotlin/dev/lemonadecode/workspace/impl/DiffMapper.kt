@@ -18,8 +18,12 @@ import dev.lemonadecode.platform.localization.asLemonadeCodeString
 import dev.lemonadecode.workspace.strings.Res
 import dev.lemonadecode.workspace.strings.comment_author_you
 import dev.lemonadecode.workspace.strings.comment_on_line
+import dev.lemonadecode.workspace.strings.detail_two
+import dev.lemonadecode.workspace.strings.diff_branch_default
+import dev.lemonadecode.workspace.strings.diff_branch_head
 import dev.lemonadecode.workspace.strings.diff_source_working_tree
 import dev.lemonadecode.workspace.strings.diff_summary
+import dev.lemonadecode.workspace.strings.diff_summary_head
 import dev.lemonadecode.workspace.strings.diff_summary_uncommitted
 import dev.lemonadecode.workspace.strings.message_diff_failed
 import dev.lemonadecode.workspace.strings.message_loading_diff
@@ -28,6 +32,7 @@ import dev.lemonadecode.workspace.strings.message_no_base_detail
 import dev.lemonadecode.workspace.strings.message_no_changes
 import dev.lemonadecode.workspace.strings.message_not_repo
 import dev.lemonadecode.workspace.strings.message_not_repo_detail
+import dev.lemonadecode.workspace.uimodel.BaseBranchModel
 import dev.lemonadecode.workspace.uimodel.CodeTokenModel
 import dev.lemonadecode.workspace.uimodel.CommentComposerModel
 import dev.lemonadecode.workspace.uimodel.CommentStatusModel
@@ -68,8 +73,9 @@ internal object DiffMapper {
     previews: Map<String, PreviewLoad> = emptyMap(),
     assets: PreviewAssetLoader = PreviewAssetLoader.None,
     rowCache: DiffRowCache = DiffRowCache(),
+    nowMillis: Long = 0,
   ): WorkspaceContentModel {
-    val toolbar = toolbar(review, view)
+    val toolbar = toolbar(review, view, nowMillis)
     return when (val diff = review?.diff ?: DiffState.Loading) {
       DiffState.Loading -> WorkspaceContentModel.Message(Res.string.message_loading_diff.asLemonadeCodeString(), loading = true, diffToolbar = toolbar)
       DiffState.NotARepository -> WorkspaceContentModel.Message(
@@ -91,14 +97,36 @@ internal object DiffMapper {
   }
 
   /** The bar over the diff, without a summary; [review] adds it once there are files. */
-  private fun toolbar(review: Review?, view: WorkspaceViewState): DiffToolbarModel = DiffToolbarModel(
+  private fun toolbar(review: Review?, view: WorkspaceViewState, nowMillis: Long): DiffToolbarModel = DiffToolbarModel(
     sourceLabel = Res.string.diff_source_working_tree.asLemonadeCodeString(),
     base = DiffBaseModel(
       selected = review?.base,
-      options = review?.bases.orEmpty(),
+      options = baseOptions(review, nowMillis),
       pickerOpen = view.basePickerOpen,
     ),
   )
+
+  /**
+   * The review's branches with when each last changed, the default one marked, then `HEAD`, which
+   * compares with the last commit: only the uncommitted changes.
+   */
+  fun baseOptions(review: Review?, nowMillis: Long): List<BaseBranchModel> {
+    val bases = review?.bases.orEmpty().filterNot { it == HeadRef }
+    if (bases.isEmpty()) return emptyList()
+    return bases.map { name ->
+      val tip = review?.branchTips?.get(name)
+      val detail = when {
+        tip == null -> null
+        name == review.defaultBranch -> Res.string.diff_branch_default.asLemonadeCodeString(timeAgo(tip.committedAtMillis, nowMillis))
+        tip.author.isBlank() -> timeAgo(tip.committedAtMillis, nowMillis)
+        else -> Res.string.detail_two.asLemonadeCodeString(tip.author, timeAgo(tip.committedAtMillis, nowMillis))
+      }
+      BaseBranchModel(name, detail)
+    } + BaseBranchModel(HeadRef, Res.string.diff_branch_head.asLemonadeCodeString())
+  }
+
+  /** Compares with the last commit. */
+  const val HeadRef: String = "HEAD"
 
   fun stat(review: Review?): DiffStatModel? {
     val snapshot = (review?.diff as? DiffState.Ready)?.snapshot ?: return null
@@ -154,10 +182,10 @@ internal object DiffMapper {
     rowCache.retain(snapshot.files)
     return DiffReviewModel(
       toolbar = toolbar.copy(
-        summary = if (snapshot.hasUncommittedChanges) {
-          Res.plurals.diff_summary_uncommitted.asLemonadeCodeString(fileCount)
-        } else {
-          Res.plurals.diff_summary.asLemonadeCodeString(fileCount)
+        summary = when {
+          snapshot.baseRef == HeadRef -> Res.plurals.diff_summary_head.asLemonadeCodeString(fileCount)
+          snapshot.hasUncommittedChanges -> Res.plurals.diff_summary_uncommitted.asLemonadeCodeString(fileCount)
+          else -> Res.plurals.diff_summary.asLemonadeCodeString(fileCount)
         },
       ),
       files = snapshot.files.map { file(it, comments.filter { comment -> comment.filePath == it.path }, view, previews[it.path], rowCache) },
@@ -171,6 +199,7 @@ internal object DiffMapper {
         preview = pendingMessage?.takeIf { view.previewOpen && unsent.isNotEmpty() },
       ),
       assets = assets,
+      fileList = view.fileList,
     )
   }
 

@@ -1,14 +1,19 @@
 package dev.lemonadecode.workspace.impl
 
+import dev.lemonadecode.domain.mobile.MobileError
 import dev.lemonadecode.domain.review.DiffState
 import dev.lemonadecode.domain.review.Review
 import dev.lemonadecode.domain.session.SessionId
+import dev.lemonadecode.domain.settings.AppLanguage
 import dev.lemonadecode.domain.settings.ThemePreference
 import dev.lemonadecode.domain.update.AppRelease
 import dev.lemonadecode.domain.update.AppVersion
+import dev.lemonadecode.domain.update.UpdateChecks
 import dev.lemonadecode.domain.update.UpdateFailure
 import dev.lemonadecode.domain.update.UpdateProgress
 import dev.lemonadecode.domain.update.UpdateState
+import dev.lemonadecode.mobile.fake.FakeMobileService
+import dev.lemonadecode.platform.core.LemonadeCodeResult
 import dev.lemonadecode.platform.localization.asLemonadeCodeString
 import dev.lemonadecode.platform.presenter.testing.awaitItemWhere
 import dev.lemonadecode.platform.presenter.testing.test
@@ -18,19 +23,31 @@ import dev.lemonadecode.review.fake.FakeReviewService
 import dev.lemonadecode.sessions.fake.FakeSessionService
 import dev.lemonadecode.settings.fake.FakeSettingsService
 import dev.lemonadecode.updates.fake.FakeUpdateService
+import dev.lemonadecode.workspace.impl.showcase.ShowcaseDevices
 import dev.lemonadecode.workspace.impl.showcase.ShowcaseFixtures
 import dev.lemonadecode.workspace.strings.Res
 import dev.lemonadecode.workspace.strings.session_path_copied
+import dev.lemonadecode.workspace.strings.time_hours_ago
 import dev.lemonadecode.workspace.strings.update_failed_checksum
+import dev.lemonadecode.workspace.strings.updates_up_to_date
 import dev.lemonadecode.workspace.strings.worktree_branch_invalid
 import dev.lemonadecode.workspace.strings.worktree_branch_taken
+import dev.lemonadecode.workspace.uimodel.DeviceScreenModel
+import dev.lemonadecode.workspace.uimodel.DevicesButtonModel
+import dev.lemonadecode.workspace.uimodel.DevicesContentModel
+import dev.lemonadecode.workspace.uimodel.DevicesWindow
 import dev.lemonadecode.workspace.uimodel.DiffRowModel
+import dev.lemonadecode.workspace.uimodel.LanguageOption
+import dev.lemonadecode.workspace.uimodel.LogFilter
+import dev.lemonadecode.workspace.uimodel.MobilePlatformModel
+import dev.lemonadecode.workspace.uimodel.PairingMethod
+import dev.lemonadecode.workspace.uimodel.ReleaseNotesModel
 import dev.lemonadecode.workspace.uimodel.SessionMenuModel
 import dev.lemonadecode.workspace.uimodel.SessionRenameModel
 import dev.lemonadecode.workspace.uimodel.SessionsPanelModel
+import dev.lemonadecode.workspace.uimodel.SettingsPage
 import dev.lemonadecode.workspace.uimodel.ThemeOption
-import dev.lemonadecode.workspace.uimodel.UpdateModel
-import dev.lemonadecode.workspace.uimodel.UpdateStatusModel
+import dev.lemonadecode.workspace.uimodel.UpdatePhase
 import dev.lemonadecode.workspace.uimodel.WorkspaceContentModel
 import dev.lemonadecode.workspace.uimodel.WorkspaceEvent
 import dev.lemonadecode.workspace.uimodel.WorkspaceView
@@ -48,6 +65,7 @@ class WorkspacePresenterTest {
   private val reviews = FakeReviewService()
   private val settings = FakeSettingsService()
   private val updates = FakeUpdateService()
+  private val mobile = FakeMobileService()
   private val presenter = WorkspacePresenter(
     sessions,
     reviews,
@@ -56,7 +74,8 @@ class WorkspacePresenterTest {
       override val path: String = ShowcaseFixtures.Home
     },
     updates,
-  )
+    mobile,
+  ) { Now }
 
   private fun withSession() {
     sessions.setSessions(listOf(ShowcaseFixtures.session("ar", "api-ratelimit")))
@@ -96,7 +115,7 @@ class WorkspacePresenterTest {
       val open = awaitItemWhere { (it.content as? WorkspaceContentModel.Diff)?.review?.toolbar?.base?.pickerOpen == true }
       val base = assertIs<WorkspaceContentModel.Diff>(open.content).review.toolbar.base
       assertEquals("main", base.selected)
-      assertEquals(listOf("main", "release"), base.options)
+      assertEquals(listOf("main", "release", "HEAD"), base.options.map { it.name })
       open.eventSink(WorkspaceEvent.CompareWith("release"))
       awaitItemWhere { (it.content as? WorkspaceContentModel.Diff)?.review?.toolbar?.base?.pickerOpen == false }
       yieldUntil { reviews.comparedWith.isNotEmpty() }
@@ -111,7 +130,7 @@ class WorkspacePresenterTest {
     presenter.test {
       awaitItem().eventSink(WorkspaceEvent.SelectView(WorkspaceView.Diff))
       val message = awaitItemWhere { it.content is WorkspaceContentModel.Message && it.viewSwitcher?.selected == WorkspaceView.Diff }
-      assertEquals(listOf("main", "release"), assertIs<WorkspaceContentModel.Message>(message.content).diffToolbar?.base?.options)
+      assertEquals(listOf("main", "release", "HEAD"), assertIs<WorkspaceContentModel.Message>(message.content).diffToolbar?.base?.options?.map { it.name })
     }
   }
 
@@ -164,42 +183,216 @@ class WorkspacePresenterTest {
   }
 
   @Test
-  fun `an update shows a button whose panel installs it and follows the download`() = runTest {
+  fun `an update puts a dot on the gear, and its page downloads it and then restarts`() = runTest {
     val available = UpdateState.Available(
       current = AppVersion(1, 2, 0),
-      release = AppRelease(AppVersion(1, 3, 0), "https://github.com/williankl/loupe/releases/tag/v1.3.0"),
+      release = AppRelease(AppVersion(1, 3, 0), "https://github.com/williankl/loupe/releases/tag/v1.3.0", "Faster diffs"),
     )
     presenter.test {
-      assertEquals(null, awaitItem().topBar.update)
+      assertEquals(false, awaitItem().topBar.updateAttention)
       updates.setState(available)
-      val offered = awaitItemWhere { it.topBar.update != null }
-      assertEquals(UpdateModel("1.3.0", "1.2.0", available.release.pageUrl, open = false, status = UpdateStatusModel.Ready), offered.topBar.update)
+      val offered = awaitItemWhere { it.topBar.updateAttention }
+      assertEquals(UpdatePhase.Available, offered.settings.updates.phase)
+      assertEquals(ReleaseNotesModel("1.3.0", "Faster diffs", available.release.pageUrl), offered.settings.updates.release)
 
-      offered.eventSink(WorkspaceEvent.ToggleUpdate)
-      awaitItemWhere { it.topBar.update?.open == true }.eventSink(WorkspaceEvent.InstallUpdate)
+      offered.eventSink(WorkspaceEvent.ToggleSettings)
+      awaitItemWhere { it.settings.open }.eventSink(WorkspaceEvent.OpenSettingsPage(SettingsPage.Updates))
+      awaitItemWhere { it.settings.page == SettingsPage.Updates }.eventSink(WorkspaceEvent.InstallUpdate)
       assertEquals(1, updates.installCount)
 
       updates.setState(available.copy(progress = UpdateProgress.Downloading(0.5f)))
-      awaitItemWhere { it.topBar.update?.status == UpdateStatusModel.Downloading(50) }
+      val downloading = awaitItemWhere { it.settings.updates.phase == UpdatePhase.Downloading }
+      assertEquals(0.5f, downloading.settings.updates.progress)
+      updates.setState(available.copy(progress = UpdateProgress.Downloaded))
+      awaitItemWhere { it.settings.updates.phase == UpdatePhase.Downloaded }.eventSink(WorkspaceEvent.RestartToUpdate)
+      assertEquals(1, updates.restartCount)
+
       updates.setState(available.copy(progress = UpdateProgress.Failed(UpdateFailure.Checksum)))
-      val failed = awaitItemWhere { it.topBar.update?.status is UpdateStatusModel.Failed }
-      assertEquals(
-        UpdateStatusModel.Failed(Res.string.update_failed_checksum.asLemonadeCodeString()),
-        failed.topBar.update?.status,
-      )
+      val failed = awaitItemWhere { it.settings.updates.phase == UpdatePhase.Failed }
+      assertEquals(Res.string.update_failed_checksum.asLemonadeCodeString(), failed.settings.updates.status)
     }
   }
 
   @Test
-  fun `opening settings closes the update panel`() = runTest {
-    updates.setState(
-      UpdateState.Available(AppVersion(1, 2, 0), AppRelease(AppVersion(1, 3, 0), "https://github.com/williankl/loupe/releases/tag/v1.3.0")),
-    )
+  fun `with nothing newer the Updates page says when it last checked, and checks again`() = runTest {
+    updates.setChecks(UpdateChecks(lastCheckedMillis = Now - 2 * 60 * 60_000))
     presenter.test {
-      awaitItemWhere { it.topBar.update != null }.eventSink(WorkspaceEvent.ToggleUpdate)
-      awaitItemWhere { it.topBar.update?.open == true }.eventSink(WorkspaceEvent.ToggleSettings)
-      val settingsOpen = awaitItemWhere { it.settings.open }
-      assertEquals(false, settingsOpen.topBar.update?.open)
+      val model = awaitItem()
+      assertEquals(UpdatePhase.UpToDate, model.settings.updates.phase)
+      assertEquals(Res.string.updates_up_to_date.asLemonadeCodeString(Res.plurals.time_hours_ago.asLemonadeCodeString(2)), model.settings.updates.status)
+      model.eventSink(WorkspaceEvent.CheckForUpdates)
+      yieldUntil { updates.checkCount == 1 }
+    }
+  }
+
+  @Test
+  fun `each settings item opens its own page, and Esc goes back to the list, then closes`() = runTest {
+    presenter.test {
+      awaitItem().eventSink(WorkspaceEvent.ToggleSettings)
+      val list = awaitItemWhere { it.settings.open }
+      assertEquals(SettingsPage.List, list.settings.page)
+      list.eventSink(WorkspaceEvent.OpenSettingsPage(SettingsPage.Language))
+      awaitItemWhere { it.settings.page == SettingsPage.Language }.eventSink(WorkspaceEvent.SettingsBack)
+      awaitItemWhere { it.settings.page == SettingsPage.List && it.settings.open }.eventSink(WorkspaceEvent.SettingsBack)
+      awaitItemWhere { !it.settings.open }
+    }
+  }
+
+  @Test
+  fun `picking a language keeps it`() = runTest {
+    presenter.test {
+      val first = awaitItem()
+      assertEquals(LanguageOption.System, first.settings.language)
+      first.eventSink(WorkspaceEvent.SetLanguage(LanguageOption.German))
+      assertEquals(LanguageOption.German, awaitItemWhere { it.settings.language == LanguageOption.German }.settings.language)
+      assertEquals(AppLanguage.German, settings.settings.value.language)
+    }
+  }
+
+  @Test
+  fun `turning the Mobile plugin on shows the phone button with the devices connected`() = runTest {
+    mobile.setDevices(ShowcaseDevices.connected)
+    presenter.test {
+      val off = awaitItem()
+      assertEquals(null, off.topBar.devices)
+      off.eventSink(WorkspaceEvent.SetMobilePlugin(true))
+      val on = awaitItemWhere { it.topBar.devices != null }
+      assertEquals(DevicesButtonModel(count = 4, docked = false, separate = false), on.topBar.devices)
+      assertEquals(SettingsMapper.mobile(true, ShowcaseDevices.connected), on.settings.mobile)
+
+      on.eventSink(WorkspaceEvent.ToggleDevices)
+      val open = awaitItemWhere { it.devices != null }
+      val list = assertIs<DevicesContentModel.Devices>(open.devices?.content)
+      assertEquals(listOf(2, 2), list.groups.map { it.devices.size })
+      assertEquals(true, open.topBar.devices?.docked)
+
+      open.eventSink(WorkspaceEvent.SetMobilePlugin(false))
+      val closed = awaitItemWhere { it.topBar.devices == null }
+      assertEquals(null, closed.devices)
+    }
+  }
+
+  @Test
+  fun `a device shows its screen and logs, and its errors go to the session's agent`() = runTest {
+    withSession()
+    settings.update { it.copy(mobilePlugin = true) }
+    mobile.setDevices(ShowcaseDevices.connected)
+    mobile.logs.value = mapOf(ShowcaseDevices.pixel.id to ShowcaseDevices.androidLogs)
+    mobile.screens.value = mapOf(ShowcaseDevices.pixel.id to ShowcaseDevices.screen())
+    presenter.test {
+      awaitItem().eventSink(WorkspaceEvent.ToggleDevices)
+      awaitItemWhere { it.devices != null }.eventSink(WorkspaceEvent.SelectDevice(ShowcaseDevices.pixel.id.value))
+      val device = awaitItemWhere { (it.devices?.content as? DevicesContentModel.Device)?.logs?.lines?.isNotEmpty() == true }
+      val page = assertIs<DevicesContentModel.Device>(device.devices?.content)
+      assertIs<DeviceScreenModel.Frame>(page.screen)
+      assertEquals(2, page.logs.errorCount)
+      assertEquals("logcat · com.teya.storefront", page.logs.source)
+
+      device.eventSink(WorkspaceEvent.SetLogFilter(LogFilter.Errors))
+      val errors = awaitItemWhere { (it.devices?.content as? DevicesContentModel.Device)?.logs?.filter == LogFilter.Errors }
+      assertEquals(2, (errors.devices?.content as DevicesContentModel.Device).logs.lines.size)
+      errors.eventSink(WorkspaceEvent.SendLogErrors)
+      yieldUntil { sessions.pasted.isNotEmpty() }
+      val (to, text) = sessions.pasted.single()
+      assertEquals(ar, to)
+      assertTrue(text.startsWith("Errors from Pixel 8 (logcat · com.teya.storefront):\n"))
+      assertTrue("RateLimiter: 429 Too Many Requests" in text)
+
+      errors.eventSink(WorkspaceEvent.TapDevice(540, 1200))
+      errors.eventSink(WorkspaceEvent.PressDeviceHome)
+      yieldUntil { mobile.actions.size >= 2 }
+      assertEquals(listOf("tap 38021FDH2000AB 540,1200", "press 38021FDH2000AB Home"), mobile.actions)
+    }
+  }
+
+  @Test
+  fun `a screenshot is handed to the session as a path`() = runTest {
+    withSession()
+    settings.update { it.copy(mobilePlugin = true) }
+    mobile.setDevices(ShowcaseDevices.connected)
+    mobile.screenshotPath = "/tmp/lemonade-code/screenshots/Pixel 8-20261102.png"
+    presenter.test {
+      awaitItem().eventSink(WorkspaceEvent.ToggleDevices)
+      awaitItemWhere { it.devices != null }.eventSink(WorkspaceEvent.SelectDevice(ShowcaseDevices.pixel.id.value))
+      awaitItemWhere { it.devices?.content is DevicesContentModel.Device }.eventSink(WorkspaceEvent.ScreenshotToSession)
+      yieldUntil { sessions.pasted.isNotEmpty() }
+      assertEquals(ar to "/tmp/lemonade-code/screenshots/Pixel\\ 8-20261102.png ", sessions.pasted.single())
+      awaitItemWhere { it.toast != null }
+    }
+  }
+
+  @Test
+  fun `pairing with a code goes through the three steps and opens the new device`() = runTest {
+    settings.update { it.copy(mobilePlugin = true) }
+    presenter.test {
+      awaitItem().eventSink(WorkspaceEvent.ToggleDevices)
+      awaitItemWhere { it.devices != null }.eventSink(WorkspaceEvent.StartPairing)
+      awaitItemWhere { it.devices?.content == DevicesContentModel.ChoosePlatform }.eventSink(WorkspaceEvent.ChoosePairingPlatform(MobilePlatformModel.Android))
+      awaitItemWhere { it.devices?.content is DevicesContentModel.ChooseMethod }.eventSink(WorkspaceEvent.ChoosePairingMethod(PairingMethod.PairingCode))
+      val code = awaitItemWhere { it.devices?.content is DevicesContentModel.EnterCode }
+      assertEquals(false, (code.devices?.content as DevicesContentModel.EnterCode).canPair)
+      code.eventSink(WorkspaceEvent.SetPairingAddress("192.168.1.57:37099"))
+      code.eventSink(WorkspaceEvent.SetPairingCode("48 29 13"))
+      val ready = awaitItemWhere { (it.devices?.content as? DevicesContentModel.EnterCode)?.canPair == true }
+      assertEquals("482913", (ready.devices?.content as DevicesContentModel.EnterCode).code)
+      ready.eventSink(WorkspaceEvent.PairWithCode)
+      val paired = awaitItemWhere { it.devices?.content is DevicesContentModel.Paired }
+      assertEquals(listOf("pair 192.168.1.57:37099 482913"), mobile.actions)
+      paired.eventSink(WorkspaceEvent.OpenPairedDevice)
+      awaitItemWhere { it.devices?.content is DevicesContentModel.Device }
+    }
+  }
+
+  @Test
+  fun `a wrong code stays on the step and says so`() = runTest {
+    settings.update { it.copy(mobilePlugin = true) }
+    mobile.nextPairResult = LemonadeCodeResult.Failure(MobileError.WrongCode)
+    presenter.test {
+      awaitItem().eventSink(WorkspaceEvent.ToggleDevices)
+      awaitItemWhere { it.devices != null }.eventSink(WorkspaceEvent.StartPairing)
+      awaitItemWhere { it.devices?.content == DevicesContentModel.ChoosePlatform }.eventSink(WorkspaceEvent.ChoosePairingPlatform(MobilePlatformModel.Android))
+      awaitItemWhere { it.devices?.content is DevicesContentModel.ChooseMethod }.eventSink(WorkspaceEvent.ChoosePairingMethod(PairingMethod.PairingCode))
+      val code = awaitItemWhere { it.devices?.content is DevicesContentModel.EnterCode }
+      code.eventSink(WorkspaceEvent.SetPairingAddress("192.168.1.57:37099"))
+      code.eventSink(WorkspaceEvent.SetPairingCode("000000"))
+      awaitItemWhere { (it.devices?.content as? DevicesContentModel.EnterCode)?.canPair == true }.eventSink(WorkspaceEvent.PairWithCode)
+      val wrong = awaitItemWhere { (it.devices?.content as? DevicesContentModel.EnterCode)?.error != null }
+      assertEquals(DevicesMapper.errorText(MobileError.WrongCode), (wrong.devices?.content as DevicesContentModel.EnterCode).error)
+      wrong.eventSink(WorkspaceEvent.DevicesBack)
+      awaitItemWhere { it.devices?.content is DevicesContentModel.ChooseMethod }
+    }
+  }
+
+  @Test
+  fun `the panel moves to its own window and back, and the phone button brings that window forward`() = runTest {
+    settings.update { it.copy(mobilePlugin = true) }
+    presenter.test {
+      awaitItem().eventSink(WorkspaceEvent.ToggleDevices)
+      awaitItemWhere { it.devices != null }.eventSink(WorkspaceEvent.MoveDevices(DevicesWindow.Separate))
+      val separate = awaitItemWhere { it.devices?.window == DevicesWindow.Separate }
+      assertEquals(DevicesButtonModel(count = 0, docked = false, separate = true), separate.topBar.devices)
+      val before = separate.devices?.focusRequest ?: 0
+      separate.eventSink(WorkspaceEvent.ToggleDevices)
+      awaitItemWhere { (it.devices?.focusRequest ?: 0) > before }.eventSink(WorkspaceEvent.MoveDevices(DevicesWindow.Docked))
+      awaitItemWhere { it.devices?.window == DevicesWindow.Docked }.eventSink(WorkspaceEvent.CloseDevices)
+      awaitItemWhere { it.devices == null }
+    }
+  }
+
+  @Test
+  fun `the changed files can be hidden, and picking a folded one opens it`() = runTest {
+    withSession()
+    presenter.test {
+      awaitItem().eventSink(WorkspaceEvent.SelectView(WorkspaceView.Diff))
+      val diff = awaitItemWhere { it.content is WorkspaceContentModel.Diff }
+      assertEquals(null, (diff.content as WorkspaceContentModel.Diff).review.fileList)
+      diff.eventSink(WorkspaceEvent.ShowFileList(false))
+      awaitItemWhere { (it.content as? WorkspaceContentModel.Diff)?.review?.fileList == false }
+      val folded = "src/config.ts"
+      diff.eventSink(WorkspaceEvent.ToggleFileExpanded(folded))
+      awaitItemWhere { (it.content as? WorkspaceContentModel.Diff)?.review?.files?.first { file -> file.id == folded }?.expanded == false }
+      diff.eventSink(WorkspaceEvent.RevealFile(folded))
+      awaitItemWhere { (it.content as? WorkspaceContentModel.Diff)?.review?.files?.first { file -> file.id == folded }?.expanded == true }
     }
   }
 
@@ -457,4 +650,8 @@ class WorkspacePresenterTest {
   }
 
   private fun dev.lemonadecode.workspace.uimodel.WorkspaceModel.lines(path: String): List<DiffRowModel.Line> = (content as? WorkspaceContentModel.Diff)?.review?.files?.first { it.path == path }?.rows?.filterIsInstance<DiffRowModel.Line>().orEmpty()
+
+  private companion object {
+    const val Now: Long = 1_793_600_000_000
+  }
 }

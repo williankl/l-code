@@ -4,3 +4,9 @@ package dev.lemonadecode.platform.architecture
 public interface AppExit {
   public fun exit()
 }
+
+/** The time of day, for text like "checked 2 h ago". Tests pass a fixed one. */
+public fun interface WallClock {
+  /** Milliseconds since the epoch. */
+  public fun nowMillis(): Long
+}

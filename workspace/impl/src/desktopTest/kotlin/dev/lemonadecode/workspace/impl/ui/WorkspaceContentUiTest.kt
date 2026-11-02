@@ -47,11 +47,19 @@ import dev.lemonadecode.workspace.strings.update_failed_download
 import dev.lemonadecode.workspace.strings.worktree_branch_invalid
 import dev.lemonadecode.workspace.ui.TerminalTranscript
 import dev.lemonadecode.workspace.ui.WorkspaceContent
+import dev.lemonadecode.workspace.uimodel.DeviceTab
+import dev.lemonadecode.workspace.uimodel.DevicesLayoutOption
+import dev.lemonadecode.workspace.uimodel.DevicesWindow
+import dev.lemonadecode.workspace.uimodel.LanguageOption
+import dev.lemonadecode.workspace.uimodel.LogFilter
+import dev.lemonadecode.workspace.uimodel.MobilePlatformModel
+import dev.lemonadecode.workspace.uimodel.PairingMethod
 import dev.lemonadecode.workspace.uimodel.SessionMenuModel
 import dev.lemonadecode.workspace.uimodel.SessionsPanelModel
+import dev.lemonadecode.workspace.uimodel.SettingsPage
 import dev.lemonadecode.workspace.uimodel.SubSessionLocation
 import dev.lemonadecode.workspace.uimodel.ThemeOption
-import dev.lemonadecode.workspace.uimodel.UpdateStatusModel
+import dev.lemonadecode.workspace.uimodel.UpdatePhase
 import dev.lemonadecode.workspace.uimodel.WorkspaceContentModel
 import dev.lemonadecode.workspace.uimodel.WorkspaceEvent
 import dev.lemonadecode.workspace.uimodel.WorkspaceModel
@@ -70,7 +78,7 @@ class WorkspaceContentUiTest {
   private val rateLimit = ShowcaseFixtures.path("rl")
   private val app = ShowcaseFixtures.path("app")
 
-  private fun show(showcase: WorkspaceShowcase, block: DesktopComposeUiTest.() -> Unit) = runDesktopComposeUiTest(width = showcase.widthDp, height = 900) {
+  private fun show(showcase: WorkspaceShowcase, block: DesktopComposeUiTest.() -> Unit) = runDesktopComposeUiTest(width = showcase.widthDp, height = showcase.heightDp) {
     setContent {
       LemonadeCodeTheme { WorkspaceShowcaseContent(showcase, onEvent = { events += it }) }
     }
@@ -84,7 +92,7 @@ class WorkspaceContentUiTest {
     edit: (WorkspaceModel) -> WorkspaceModel,
     clipboard: Clipboard = FakeClipboard(),
     block: DesktopComposeUiTest.() -> Unit,
-  ) = runDesktopComposeUiTest(width = showcase.widthDp, height = 900) {
+  ) = runDesktopComposeUiTest(width = showcase.widthDp, height = showcase.heightDp) {
     setContent {
       LemonadeCodeTheme {
         CompositionLocalProvider(LocalClipboard provides clipboard) {
@@ -158,7 +166,7 @@ class WorkspaceContentUiTest {
       expect(WorkspaceEvent.ToggleDiffBasePicker) { onNodeWithText("main").performClick() }
     }
     show(WorkspaceShowcase.CommentOnDiff, edit = { model -> model.withBasePickerOpen() }) {
-      onNodeWithText("COMPARE WITH").assertExists()
+      onNodeWithText("Compare working tree with").assertExists()
       expect(WorkspaceEvent.CompareWith("release/2024.11")) { onNodeWithText("release/2024.11").performClick() }
     }
   }
@@ -225,45 +233,153 @@ class WorkspaceContentUiTest {
   }
 
   @Test
-  fun `settings change the theme and keep awake`() = show(WorkspaceShowcase.SettingsOpen) {
-    onNodeWithText("Appearance").assertExists()
+  fun `the settings list opens each item on its own page`() = show(WorkspaceShowcase.SettingsList) {
+    onNodeWithText("1.9.0 available").assertExists()
+    expect(WorkspaceEvent.OpenSettingsPage(SettingsPage.Appearance)) { onNodeWithText("Appearance").performClick() }
+    expect(WorkspaceEvent.OpenSettingsPage(SettingsPage.Language)) { onNodeWithText("Language").performClick() }
+    expect(WorkspaceEvent.OpenSettingsPage(SettingsPage.KeepAwake)) { onNodeWithText("Keep awake while sessions work").performClick() }
+    expect(WorkspaceEvent.OpenSettingsPage(SettingsPage.Plugins)) { onNodeWithText("Plugins").performClick() }
+    expect(WorkspaceEvent.OpenSettingsPage(SettingsPage.Updates)) { onNodeWithText("Updates").performClick() }
+  }
+
+  @Test
+  fun `a settings page goes back to the list`() = show(WorkspaceShowcase.SettingsPlugins) {
+    expect(WorkspaceEvent.SettingsBack) { onNodeWithContentDescription("Back").performClick() }
+  }
+
+  @Test
+  fun `the appearance page changes the theme`() = show(WorkspaceShowcase.SettingsList, edit = { it.copy(settings = it.settings.copy(page = SettingsPage.Appearance)) }) {
     expect(WorkspaceEvent.SetTheme(ThemeOption.Light)) { onNodeWithText("Light").performClick() }
+  }
+
+  @Test
+  fun `the keep awake page turns it off`() = show(WorkspaceShowcase.SettingsOpen, edit = { it.copy(settings = it.settings.copy(page = SettingsPage.KeepAwake)) }) {
     expect(WorkspaceEvent.SetKeepAwake(false)) { onNode(isToggleable()).performClick() }
   }
 
   @Test
-  fun `the Update button opens its panel`() = show(
-    WorkspaceShowcase.UpdateAvailable,
-    edit = { model -> model.copy(topBar = model.topBar.copy(update = model.topBar.update?.copy(open = false, status = UpdateStatusModel.Ready))) },
+  fun `the language page lists each language in its own name`() = show(
+    WorkspaceShowcase.SettingsLanguage,
+    edit = { it.copy(settings = it.settings.copy(language = LanguageOption.System)) },
   ) {
-    expect(WorkspaceEvent.ToggleUpdate) { onNodeWithText("Update").performClick() }
+    onNodeWithText("Match system").assertExists()
+    onNodeWithText("Deutsch").assertExists()
+    expect(WorkspaceEvent.SetLanguage(LanguageOption.French)) { onNodeWithText("Français").performClick() }
   }
 
   @Test
-  fun `the update panel installs the new version`() = show(
-    WorkspaceShowcase.UpdateAvailable,
-    edit = { model -> model.copy(topBar = model.topBar.copy(update = model.topBar.update?.copy(status = UpdateStatusModel.Ready))) },
-  ) {
-    onNodeWithText("Lemonade Code 1.3.0 is ready to install. You have 1.2.0.").assertExists()
-    expect(WorkspaceEvent.InstallUpdate) { onNodeWithText("Update and restart").performClick() }
+  fun `the plugins page turns Mobile off and opens the devices`() = show(WorkspaceShowcase.SettingsPlugins) {
+    onNodeWithText("2 Android · 2 iOS connected").assertExists()
+    expect(WorkspaceEvent.SetMobilePlugin(false)) { onNode(isToggleable()).performClick() }
+    expect(WorkspaceEvent.OpenDevices) { onNodeWithText("Open devices").performClick() }
   }
 
   @Test
-  fun `while the update downloads, it can't be started twice`() = show(WorkspaceShowcase.UpdateAvailable) {
-    onNodeWithText("Downloading… 42%").assertExists()
-    onNodeWithText("Update and restart").assertIsNotEnabled()
+  fun `the updates page installs the new version`() = show(WorkspaceShowcase.SettingsUpdates) {
+    onNodeWithText("Version 1.9.0 is available").assertExists()
+    onNodeWithText("What’s new · 1.9.0").assertExists()
+    expect(WorkspaceEvent.InstallUpdate) { onNodeWithText("Update now").performClick() }
+  }
+
+  @Test
+  fun `once downloaded, the updates page restarts into it`() = show(
+    WorkspaceShowcase.SettingsUpdates,
+    edit = { it.copy(settings = it.settings.copy(updates = it.settings.updates.copy(phase = UpdatePhase.Downloaded))) },
+  ) {
+    expect(WorkspaceEvent.RestartToUpdate) { onNodeWithText("Restart now").performClick() }
+  }
+
+  @Test
+  fun `while the update downloads, it can't be started twice`() = show(
+    WorkspaceShowcase.SettingsUpdates,
+    edit = { it.copy(settings = it.settings.copy(updates = it.settings.updates.copy(phase = UpdatePhase.Downloading, progress = 0.42f))) },
+  ) {
+    onNodeWithText("Downloading…").assertIsNotEnabled()
   }
 
   @Test
   fun `a failed update says why and offers to try again`() = show(
-    WorkspaceShowcase.UpdateAvailable,
+    WorkspaceShowcase.SettingsUpdates,
     edit = { model ->
-      val failed = UpdateStatusModel.Failed(Res.string.update_failed_download.asLemonadeCodeString())
-      model.copy(topBar = model.topBar.copy(update = model.topBar.update?.copy(status = failed)))
+      val failed = model.settings.updates.copy(phase = UpdatePhase.Failed, status = Res.string.update_failed_download.asLemonadeCodeString())
+      model.copy(settings = model.settings.copy(updates = failed))
     },
   ) {
     onNodeWithText("Couldn’t download the update. Check your connection and try again.").assertExists()
     expect(WorkspaceEvent.InstallUpdate) { onNodeWithText("Try again").performClick() }
+  }
+
+  @Test
+  fun `the gear carries a dot while an update waits, and the phone button opens the devices`() = show(WorkspaceShowcase.DisplayMain) {
+    expect(WorkspaceEvent.ToggleDevices) { onNodeWithContentDescription("Devices · open in a separate window").performClick() }
+  }
+
+  @Test
+  fun `the device list opens a device and starts pairing`() = show(WorkspaceShowcase.DeviceList) {
+    onNodeWithText("4 connected").assertExists()
+    expect(WorkspaceEvent.SelectDevice(ShowcaseDevicesIds.Pixel)) { onNodeWithText("Pixel 8").performClick() }
+    expect(WorkspaceEvent.StartPairing) { onNodeWithText("Pair a device").performClick() }
+    expect(WorkspaceEvent.MoveDevices(DevicesWindow.Separate)) { onNodeWithContentDescription("Open in a separate window").performClick() }
+    expect(WorkspaceEvent.CloseDevices) { onNodeWithContentDescription("Close devices").performClick() }
+  }
+
+  @Test
+  fun `a device's screen and logs raise their events`() = show(WorkspaceShowcase.DeviceSideBySide) {
+    expect(WorkspaceEvent.PressDeviceHome) { onNodeWithContentDescription("Home").performClick() }
+    expect(WorkspaceEvent.ScreenshotToSession) { onNodeWithContentDescription("Screenshot to session").performClick() }
+    expect(WorkspaceEvent.ToggleDeviceKeyboard) { onNodeWithContentDescription("Type from this keyboard").performClick() }
+    expect(WorkspaceEvent.SetLogFilter(LogFilter.Errors)) { onNodeWithText("Errors").performClick() }
+    expect(WorkspaceEvent.ToggleLogSearch) { onNodeWithContentDescription("Filter lines").performClick() }
+    expect(WorkspaceEvent.ToggleLogsPaused) { onNodeWithText("Live").performClick() }
+    expect(WorkspaceEvent.SendLogErrors) { onNodeWithText("Send 2 errors to claude").performClick() }
+    expect(WorkspaceEvent.SetDevicesLayout(DevicesLayoutOption.Tabs)) { onNodeWithContentDescription("Show screen and logs as tabs").performClick() }
+    // The header's back arrow comes before the phone's own Back button.
+    expect(WorkspaceEvent.DevicesBack) { onAllNodesWithContentDescription("Back")[0].performClick() }
+  }
+
+  @Test
+  fun `in tabs, the device shows one pane and switches between them`() = show(WorkspaceShowcase.DeviceTabs) {
+    onNodeWithText("idevicesyslog · all processes").assertExists()
+    expect(WorkspaceEvent.SetDeviceTab(DeviceTab.Screen)) { onNodeWithText("Screen").performClick() }
+  }
+
+  @Test
+  fun `pairing asks one thing at a time`() {
+    show(WorkspaceShowcase.PairPlatform) {
+      onNodeWithText("Step 1 of 3").assertExists()
+      expect(WorkspaceEvent.ChoosePairingPlatform(MobilePlatformModel.Android)) { onNodeWithText("Android").performClick() }
+    }
+    show(WorkspaceShowcase.PairMethod) {
+      onNodeWithText("1 found with wireless debugging on").assertExists()
+      expect(WorkspaceEvent.ChoosePairingMethod(PairingMethod.PairingCode)) { onNodeWithText("Enter a pairing code").performClick() }
+    }
+    show(WorkspaceShowcase.PairCode) {
+      expect(WorkspaceEvent.PairWithCode) { onNodeWithText("Pair").performClick() }
+    }
+    show(WorkspaceShowcase.Paired) {
+      onNodeWithText("Pixel 7a is connected").assertExists()
+      expect(WorkspaceEvent.OpenPairedDevice) { onNodeWithText("Open Pixel 7a").performClick() }
+      expect(WorkspaceEvent.StartPairing) { onNodeWithText("Pair another device").performClick() }
+    }
+  }
+
+  @Test
+  fun `the base picker finds a branch by name`() = show(WorkspaceShowcase.DiffBasePicker) {
+    onNodeWithText("Default branch · updated 2 h ago").assertExists()
+    onNodeWithText("HEAD").assertExists()
+    onNode(hasSetTextAction()).performTextReplacement("auth")
+    waitForIdle()
+    onNodeWithText("main").assertDoesNotExist()
+    expect(WorkspaceEvent.CompareWith("feat/auth-tokens")) { onNodeWithText("feat/auth-tokens").performClick() }
+    onNode(hasSetTextAction()).performTextReplacement("nothing-like-it")
+    waitForIdle()
+    onNodeWithText("No branch matches that name.").assertExists()
+  }
+
+  @Test
+  fun `the changed files jump to a file and can be hidden`() = show(WorkspaceShowcase.DiffFileList) {
+    expect(WorkspaceEvent.RevealFile(ShowcaseFixtures.path("cfg"))) { onNodeWithText("config.ts").performClick() }
+    expect(WorkspaceEvent.ShowFileList(false)) { onNodeWithContentDescription("Hide changed files").performClick() }
   }
 
   @Test
@@ -439,4 +555,9 @@ class WorkspaceContentUiTest {
 
     override val nativeClipboard: java.awt.datatransfer.Clipboard = java.awt.datatransfer.Clipboard("test")
   }
+}
+
+/** The serials of the showcase's devices, as the panel raises them. */
+private object ShowcaseDevicesIds {
+  const val Pixel = "38021FDH2000AB"
 }

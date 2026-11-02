@@ -128,6 +128,7 @@ private data class GitHubRelease(
   val prerelease: Boolean = false,
   @SerialName("html_url") val pageUrl: String = "",
   val assets: List<GitHubAsset> = emptyList(),
+  val body: String? = null,
 ) {
   fun toDomain(): PublishedRelease = PublishedRelease(
     tag = tag,
@@ -135,6 +136,7 @@ private data class GitHubRelease(
     prerelease = prerelease,
     pageUrl = pageUrl,
     assets = assets.map { ReleaseAsset(name = it.name, url = it.url, size = it.size, complete = it.state == "uploaded") },
+    body = body,
   )
 }
 

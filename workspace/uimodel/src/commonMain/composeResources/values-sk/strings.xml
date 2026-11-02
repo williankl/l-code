@@ -16,25 +16,110 @@
   <plurals name="keep_awake_active">
     <item quantity="one">Teraz bez spánku · pracuje %1$d relácia</item>
     <item quantity="few">Teraz bez spánku · pracujú %1$d relácie</item>
+    <item quantity="many">Teraz bez spánku · pracuje %1$d relácií</item>
     <item quantity="other">Teraz bez spánku · pracuje %1$d relácií</item>
   </plurals>
   <string name="keep_awake_idle">Zapnuté · žiadna relácia nepracuje, spánok je povolený</string>
 
-  <!-- Update -->
-  <string name="update_action">Aktualizovať</string>
-  <string name="update_action_busy">Aktualizuje sa…</string>
-  <string name="update_title">Je dostupná aktualizácia</string>
-  <string name="update_detail">Lemonade Code %1$s je pripravený na inštaláciu. Máte verziu %2$s.</string>
-  <string name="update_restart_note">Lemonade Code sa na dokončenie reštartuje. Relácie sa vrátia, ale programy, ktoré v nich bežia, sa zastavia.</string>
-  <string name="update_release_notes">Čo je nové</string>
-  <string name="update_install">Aktualizovať a reštartovať</string>
+  <string name="settings_back">Späť</string>
+  <string name="settings_language">Jazyk</string>
+  <string name="settings_plugins">Doplnky</string>
+  <string name="settings_updates">Aktualizácie</string>
+  <string name="value_on">Zapnuté</string>
+  <string name="value_off">Vypnuté</string>
+
+  <!-- Settings › Language. Each language's own name is shown as is; these are the names in this language. -->
+  <string name="language_match_system">Podľa systému</string>
+  <string name="language_english">Angličtina</string>
+  <string name="language_german">Nemčina</string>
+  <string name="language_spanish">Španielčina</string>
+  <string name="language_french">Francúzština</string>
+  <string name="language_portuguese">Portugalčina</string>
+  <string name="language_slovak">Slovenčina</string>
+
+  <!-- Settings › Plugins -->
+  <string name="plugins_mobile">Mobilné zariadenia</string>
+  <string name="plugins_mobile_description">Zrkadlí obrazovky Androidu a iOS, páruje zariadenia cez Wi‑Fi a číta ich logy.</string>
+  <string name="plugins_value_mobile">Mobilné zapnuté</string>
+  <string name="plugins_value_none">Žiadne zapnuté</string>
+  <string name="plugins_mobile_status">Pripojené: %1$d Android · %2$d iOS</string>
+  <string name="plugins_open_devices">Otvoriť zariadenia</string>
+
+  <!-- Settings › Updates -->
+  <string name="updates_version">Lemonade Code %1$s</string>
+  <string name="updates_version_development">Lemonade Code · vývojová zostava</string>
+  <string name="updates_up_to_date">Aktuálne · skontrolované %1$s</string>
+  <string name="updates_not_checked">Zatiaľ neskontrolované</string>
+  <string name="updates_checking">Hľadajú sa aktualizácie…</string>
+  <string name="updates_available">Je dostupná verzia %1$s</string>
+  <string name="updates_downloading">Sťahuje sa · %1$s</string>
+  <string name="updates_downloading_unknown">Sťahuje sa…</string>
+  <string name="updates_downloaded">Na dokončenie aktualizácie reštartujte</string>
+  <string name="updates_restarting">Reštartuje sa…</string>
+  <string name="updates_homebrew">Aktualizácie zabezpečuje Homebrew: brew upgrade --cask lemonade-code</string>
+  <string name="updates_snap">Aktualizácie zabezpečuje Snap Store.</string>
+  <string name="updates_development">Zostavené zo zdrojového kódu, preto sa samo neaktualizuje.</string>
+  <string name="updates_unsupported">Pre tento systém nie sú dostupné žiadne aktualizácie.</string>
+  <string name="updates_summary_up_to_date">Aktuálne</string>
+  <string name="updates_summary_available">Dostupná: %1$s</string>
+  <string name="updates_summary_homebrew">Homebrew</string>
+  <string name="updates_summary_snap">Snap Store</string>
+  <string name="updates_whats_new">Čo je nové · %1$s</string>
+  <string name="update_release_notes">Poznámky k vydaniu</string>
+  <string name="updates_check">Vyhľadať aktualizácie</string>
+  <string name="updates_check_busy">Kontroluje sa…</string>
+  <string name="updates_install">Aktualizovať teraz</string>
+  <string name="updates_install_busy">Sťahuje sa…</string>
+  <string name="updates_restart">Reštartovať teraz</string>
+  <string name="update_restart_note">Relácie sa po reštarte vrátia, ale programy, ktoré v nich bežia, sa zastavia.</string>
   <string name="update_retry">Skúsiť znova</string>
-  <string name="update_downloading">Sťahuje sa… %1$s</string>
-  <string name="update_downloading_unknown">Sťahuje sa…</string>
-  <string name="update_restarting">Reštartuje sa…</string>
   <string name="update_failed_download">Aktualizáciu sa nepodarilo stiahnuť. Skontrolujte pripojenie a skúste to znova.</string>
   <string name="update_failed_checksum">Stiahnutý súbor nezodpovedal kontrolnému súčtu vydania, preto bol zahodený. Skúste to znova.</string>
   <string name="update_failed_install">Aktualizáciu sa tu nepodarilo nainštalovať. Stiahnite si ju zo stránky vydania.</string>
+
+  <!-- How long ago something happened -->
+  <string name="time_just_now">práve teraz</string>
+  <plurals name="time_minutes_ago">
+    <item quantity="one">pred %1$d min</item>
+    <item quantity="few">pred %1$d min</item>
+    <item quantity="many">pred %1$d min</item>
+    <item quantity="other">pred %1$d min</item>
+  </plurals>
+  <plurals name="time_hours_ago">
+    <item quantity="one">pred %1$d h</item>
+    <item quantity="few">pred %1$d h</item>
+    <item quantity="many">pred %1$d h</item>
+    <item quantity="other">pred %1$d h</item>
+  </plurals>
+  <string name="time_yesterday">včera</string>
+  <plurals name="time_days_ago">
+    <item quantity="one">pred %1$d dňom</item>
+    <item quantity="few">pred %1$d dňami</item>
+    <item quantity="many">pred %1$d dňami</item>
+    <item quantity="other">pred %1$d dňami</item>
+  </plurals>
+  <plurals name="time_weeks_ago">
+    <item quantity="one">pred %1$d týždňom</item>
+    <item quantity="few">pred %1$d týždňami</item>
+    <item quantity="many">pred %1$d týždňami</item>
+    <item quantity="other">pred %1$d týždňami</item>
+  </plurals>
+  <plurals name="time_months_ago">
+    <item quantity="one">pred %1$d mesiacom</item>
+    <item quantity="few">pred %1$d mesiacmi</item>
+    <item quantity="many">pred %1$d mesiacmi</item>
+    <item quantity="other">pred %1$d mesiacmi</item>
+  </plurals>
+  <plurals name="time_years_ago">
+    <item quantity="one">pred %1$d rokom</item>
+    <item quantity="few">pred %1$d rokmi</item>
+    <item quantity="many">pred %1$d rokmi</item>
+    <item quantity="other">pred %1$d rokmi</item>
+  </plurals>
+
+  <!-- Two or three details in a row, e.g. "USB · Android 15" -->
+  <string name="detail_two">%1$s · %2$s</string>
+  <string name="detail_three">%1$s · %2$s · %3$s</string>
 
   <!-- Sessions -->
   <string name="sessions_title">Relácie</string>
@@ -48,11 +133,13 @@
   <plurals name="fold_show">
     <item quantity="one">Zobraziť %1$d podreláciu</item>
     <item quantity="few">Zobraziť %1$d podrelácie</item>
+    <item quantity="many">Zobraziť %1$d podrelácií</item>
     <item quantity="other">Zobraziť %1$d podrelácií</item>
   </plurals>
   <plurals name="fold_hide">
     <item quantity="one">Skryť %1$d podreláciu</item>
     <item quantity="few">Skryť %1$d podrelácie</item>
+    <item quantity="many">Skryť %1$d podrelácií</item>
     <item quantity="other">Skryť %1$d podrelácií</item>
   </plurals>
   <!-- Session row subtitle: the agent (or shell), then the branch (or folder) -->
@@ -105,17 +192,33 @@
   <!-- Diff review -->
   <string name="diff_changes">Zmeny</string>
   <string name="diff_vs">oproti</string>
-  <string name="diff_compare_with">Porovnať s</string>
+  <string name="diff_compare_with">Porovnať pracovný strom s</string>
+  <string name="diff_compare_aria">Porovnáva sa s %1$s. Zmeniť vetvu</string>
+  <string name="diff_find_branch">Nájsť vetvu</string>
+  <string name="diff_no_branch_match">Tomuto názvu nezodpovedá žiadna vetva.</string>
+  <string name="diff_branch_default">Predvolená vetva · aktualizovaná %1$s</string>
+  <string name="diff_branch_head">Posledný commit · iba necommitnuté zmeny</string>
+  <string name="diff_files">Zmenené súbory</string>
+  <string name="diff_files_show">Zobraziť zmenené súbory</string>
+  <string name="diff_files_hide">Skryť zmenené súbory</string>
   <string name="diff_refresh">Obnoviť diff</string>
   <string name="diff_source_working_tree">pracovný strom</string>
   <plurals name="diff_summary_uncommitted">
     <item quantity="one">vrátane necommitnutých zmien · %1$d súbor</item>
     <item quantity="few">vrátane necommitnutých zmien · %1$d súbory</item>
+    <item quantity="many">vrátane necommitnutých zmien · %1$d súborov</item>
     <item quantity="other">vrátane necommitnutých zmien · %1$d súborov</item>
+  </plurals>
+  <plurals name="diff_summary_head">
+    <item quantity="one">iba necommitnuté zmeny · %1$d súbor</item>
+    <item quantity="few">iba necommitnuté zmeny · %1$d súbory</item>
+    <item quantity="many">iba necommitnuté zmeny · %1$d súborov</item>
+    <item quantity="other">iba necommitnuté zmeny · %1$d súborov</item>
   </plurals>
   <plurals name="diff_summary">
     <item quantity="one">%1$d súbor</item>
     <item quantity="few">%1$d súbory</item>
+    <item quantity="many">%1$d súborov</item>
     <item quantity="other">%1$d súborov</item>
   </plurals>
   <string name="file_added">Pridaný</string>
@@ -131,16 +234,19 @@
   <plurals name="file_comment_count">
     <item quantity="one">%1$d komentár</item>
     <item quantity="few">%1$d komentáre</item>
+    <item quantity="many">%1$d komentárov</item>
     <item quantity="other">%1$d komentárov</item>
   </plurals>
   <plurals name="hunk_show_hidden">
     <item quantity="one">Zobraziť %1$d skrytý riadok</item>
     <item quantity="few">Zobraziť %1$d skryté riadky</item>
+    <item quantity="many">Zobraziť %1$d skrytých riadkov</item>
     <item quantity="other">Zobraziť %1$d skrytých riadkov</item>
   </plurals>
   <plurals name="file_unchanged_below">
     <item quantity="one">%1$d nezmenený riadok nižšie</item>
     <item quantity="few">%1$d nezmenené riadky nižšie</item>
+    <item quantity="many">%1$d nezmenených riadkov nižšie</item>
     <item quantity="other">%1$d nezmenených riadkov nižšie</item>
   </plurals>
   <string name="comment_on_line">Komentár k %1$s</string>
@@ -168,16 +274,164 @@
   <plurals name="send_unsent">
     <item quantity="one">%1$d neodoslaný komentár</item>
     <item quantity="few">%1$d neodoslané komentáre</item>
+    <item quantity="many">%1$d neodoslaných komentárov</item>
     <item quantity="other">%1$d neodoslaných komentárov</item>
   </plurals>
   <plurals name="send_across_files">
     <item quantity="one">v %1$d súbore</item>
     <item quantity="few">v %1$d súboroch</item>
+    <item quantity="many">v %1$d súboroch</item>
     <item quantity="other">v %1$d súboroch</item>
   </plurals>
   <string name="send_all_delivered">Všetky komentáre sú doručené</string>
   <string name="send_no_comments">Zatiaľ žiadne komentáre</string>
   <string name="send_hint">Komentujte kliknutím na + vedľa riadka alebo potiahnutím cez viac riadkov</string>
+
+  <!-- Devices (the Mobile plugin) -->
+  <string name="devices_title">Zariadenia</string>
+  <string name="devices_button">Zariadenia</string>
+  <string name="devices_button_hide">Skryť zariadenia</string>
+  <string name="devices_button_separate">Zariadenia · otvorené v samostatnom okne</string>
+  <plurals name="devices_connected">
+    <item quantity="one">%1$d pripojené</item>
+    <item quantity="few">%1$d pripojené</item>
+    <item quantity="many">%1$d pripojených</item>
+    <item quantity="other">%1$d pripojených</item>
+  </plurals>
+  <string name="devices_android">Android</string>
+  <string name="devices_ios">iOS</string>
+  <string name="devices_none">Žiadne pripojené</string>
+  <string name="devices_needs_adb">Ak chcete vidieť zariadenia s Androidom, nainštalujte nástroje platformy Android (adb).</string>
+  <string name="devices_needs_libimobiledevice">Ak chcete vidieť iPhony a iPady, nainštalujte libimobiledevice.</string>
+  <string name="devices_pair">Spárovať zariadenie</string>
+  <string name="devices_close">Zavrieť zariadenia</string>
+  <string name="devices_separate">Otvoriť v samostatnom okne</string>
+  <string name="devices_dock">Vrátiť do hlavného okna</string>
+  <string name="devices_layout_tabs">Zobraziť obrazovku a logy na kartách</string>
+  <string name="devices_layout_split">Zobraziť obrazovku a logy vedľa seba</string>
+  <string name="devices_disconnect">Odpojiť %1$s</string>
+  <string name="devices_disconnected">Odpojené: %1$s</string>
+  <string name="device_usb">USB</string>
+  <string name="device_wifi">Wi‑Fi</string>
+  <string name="device_android_version">Android %1$s</string>
+  <string name="device_ios_version">iOS %1$s</string>
+  <string name="device_allow_debugging">Povoľte v telefóne ladenie cez USB</string>
+  <string name="device_tap_trust">Klepnite v zariadení na „Dôverovať“</string>
+  <string name="device_offline">Neodpovedá</string>
+  <string name="device_tab_screen">Obrazovka</string>
+  <string name="device_tab_logs">Logy</string>
+
+  <!-- Devices › the mirrored screen -->
+  <string name="mirror_back">Späť</string>
+  <string name="mirror_home">Domov</string>
+  <string name="mirror_rotate">Otočiť</string>
+  <string name="mirror_screenshot">Snímka obrazovky do relácie</string>
+  <string name="mirror_keyboard">Písať z tejto klávesnice</string>
+  <string name="mirror_size">%1$d × %2$d</string>
+  <string name="mirror_fps">%1$d fps</string>
+  <string name="mirror_clicks">kliknutia idú do zariadenia</string>
+  <string name="mirror_keys">klávesnica ide do zariadenia</string>
+  <string name="mirror_view_only">v iOS iba na zobrazenie</string>
+  <string name="mirror_loading">Pripája sa k obrazovke…</string>
+  <string name="screen_cable_only_title">Na zobrazenie obrazovky pripojte kábel</string>
+  <string name="screen_cable_only_detail">iOS zobrazuje obrazovku iba cez kábel. Logy fungujú ďalej cez Wi‑Fi.</string>
+  <string name="screen_not_supported_title">Túto obrazovku nemožno zobraziť</string>
+  <string name="screen_not_supported_detail">libimobiledevice toto zariadenie nedokáže zachytiť. Možno je potrebné pripojiť jeho vývojársky obraz disku.</string>
+  <string name="screen_failed_title">Obrazovku sa nepodarilo načítať</string>
+  <string name="screen_failed_detail">Skúša sa znova…</string>
+  <string name="screenshot_attached">Snímka obrazovky priložená k relácii %1$s</string>
+  <string name="screenshot_failed">Snímku obrazovky sa nepodarilo vytvoriť: %1$s</string>
+
+  <!-- Devices › logs -->
+  <string name="logs_all">Všetko</string>
+  <string name="logs_warnings">Upozornenia</string>
+  <string name="logs_errors">Chyby</string>
+  <string name="logs_filter">Filtrovať riadky</string>
+  <string name="logs_filter_placeholder">Filtrovať podľa značky alebo textu</string>
+  <string name="logs_clear">Vymazať logy</string>
+  <string name="logs_live">Naživo</string>
+  <string name="logs_paused">Pozastavené</string>
+  <string name="logs_pause">Pozastaviť stream</string>
+  <string name="logs_resume">Pokračovať v streame</string>
+  <string name="logs_cleared">Vymazané. Nové riadky sa zobrazia, keď prídu.</string>
+  <string name="logs_no_match">Žiadne riadky nezodpovedajú.</string>
+  <string name="logs_waiting">Čaká sa na riadky…</string>
+  <plurals name="logs_send_errors">
+    <item quantity="one">Odoslať %1$d chybu do %2$s</item>
+    <item quantity="few">Odoslať %1$d chyby do %2$s</item>
+    <item quantity="many">Odoslať %1$d chýb do %2$s</item>
+    <item quantity="other">Odoslať %1$d chýb do %2$s</item>
+  </plurals>
+  <plurals name="logs_errors_sent">
+    <item quantity="one">%1$d chybový riadok odoslaný do %2$s</item>
+    <item quantity="few">%1$d chybové riadky odoslané do %2$s</item>
+    <item quantity="many">%1$d chybových riadkov odoslaných do %2$s</item>
+    <item quantity="other">%1$d chybových riadkov odoslaných do %2$s</item>
+  </plurals>
+
+  <!-- Devices › pairing -->
+  <string name="pair_title">Spárovať zariadenie</string>
+  <string name="pair_step">Krok %1$d z 3</string>
+  <string name="pair_step_platform">Krok %1$d z 3 · %2$s</string>
+  <string name="pair_what">Čo chcete spárovať?</string>
+  <string name="pair_android">Android</string>
+  <string name="pair_android_note">Páruje sa cez adb. Wi‑Fi vyžaduje Android 11 alebo novší.</string>
+  <string name="pair_ios">iPhone alebo iPad</string>
+  <string name="pair_ios_note">Raz cez kábel nastaví dôveru k tomuto počítaču pomocou libimobiledevice.</string>
+  <string name="pair_how">Ako chcete párovať?</string>
+  <string name="pair_qr">Naskenovať QR kód</string>
+  <string name="pair_qr_note">Najrýchlejšie. Telefón naskenuje kód zobrazený tu.</string>
+  <string name="pair_code">Zadať párovací kód</string>
+  <string name="pair_code_note">Zadajte adresu a 6‑miestny kód, ktorý zobrazuje telefón.</string>
+  <string name="pair_nearby">Vybrať z tejto siete</string>
+  <plurals name="pair_nearby_found_android">
+    <item quantity="one">%1$d nájdené so zapnutým bezdrôtovým ladením</item>
+    <item quantity="few">%1$d nájdené so zapnutým bezdrôtovým ladením</item>
+    <item quantity="many">%1$d nájdených so zapnutým bezdrôtovým ladením</item>
+    <item quantity="other">%1$d nájdených so zapnutým bezdrôtovým ladením</item>
+  </plurals>
+  <plurals name="pair_nearby_found_ios">
+    <item quantity="one">%1$d nájdené dôveryhodné zariadenie</item>
+    <item quantity="few">%1$d nájdené dôveryhodné zariadenia</item>
+    <item quantity="many">%1$d nájdených dôveryhodných zariadení</item>
+    <item quantity="other">%1$d nájdených dôveryhodných zariadení</item>
+  </plurals>
+  <string name="pair_nearby_none">Zatiaľ sa nič nenašlo</string>
+  <string name="pair_cable">Raz pripojiť káblom</string>
+  <string name="pair_cable_note">Klepnite v zariadení na „Dôverovať“. Potom sa bude môcť pripájať aj cez Wi‑Fi.</string>
+  <string name="pair_qr_title">Naskenujte telefónom</string>
+  <string name="pair_qr_text">V telefóne otvorte Pre vývojárov › Bezdrôtové ladenie › Spárovať zariadenie QR kódom.</string>
+  <string name="pair_qr_label">Párovací QR kód</string>
+  <string name="pair_qr_waiting">Čaká sa na naskenovanie</string>
+  <string name="pair_busy">Páruje sa…</string>
+  <string name="pair_code_title">Zadajte, čo zobrazuje telefón</string>
+  <string name="pair_code_text">Bezdrôtové ladenie › Spárovať zariadenie párovacím kódom.</string>
+  <string name="pair_code_address">IP adresa a port</string>
+  <string name="pair_code_address_hint">192.168.1.57:37099</string>
+  <string name="pair_code_code">Párovací kód</string>
+  <string name="pair_code_code_hint">6 číslic</string>
+  <string name="pair_action">Spárovať</string>
+  <string name="pair_connect">Pripojiť</string>
+  <string name="pair_nearby_title">Nájdené v tejto sieti</string>
+  <string name="pair_nearby_empty_android">Nič nablízku. Zapnite v telefóne Bezdrôtové ladenie.</string>
+  <string name="pair_nearby_empty_ios">Nič nablízku. Odomknite zariadenie a nechajte ho v tejto sieti.</string>
+  <string name="nearby_connectable">%1$s · bezdrôtové ladenie zapnuté</string>
+  <string name="nearby_awaiting_code">%1$s · zobrazuje párovací kód</string>
+  <string name="nearby_trusted">Už dôveryhodné · v tejto sieti</string>
+  <string name="pair_cable_title">Pripojte zariadenie</string>
+  <string name="pair_cable_text">Odomknite ho a klepnite na „Dôverovať“. Potom sa bude môcť pripojiť cez Wi‑Fi, keď bude nablízku.</string>
+  <string name="pair_cable_waiting">Čaká sa na zariadenie</string>
+  <string name="pair_cable_trust">Čaká sa na „Dôverovať“ v zariadení %1$s</string>
+  <string name="paired_title">Zariadenie %1$s je pripojené</string>
+  <string name="paired_open">Otvoriť %1$s</string>
+  <string name="paired_another">Spárovať ďalšie zariadenie</string>
+  <string name="pair_error_wrong_code">Kód nefungoval. Skontrolujte ho a skúste to znova; platnosť kódov vyprší po minúte.</string>
+  <string name="pair_error_not_paired">Toto zariadenie nie je spárované s týmto počítačom. Najprv ho spárujte pomocou kódu alebo QR kódu.</string>
+  <string name="pair_error_discovery">Táto verzia adb nevie nájsť zariadenia v sieti. Aktualizujte nástroje platformy Android.</string>
+  <string name="pair_error_timed_out">Chvíľu sa nič nedialo. Skúste to znova.</string>
+  <string name="pair_error_gone">Zariadenie už nie je pripojené.</string>
+  <string name="pair_error_adb_missing">adb nie je nainštalované. Nainštalujte nástroje platformy Android.</string>
+  <string name="pair_error_libimobiledevice_missing">libimobiledevice nie je nainštalované.</string>
 
   <!-- Terminal transcript -->
   <string name="terminal_running">beží…</string>
@@ -207,6 +461,7 @@
   <plurals name="preview_frames">
     <item quantity="one">%1$s snímka</item>
     <item quantity="few">%1$s snímky</item>
+    <item quantity="many">%1$s snímok</item>
     <item quantity="other">%1$s snímok</item>
   </plurals>
   <string name="preview_model_hint">Potiahnutím otočíte · ⌘ alebo Ctrl + posúvanie mení priblíženie · dvojklikom obnovíte</string>
@@ -226,11 +481,13 @@
   <plurals name="preview_model_triangles">
     <item quantity="one">%1$s trojuholník</item>
     <item quantity="few">%1$s trojuholníky</item>
+    <item quantity="many">%1$s trojuholníkov</item>
     <item quantity="other">%1$s trojuholníkov</item>
   </plurals>
   <plurals name="preview_table_more_rows">
     <item quantity="one">Ďalší %1$d riadok sa nezobrazuje</item>
     <item quantity="few">Ďalšie %1$d riadky sa nezobrazujú</item>
+    <item quantity="many">Ďalších %1$d riadkov sa nezobrazuje</item>
     <item quantity="other">Ďalších %1$d riadkov sa nezobrazuje</item>
   </plurals>
 </resources>

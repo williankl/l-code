@@ -73,7 +73,7 @@ Start Claude Code, Codex, or any program you like. The sidebar shows what every 
 Switch to the **Diff** tab to see every change in that folder against `main`, or any branch you
 pick. New and uncommitted files are included, code is coloured, and the full file is one click away.
 
-<img src="docs/images/review-diff.png" width="100%" alt="The diff of src/server/app.ts showing the full file, with a comment under line 9">
+<img src="docs/images/review-diff.png" width="100%" alt="The diff of src/server/app.ts showing the full file, with a comment under line 9 and the changed files listed beside it">
 
 ### Comment like it's a pull request
 
@@ -140,9 +140,9 @@ Pick one, or follow your system. Both themes come straight from the Lemonade des
 
 <table>
 <tr>
-<td width="33%" valign="top"><img src="docs/images/touch-keep-awake.png" alt="Settings with Keep awake turned on"><br><b>Keep awake</b><br><sub>Your computer won't sleep or lock while an agent is working.</sub></td>
+<td width="33%" valign="top"><img src="docs/images/touch-keep-awake.png" alt="The settings list with Keep awake on, and the Keeping awake tag in the top bar"><br><b>Keep awake</b><br><sub>Your computer won't sleep or lock while an agent is working.</sub></td>
 <td width="33%" valign="top"><img src="docs/images/touch-session-menu.png" alt="The right-click menu of a session"><br><b>Right-click menu</b><br><sub>Rename a session, copy its folder, or branch off from it.</sub></td>
-<td width="33%" valign="top"><img src="docs/images/touch-update.png" alt="The update panel downloading a new version"><br><b>Updates itself</b><br><sub>One click to update, and your sessions come right back.</sub></td>
+<td width="33%" valign="top"><img src="docs/images/touch-update.png" alt="Settings › Updates offering a new version"><br><b>Updates itself</b><br><sub>Update from Settings, and your sessions come right back.</sub></td>
 </tr>
 <tr>
 <td width="33%" valign="top"><img src="docs/images/touch-narrow.png" alt="A narrow window with the sessions shown as a drawer"><br><b>Fits small windows</b><br><sub>On a narrow window the sidebar slides in as a drawer.</sub></td>
@@ -157,7 +157,10 @@ And a few more:
   last output on screen. Claude Code conversations pick up where they left off.
 - 🔗 **Clickable links.** Ctrl-click (or ⌘-click) any web address in the terminal to open it.
 - ⌨️ **Every keyboard works.** Accents, dead keys and input methods type just like anywhere else.
-- 🌍 **Speaks your language.** English, Portuguese and Slovak, following your system.
+- 📱 **Phones beside the code.** Turn on the Mobile plugin to see an Android or iOS screen next to
+  its logs, use the phone from the app, and hand its errors or a screenshot to the agent.
+- 🌍 **Speaks your language.** English, German, Spanish, French, Portuguese and Slovak. It follows
+  your system, or pick one in Settings.
 
 See everything in the **[feature guide](docs/FEATURES.md)**.
 

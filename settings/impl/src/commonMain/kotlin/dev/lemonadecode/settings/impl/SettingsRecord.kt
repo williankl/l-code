@@ -1,7 +1,9 @@
 package dev.lemonadecode.settings.impl
 
 import dev.lemonadecode.domain.session.SubSessionLocation
+import dev.lemonadecode.domain.settings.AppLanguage
 import dev.lemonadecode.domain.settings.AppSettings
+import dev.lemonadecode.domain.settings.DevicesLayout
 import dev.lemonadecode.domain.settings.ThemePreference
 import kotlinx.serialization.Serializable
 
@@ -13,6 +15,9 @@ internal data class SettingsRecord(
   val subSessionLocation: String? = null,
   val sidebarExpanded: Boolean? = null,
   val sidebarWidth: Int? = null,
+  val language: String? = null,
+  val mobilePlugin: Boolean? = null,
+  val devicesLayout: String? = null,
 )
 
 internal fun SettingsRecord.toDomain(): AppSettings {
@@ -23,6 +28,9 @@ internal fun SettingsRecord.toDomain(): AppSettings {
     subSessionLocation = SubSessionLocation.entries.firstOrNull { it.name == subSessionLocation } ?: defaults.subSessionLocation,
     sidebarExpanded = sidebarExpanded ?: defaults.sidebarExpanded,
     sidebarWidth = sidebarWidth?.takeIf { it > 0 } ?: defaults.sidebarWidth,
+    language = AppLanguage.entries.firstOrNull { it.name == language } ?: defaults.language,
+    mobilePlugin = mobilePlugin ?: defaults.mobilePlugin,
+    devicesLayout = DevicesLayout.entries.firstOrNull { it.name == devicesLayout } ?: defaults.devicesLayout,
   )
 }
 
@@ -32,4 +40,7 @@ internal fun AppSettings.toRecord(): SettingsRecord = SettingsRecord(
   subSessionLocation = subSessionLocation.name,
   sidebarExpanded = sidebarExpanded,
   sidebarWidth = sidebarWidth,
+  language = language.name,
+  mobilePlugin = mobilePlugin,
+  devicesLayout = devicesLayout.name,
 )

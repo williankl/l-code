@@ -9,6 +9,7 @@ import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlin.time.Clock
 
 /** The concurrency primitives every app graph needs, bound by the module that defines them. */
 @BindingContainer
@@ -27,4 +28,7 @@ public object ConcurrencyBindings {
   public fun provideApplicationScope(): CoroutineScope = CoroutineScope(
     SupervisorJob() + Dispatchers.Default + CoroutineExceptionHandler { _, error -> error.printStackTrace() },
   )
+
+  @Provides
+  public fun provideWallClock(): WallClock = WallClock { Clock.System.now().toEpochMilliseconds() }
 }

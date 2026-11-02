@@ -1,6 +1,7 @@
 package dev.lemonadecode.data.git.fake
 
 import dev.lemonadecode.data.git.GitBlob
+import dev.lemonadecode.data.git.GitBranchTip
 import dev.lemonadecode.data.git.GitCheckout
 import dev.lemonadecode.data.git.GitDataSource
 import dev.lemonadecode.data.git.GitError
@@ -11,6 +12,7 @@ public class FakeGitDataSource : GitDataSource {
   public var checkoutResult: LemonadeCodeResult<GitCheckout, GitError> = LemonadeCodeResult.failure(GitError.NotARepository)
   public var defaultBranchResult: LemonadeCodeResult<String, GitError> = LemonadeCodeResult.success("main")
   public var branchesResult: LemonadeCodeResult<List<String>, GitError> = LemonadeCodeResult.success(listOf("main"))
+  public var branchTipsResult: LemonadeCodeResult<Map<String, GitBranchTip>, GitError> = LemonadeCodeResult.success(emptyMap())
   public var diffResult: LemonadeCodeResult<String, GitError> = LemonadeCodeResult.success("")
   public var untrackedResult: LemonadeCodeResult<List<String>, GitError> = LemonadeCodeResult.success(emptyList())
   public var uncommittedResult: LemonadeCodeResult<Boolean, GitError> = LemonadeCodeResult.success(false)
@@ -34,6 +36,8 @@ public class FakeGitDataSource : GitDataSource {
   override suspend fun defaultBranch(repositoryRoot: String): LemonadeCodeResult<String, GitError> = defaultBranchResult
 
   override suspend fun branches(repositoryRoot: String): LemonadeCodeResult<List<String>, GitError> = branchesResult
+
+  override suspend fun branchTips(repositoryRoot: String): LemonadeCodeResult<Map<String, GitBranchTip>, GitError> = branchTipsResult
 
   override suspend fun diffAgainst(repositoryRoot: String, baseRef: String): LemonadeCodeResult<String, GitError> {
     diffCalls += repositoryRoot to baseRef

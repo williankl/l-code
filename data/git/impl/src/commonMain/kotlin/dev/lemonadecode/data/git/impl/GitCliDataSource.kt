@@ -1,6 +1,7 @@
 package dev.lemonadecode.data.git.impl
 
 import dev.lemonadecode.data.git.GitBlob
+import dev.lemonadecode.data.git.GitBranchTip
 import dev.lemonadecode.data.git.GitCheckout
 import dev.lemonadecode.data.git.GitDataSource
 import dev.lemonadecode.data.git.GitError
@@ -48,6 +49,10 @@ internal class GitCliDataSource(
   override suspend fun branches(repositoryRoot: String): LemonadeCodeResult<List<String>, GitError> = git(repositoryRoot, "for-each-ref", "--format=%(refname:short)", "refs/heads")
     .flatMap { it.requireSuccess() }
     .map { output -> output.stdout.lines().map { it.trim() }.filter { it.isNotEmpty() } }
+
+  override suspend fun branchTips(repositoryRoot: String): LemonadeCodeResult<Map<String, GitBranchTip>, GitError> = git(repositoryRoot, "for-each-ref", "--format=%(refname:short)%09%(committerdate:unix)%09%(authorname)", "refs/heads")
+    .flatMap { it.requireSuccess() }
+    .map { output -> parseBranchTips(output.stdout) }
 
   override suspend fun diffAgainst(repositoryRoot: String, baseRef: String): LemonadeCodeResult<String, GitError> = mergeBase(repositoryRoot, baseRef).flatMap { mergeBase ->
     git(
@@ -120,3 +125,12 @@ internal class GitCliDataSource(
     const val WholeFile = 1_000_000
   }
 }
+
+/** `for-each-ref` lines of name, commit time in seconds and author, split by tabs. */
+internal fun parseBranchTips(output: String): Map<String, GitBranchTip> = output.lineSequence()
+  .mapNotNull { line ->
+    val parts = line.trim().split('\t')
+    val seconds = parts.getOrNull(1)?.toLongOrNull() ?: return@mapNotNull null
+    parts[0] to GitBranchTip(committedAtMillis = seconds * 1000, author = parts.getOrNull(2).orEmpty())
+  }
+  .toMap()

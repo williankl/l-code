@@ -1,5 +1,10 @@
 package dev.lemonadecode.workspace.impl.showcase
 
+import dev.lemonadecode.domain.mobile.DeviceLogs
+import dev.lemonadecode.domain.mobile.DeviceScreen
+import dev.lemonadecode.domain.mobile.MobileDevice
+import dev.lemonadecode.domain.mobile.NearbyDevice
+import dev.lemonadecode.domain.review.BranchTip
 import dev.lemonadecode.domain.review.CommentStatus
 import dev.lemonadecode.domain.review.DiffState
 import dev.lemonadecode.domain.review.Review
@@ -11,14 +16,21 @@ import dev.lemonadecode.domain.session.SessionPlacement
 import dev.lemonadecode.domain.session.SessionStatus
 import dev.lemonadecode.domain.session.SubSessionLocation
 import dev.lemonadecode.domain.session.SubSessionPlan
+import dev.lemonadecode.domain.settings.AppLanguage
 import dev.lemonadecode.domain.settings.AppSettings
+import dev.lemonadecode.domain.settings.DevicesLayout
 import dev.lemonadecode.domain.settings.ThemePreference
+import dev.lemonadecode.domain.update.AppInstallation
 import dev.lemonadecode.domain.update.AppRelease
 import dev.lemonadecode.domain.update.AppVersion
-import dev.lemonadecode.domain.update.UpdateProgress
+import dev.lemonadecode.domain.update.UpdateChannel
+import dev.lemonadecode.domain.update.UpdateChecks
 import dev.lemonadecode.domain.update.UpdateState
 import dev.lemonadecode.workspace.impl.Composer
+import dev.lemonadecode.workspace.impl.DevicesStep
+import dev.lemonadecode.workspace.impl.DevicesViewState
 import dev.lemonadecode.workspace.impl.LineRange
+import dev.lemonadecode.workspace.impl.MobileInput
 import dev.lemonadecode.workspace.impl.NavigationStyle
 import dev.lemonadecode.workspace.impl.WorkspaceInput
 import dev.lemonadecode.workspace.impl.WorkspaceModelMapper
@@ -28,6 +40,9 @@ import dev.lemonadecode.workspace.impl.showcase.ShowcaseFixtures.comment
 import dev.lemonadecode.workspace.impl.showcase.ShowcaseFixtures.path
 import dev.lemonadecode.workspace.impl.showcase.ShowcaseFixtures.rowOf
 import dev.lemonadecode.workspace.impl.showcase.ShowcaseFixtures.session
+import dev.lemonadecode.workspace.uimodel.DeviceTab
+import dev.lemonadecode.workspace.uimodel.DevicesWindow
+import dev.lemonadecode.workspace.uimodel.SettingsPage
 import dev.lemonadecode.workspace.uimodel.TerminalLineModel
 import dev.lemonadecode.workspace.uimodel.TerminalTranscriptModel
 import dev.lemonadecode.workspace.uimodel.WorkspaceEvent
@@ -39,13 +54,17 @@ import dev.lemonadecode.workspace.uimodel.WorkspaceView
  * Model mapper from fixed domain data. Drives the IDE previews and the sample app.
  *
  * @property code the frame label in the design canvas.
- * @property widthDp the frame width the design shows it at; the height is always 900.
+ * @property widthDp the frame width the design shows it at.
+ * @property heightDp the frame height the design shows it at.
+ * @property part the whole window, or only the Devices panel, as its own window shows it.
  */
 public enum class WorkspaceShowcase(
   public val code: String,
   public val title: String,
   public val description: String,
   public val widthDp: Int = 1440,
+  public val heightDp: Int = 900,
+  public val part: ShowcasePart = ShowcasePart.Window,
 ) {
   AgentFinishes("1", "Agent finishes, open the diff", "Terminal view of the main session after the agent is done."),
   CommentOnDiff("2", "Comment on the diff vs main", "Two unsent comments and the composer open on rateLimit.ts:19. Sessions collapsed to the rail."),
@@ -57,13 +76,27 @@ public enum class WorkspaceShowcase(
   SessionTree("2a", "Tree with lineage rails", "bench-redis, four levels down. The path to it is lit in brand lime."),
   ChoosingWorktree("3a·tree", "Choosing a worktree", "The new sub-session panel suggests a branch to keep or type over, and previews its folder before anything is created."),
   AfterCreatingBoth("3b·tree", "After creating both kinds", "sub-1 shares the folder; sub-2 runs in its own worktree on its own branch."),
-  SettingsOpen("4a", "Settings open, an agent working", "Appearance and keep awake. The top bar tag shows keep awake is holding the machine up."),
+  SettingsOpen("4a", "Settings open, an agent working", "Settings is a short list; every item opens its own page. The top bar tag shows keep awake is holding the machine up."),
   LightKeepAwake("4b", "Light theme, keep awake on", "The same diff review in the light palette."),
   MultiLineComment("5a", "A range comment posted, another range selected", "rateLimit.ts:24–26 has a range comment; 28–32 is selected with the composer open."),
   SessionMenu("6a", "Menu on lua-script", "Right-click a session: the menu names it and its folder, and the row holds a ring."),
   RenamingSession("6b", "Renaming in place", "Rename swaps the menu’s actions for a name field."),
   NamingWorktree("6c", "Naming a new worktree", "New sub-session in new worktree swaps the menu’s actions for a branch field, filled with a suggestion."),
-  UpdateAvailable("7a", "An update is out", "Installed from a release file, the app offers the newer version next to Settings; the panel downloads it and restarts."),
+  SettingsList("8a", "Settings list", "Five rows show their current value; the gear's dot says an update is out. Open one to change it."),
+  SettingsLanguage("8b", "Language, Deutsch chosen", "Each language in its own name, with its flag. The whole app follows at once."),
+  SettingsPlugins("8c", "Plugins › Mobile", "The Mobile plugin mirrors Android and iOS screens, pairs devices and reads their logs."),
+  SettingsUpdates("8d", "Updates, 1.9.0 available", "What's new, then Update now. It downloads, then a restart finishes it."),
+  DeviceList("8e", "Devices · list", "Connected devices, Android and iOS apart. Pairing starts at the bottom.", widthDp = 420, heightDp = 800, part = ShowcasePart.Devices),
+  DeviceSideBySide("8f", "Device · side by side", "The screen and its logs side by side, the default.", widthDp = 760, heightDp = 800, part = ShowcasePart.Devices),
+  DeviceTabs("8g", "Device · tabs, Logs selected", "Switched to tabs from the header. iOS logs over USB; errors can go to the agent.", widthDp = 420, heightDp = 800, part = ShowcasePart.Devices),
+  PairPlatform("8h", "Pair · 1 platform", "Pairing asks one thing at a time: first, what are you pairing?", widthDp = 420, heightDp = 800, part = ShowcasePart.Devices),
+  PairMethod("8i", "Pair · 2 method", "Then how: a QR code, a pairing code or a device found on this network.", widthDp = 420, heightDp = 800, part = ShowcasePart.Devices),
+  PairCode("8j", "Pair · 3 code", "Then what the phone shows: its address and the 6-digit code.", widthDp = 420, heightDp = 800, part = ShowcasePart.Devices),
+  Paired("8k", "Paired", "The new device is connected, ready to open.", widthDp = 420, heightDp = 800, part = ShowcasePart.Devices),
+  DisplayMain("8l", "Display 1 · main window", "After ↗ the main window gets its space back; the phone button gets a ↗ mark and brings the other window forward."),
+  DisplayDevices("8m", "Display 2 · Devices window", "The Devices panel in its own window, on another display.", widthDp = 520, heightDp = 900, part = ShowcasePart.Devices),
+  DiffFileList("8n", "Changed files beside the diff", "The file list follows the scroll. Picking a file jumps to it and opens it if it was folded."),
+  DiffBasePicker("8o", "Picking the base branch", "The base branch is a picker: find a branch by name, or HEAD for only the uncommitted changes."),
   ;
 
   public fun model(eventSink: (WorkspaceEvent) -> Unit = {}): WorkspaceModel = WorkspaceModelMapper.map(scene.input, eventSink)
@@ -96,6 +129,9 @@ private data class Scene(
   val transcripts: Map<String, List<TerminalLineModel>>,
 )
 
+/** Whole window, or only the Devices panel. */
+public enum class ShowcasePart { Window, Devices }
+
 private val firstReview: List<ReviewComment> get() = listOf(comment("rl", 17), comment("rl", 19), comment("app", 20))
 
 private fun List<ReviewComment>.withStatus(status: CommentStatus) = map { it.copy(status = status) }
@@ -123,6 +159,9 @@ private fun scene(
   plan: SubSessionPlan? = null,
   menuPlan: SubSessionPlan? = null,
   transcripts: Map<String, List<TerminalLineModel>> = baseTranscripts,
+  mobile: MobileInput = MobileInput(),
+  update: UpdateState = UpdateState.None,
+  review: Review? = null,
 ): Scene {
   val collapsed = listOf("cfg", "thr", "test", "readme").associate { path(it) to false }
   val state = WorkspaceViewState(
@@ -133,13 +172,29 @@ private fun scene(
   return Scene(
     input = WorkspaceInput(
       sessions = sessions,
-      review = Review(DiffState.Ready(ShowcaseFixtures.snapshot), comments, base = "main", bases = listOf("main", ShowcaseFixtures.Branch, "release/2024.11")),
+      review = review ?: Review(
+        DiffState.Ready(ShowcaseFixtures.snapshot),
+        comments,
+        base = "main",
+        bases = listOf("main", ShowcaseFixtures.Branch, "release/2024.11"),
+        defaultBranch = "main",
+        branchTips = mapOf(
+          "main" to BranchTip(Now - 2 * Hour, "Ana Ribeiro"),
+          ShowcaseFixtures.Branch to BranchTip(Now - 20 * Minute, "You"),
+          "release/2024.11" to BranchTip(Now - 4 * Day, "Release bot"),
+        ),
+      ),
       settings = settings,
       view = state,
       subSessionPlan = plan,
       pendingMessage = null,
       homeDirectory = ShowcaseFixtures.Home,
       menuWorktreePlan = menuPlan,
+      update = update,
+      installation = AppInstallation(AppVersion(1, 8, 2), UpdateChannel.SelfUpdate),
+      updateChecks = UpdateChecks(lastCheckedMillis = Now - 2 * Hour),
+      mobile = mobile.copy(enabled = settings.mobilePlugin),
+      nowMillis = Now,
     ),
     transcripts = transcripts,
   )
@@ -274,15 +329,99 @@ private fun sceneFor(showcase: WorkspaceShowcase): Scene = when (showcase) {
   WorkspaceShowcase.SessionMenu -> treeScene(sessionMenu = SessionId("d3"))
   WorkspaceShowcase.RenamingSession -> treeScene(sessionMenu = SessionId("d3"), renaming = true)
   WorkspaceShowcase.NamingWorktree -> treeScene(sessionMenu = SessionId("d3"), worktreeBranch = SuggestedBranch, namingWorktree = true)
-  WorkspaceShowcase.UpdateAvailable -> scene().let { scene ->
-    val update = UpdateState.Available(
-      current = AppVersion(1, 2, 0),
-      release = AppRelease(AppVersion(1, 3, 0), "https://github.com/williankl/loupe/releases/tag/v1.3.0"),
-      progress = UpdateProgress.Downloading(0.42f),
-    )
-    scene.copy(input = scene.input.copy(view = scene.input.view.copy(updateOpen = true), update = update))
-  }
+  WorkspaceShowcase.SettingsList -> settingsScene(SettingsPage.List)
+  WorkspaceShowcase.SettingsLanguage -> settingsScene(SettingsPage.Language, language = AppLanguage.German, update = UpdateState.None)
+  WorkspaceShowcase.SettingsPlugins -> settingsScene(SettingsPage.Plugins, update = UpdateState.None)
+  WorkspaceShowcase.SettingsUpdates -> settingsScene(SettingsPage.Updates)
+  WorkspaceShowcase.DeviceList -> devicesScene(DevicesViewState())
+  WorkspaceShowcase.DeviceSideBySide -> devicesScene(DevicesViewState(step = DevicesStep.Device, deviceId = ShowcaseDevices.pixel.id))
+  WorkspaceShowcase.DeviceTabs -> devicesScene(
+    DevicesViewState(step = DevicesStep.Device, deviceId = ShowcaseDevices.iphone.id, tab = DeviceTab.Logs),
+    layout = DevicesLayout.Tabs,
+    logs = ShowcaseDevices.iosLogs,
+    screen = ShowcaseDevices.screen(1179, 2556),
+  )
+  WorkspaceShowcase.PairPlatform -> devicesScene(DevicesViewState(step = DevicesStep.PairPlatform))
+  WorkspaceShowcase.PairMethod -> devicesScene(DevicesViewState(step = DevicesStep.PairMethod), nearby = ShowcaseDevices.nearby)
+  WorkspaceShowcase.PairCode -> devicesScene(DevicesViewState(step = DevicesStep.PairCode, pairAddress = "192.168.1.57:37099", pairCode = "482913"))
+  WorkspaceShowcase.Paired -> devicesScene(
+    DevicesViewState(step = DevicesStep.Paired, paired = ShowcaseDevices.pixel7a.id),
+    devices = ShowcaseDevices.connected + ShowcaseDevices.pixel7a,
+  )
+  WorkspaceShowcase.DisplayMain -> scene(
+    settings = AppSettings(mobilePlugin = true),
+    view = { copy(devices = DevicesViewState(step = DevicesStep.Device, deviceId = ShowcaseDevices.pixel.id), devicesWindow = DevicesWindow.Separate) },
+    mobile = MobileInput(tools = ShowcaseDevices.tools, devices = ShowcaseDevices.connected),
+  )
+  WorkspaceShowcase.DisplayDevices -> devicesScene(
+    DevicesViewState(step = DevicesStep.Device, deviceId = ShowcaseDevices.pixel.id),
+    window = DevicesWindow.Separate,
+  )
+  WorkspaceShowcase.DiffFileList -> diffScene()
+  WorkspaceShowcase.DiffBasePicker -> scene(
+    comments = listOf(comment("rl", 17), comment("app", 20)),
+    settings = AppSettings(sidebarExpanded = false),
+    view = { copy(view = WorkspaceView.Diff, basePickerOpen = true) },
+    review = Review(
+      DiffState.Ready(ShowcaseFixtures.snapshot),
+      listOf(comment("rl", 17), comment("app", 20)),
+      base = "develop",
+      bases = listOf("main", "develop", "release/2.4", "feat/auth-tokens"),
+      defaultBranch = "main",
+      branchTips = mapOf(
+        "main" to BranchTip(Now - 2 * Hour, "Ana Ribeiro"),
+        "develop" to BranchTip(Now - 26 * Hour, "Ana Ribeiro"),
+        "release/2.4" to BranchTip(Now - 4 * Day, "Release bot"),
+        "feat/auth-tokens" to BranchTip(Now - 1 * Hour, "Maria"),
+      ),
+    ),
+  )
 }
+
+/** The newer version the Updates screens offer. */
+private val NewRelease = UpdateState.Available(
+  current = AppVersion(1, 8, 2),
+  release = AppRelease(AppVersion(1, 9, 0), "https://github.com/williankl/loupe/releases/tag/v1.9.0", "Mobile plugin, language settings and faster diffs on large files."),
+)
+
+/** Settings open on [page] over the first screen, with the Mobile plugin on. */
+private fun settingsScene(
+  page: SettingsPage,
+  language: AppLanguage = AppLanguage.System,
+  update: UpdateState = NewRelease,
+) = scene(
+  settings = AppSettings(mobilePlugin = true, language = language),
+  view = { copy(settingsOpen = true, settingsPage = page) },
+  mobile = MobileInput(tools = ShowcaseDevices.tools, devices = ShowcaseDevices.connected),
+  update = update,
+)
+
+/** The Devices panel at [panel]'s step, with the design's four devices connected. */
+private fun devicesScene(
+  panel: DevicesViewState,
+  layout: DevicesLayout = DevicesLayout.SideBySide,
+  window: DevicesWindow = DevicesWindow.Docked,
+  devices: List<MobileDevice> = ShowcaseDevices.connected,
+  logs: DeviceLogs = ShowcaseDevices.androidLogs,
+  screen: DeviceScreen = ShowcaseDevices.screen(),
+  nearby: List<NearbyDevice> = emptyList(),
+) = scene(
+  settings = AppSettings(mobilePlugin = true, devicesLayout = layout),
+  view = { copy(devices = panel, devicesWindow = window) },
+  mobile = MobileInput(
+    tools = ShowcaseDevices.tools,
+    devices = devices,
+    logs = logs.takeIf { panel.step == DevicesStep.Device },
+    screen = screen.takeIf { panel.step == DevicesStep.Device },
+    nearby = nearby,
+  ),
+)
+
+/** The moment the showcase is set at, so "2 h ago" reads the same in every render. */
+private const val Now: Long = 1_793_600_000_000
+private const val Minute: Long = 60_000
+private const val Hour: Long = 60 * Minute
+private const val Day: Long = 24 * Hour
 
 private object ShowcaseSources {
   val racyComment: String = SampleSources.commentTexts.getValue("rl:19")

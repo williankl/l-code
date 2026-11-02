@@ -10,6 +10,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -23,7 +27,8 @@ internal val PopoverShadowRoom = 24.dp
 
 /**
  * Panel that opens under its anchor, aligned to the anchor's start or end edge. Place it inside the same
- * Box as the button that opens it. Clicking outside or pressing Escape calls [onDismissRequest].
+ * Box as the button that opens it. Clicking outside calls [onDismissRequest]; so does Escape, unless
+ * [onEscape] is given, e.g. to step back a page first.
  */
 @Composable
 public fun AnchoredPopover(
@@ -31,6 +36,9 @@ public fun AnchoredPopover(
   modifier: Modifier = Modifier,
   width: Dp = 344.dp,
   placement: TooltipPlacement = TooltipPlacement.BelowEnd,
+  padding: Dp = LemonadeTheme.spaces.spacing400,
+  spacing: Dp = LemonadeTheme.spaces.spacing400,
+  onEscape: (() -> Unit)? = null,
   content: @Composable ColumnScope.() -> Unit,
 ) {
   val density = LocalDensity.current
@@ -41,11 +49,16 @@ public fun AnchoredPopover(
       AnchorPositionProvider(placement = placement, gap = gap, inset = inset)
     },
     onDismissRequest = onDismissRequest,
-    properties = PopupProperties(focusable = true, dismissOnClickOutside = true, dismissOnBackPress = true),
+    properties = PopupProperties(focusable = true, dismissOnClickOutside = true, dismissOnBackPress = onEscape == null),
+    onPreviewKeyEvent = { event ->
+      val escape = onEscape != null && event.key == Key.Escape
+      if (escape && event.type == KeyEventType.KeyDown) onEscape()
+      escape
+    },
   ) {
     val shape = LemonadeTheme.shapes.radius500
     Column(
-      verticalArrangement = Arrangement.spacedBy(LemonadeTheme.spaces.spacing400),
+      verticalArrangement = Arrangement.spacedBy(spacing),
       modifier = Modifier
         .padding(PopoverShadowRoom)
         .then(modifier)
@@ -57,7 +70,7 @@ public fun AnchoredPopover(
           color = LemonadeTheme.colors.border.borderNeutralMedium,
           shape = shape,
         )
-        .padding(LemonadeTheme.spaces.spacing400),
+        .padding(padding),
       content = content,
     )
   }

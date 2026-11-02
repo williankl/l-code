@@ -21,6 +21,7 @@ flowchart TB
         review["review"]
         settings["settings"]
         updates["updates"]
+        mobile["mobile"]
     end
     git["data/git"]
     domain["domainEntities"]
@@ -34,6 +35,7 @@ flowchart TB
     review --> git
     review --> sessions
     settings --> sessions
+    mobile --> settings
     sessions --> git
     features --> domain
     features --> platform
@@ -64,7 +66,7 @@ An `impl` never depends on another `impl`. Bindings are contributed with
 | `platform/di-core` | `AppScope`. |
 | `platform/architecture-core` / `-test` | `LemonadeCodeCoroutineDispatchers`, the app `CoroutineScope`, `AppInitializer`; test dispatchers. |
 | `platform/presenter-core` / `-test` | `LemonadeCodePresenter<Model>`, `PresenterHost` (Molecule, immediate mode), `presenterAsState`; `presenter.test { }`, `awaitItemWhere`, `yieldUntil`. |
-| `platform/localization-core` | `LemonadeCodeString`: text a presenter puts in a Model, resolved by the UI. |
+| `platform/localization-core` | `LemonadeCodeString`: text a presenter puts in a Model, resolved by the UI. `ProvideAppLanguage` draws everything in the language picked in settings. |
 | `platform/preferences-core` / `-test` | `PreferenceStore`, a JSON file in the user's app-data folder. |
 | `platform/process-core` | `ProcessRunner`, `UserShell`, `HomeDirectory`. |
 | `platform/terminal` | `TerminalSession` (pty4j and JediTerm's emulator) and `TerminalView`, a Compose renderer. |
@@ -76,11 +78,12 @@ An `impl` never depends on another `impl`. Bindings are contributed with
 | `sessions/{api,impl,fake}` | `SessionService`: opens login shells in PTYs, follows each shell's folder and branch, infers working / needs input / idle / exited, plans and starts sub-sessions. `SessionTerminals` exposes the terminals to the UI. |
 | `review/{api,impl,fake}` | `ReviewService`: the diff and comments per checkout, the review text, pasting it into the session or into a review sub-session. |
 | `settings/{api,impl,fake}` | `SettingsService` (persisted) and the keep-awake coordinator. |
-| `updates/{api,impl,fake}` | `UpdateService`: finds a newer GitHub release for this install, downloads and checks it, and hands over to a helper that swaps it in after the app quits. See [RELEASING.md](../RELEASING.md). |
-| `workspace/uimodel` | `WorkspaceModel`, `WorkspaceEvent` and the localized strings (`composeResources`, English, Portuguese and Slovak). |
+| `updates/{api,impl,fake}` | `UpdateService`: finds a newer GitHub release for this install, downloads and checks it, and, on Restart now, hands over to a helper that swaps it in after the app quits. See [RELEASING.md](../RELEASING.md). |
+| `mobile/{api,impl,fake}` | `MobileService`, the Mobile plugin: Android devices through `adb` (list, screen captures, input, `logcat`, pairing by QR code or code, mDNS discovery) and iOS devices through libimobiledevice (list, screenshots, `idevicesyslog`, trusting over a cable). Idle while the plugin is off. |
+| `workspace/uimodel` | `WorkspaceModel`, `WorkspaceEvent` and the localized strings (`composeResources`: English, German, Spanish, French, Portuguese and Slovak). |
 | `workspace/ui` | The composables: `WorkspaceContent(model, terminal)` and its parts, including the file previews. Pure rendering. |
 | `workspace/impl` | `WorkspacePresenter`, the Model mapper, `WorkspaceScreen` (presenter plus live terminals), and the showcase built from fixtures through the same mapper. |
-| `apps/desktop` | The Metro `AppGraph`, `main`, and packaging. |
+| `apps/desktop` | The Metro `AppGraph`, `main` (the main window and the Devices panel's own window, sharing one presenter), and packaging. |
 | `sample` | The showcase app and the screenshot renderer. |
 
 ---
@@ -109,10 +112,12 @@ real app can't drift apart.
 ## Localization
 
 All copy lives in `workspace/uimodel/src/commonMain/composeResources/values*/strings.xml`, in
-English, Portuguese and Slovak. Presenters put `LemonadeCodeString`s in the Model
-(`Res.string.x.asLemonadeCodeString(args)`), and composables call `resolve()` or `stringResource`.
-The language follows the system locale. `TranslationsTest` checks that every language has every
-string and plural, with the same values filled in.
+English, German, Spanish, French, Portuguese and Slovak. Presenters put `LemonadeCodeString`s in the
+Model (`Res.string.x.asLemonadeCodeString(args)`), and composables call `resolve()` or
+`stringResource`. The language follows the system locale unless one is picked in Settings ›
+Language; `ProvideAppLanguage` sets the default locale and draws everything below it again, so the
+change shows at once. `TranslationsTest` checks that every language has every string and plural,
+with the same values filled in.
 
 ---
 

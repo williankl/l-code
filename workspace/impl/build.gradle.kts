@@ -11,6 +11,7 @@ kotlin {
       implementation(projects.review.api)
       implementation(projects.settings.api)
       implementation(projects.updates.api)
+      implementation(projects.mobile.api)
       implementation(projects.platform.architectureCore)
       implementation(projects.platform.syntaxCore)
       implementation(projects.platform.processCore)
@@ -22,6 +23,7 @@ kotlin {
       implementation(projects.review.fake)
       implementation(projects.settings.fake)
       implementation(projects.updates.fake)
+      implementation(projects.mobile.fake)
       implementation(projects.platform.presenterTest)
       implementation(projects.platform.architectureTest)
     }

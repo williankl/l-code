@@ -23,6 +23,7 @@ import androidx.compose.ui.test.runDesktopComposeUiTest
 import dev.lemonadecode.domain.review.DiffState
 import dev.lemonadecode.domain.review.Review
 import dev.lemonadecode.domain.session.SessionId
+import dev.lemonadecode.mobile.fake.FakeMobileService
 import dev.lemonadecode.platform.designsystem.LemonadeCodeTheme
 import dev.lemonadecode.platform.process.HomeDirectory
 import dev.lemonadecode.review.fake.FakeReviewService
@@ -48,6 +49,8 @@ class CommentTypingUiTest {
       override val path: String = ShowcaseFixtures.Home
     },
     updateService = FakeUpdateService(),
+    mobileService = FakeMobileService(),
+    clock = { 0L },
   )
   private val ar = SessionId("ar")
 

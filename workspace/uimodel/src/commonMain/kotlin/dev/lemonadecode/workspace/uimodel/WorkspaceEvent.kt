@@ -52,15 +52,80 @@ public sealed interface WorkspaceEvent {
 
   public data object ToggleSettings : WorkspaceEvent
   public data object DismissSettings : WorkspaceEvent
+
+  /** Opens one item of the settings list on its own page. */
+  public data class OpenSettingsPage(val page: SettingsPage) : WorkspaceEvent
+
+  /** Back from a settings page to the list; Esc on the list closes settings. */
+  public data object SettingsBack : WorkspaceEvent
   public data class SetTheme(val theme: ThemeOption) : WorkspaceEvent
+  public data class SetLanguage(val language: LanguageOption) : WorkspaceEvent
   public data class SetKeepAwake(val enabled: Boolean) : WorkspaceEvent
+  public data class SetMobilePlugin(val enabled: Boolean) : WorkspaceEvent
 
-  /** The Update button: opens or closes the panel about the new version. */
-  public data object ToggleUpdate : WorkspaceEvent
-  public data object DismissUpdate : WorkspaceEvent
+  public data object CheckForUpdates : WorkspaceEvent
 
-  /** Downloads the new version, then restarts into it. */
+  /** Downloads the new version; restarting finishes it. */
   public data object InstallUpdate : WorkspaceEvent
+
+  /** Quits so the downloaded version takes its place; the sessions come back after. */
+  public data object RestartToUpdate : WorkspaceEvent
+
+  /** The phone button: opens or closes the Devices panel, or brings its own window forward. */
+  public data object ToggleDevices : WorkspaceEvent
+
+  /** Plugins › Mobile › Open devices: closes settings and shows the device list. */
+  public data object OpenDevices : WorkspaceEvent
+  public data object CloseDevices : WorkspaceEvent
+
+  /** The panel's back arrow: one step back towards the list. */
+  public data object DevicesBack : WorkspaceEvent
+  public data class MoveDevices(val window: DevicesWindow) : WorkspaceEvent
+  public data class SetDevicesLayout(val layout: DevicesLayoutOption) : WorkspaceEvent
+  public data class SelectDevice(val deviceId: String) : WorkspaceEvent
+  public data class SetDeviceTab(val tab: DeviceTab) : WorkspaceEvent
+  public data class DisconnectDevice(val deviceId: String) : WorkspaceEvent
+
+  /** A click on the mirrored screen, in the device's pixels. */
+  public data class TapDevice(val x: Int, val y: Int) : WorkspaceEvent
+
+  /** A drag on the mirrored screen, in the device's pixels. */
+  public data class SwipeDevice(val fromX: Int, val fromY: Int, val toX: Int, val toY: Int, val durationMillis: Long) : WorkspaceEvent
+  public data object PressDeviceBack : WorkspaceEvent
+  public data object PressDeviceHome : WorkspaceEvent
+  public data object RotateDevice : WorkspaceEvent
+
+  /** Saves the device's screen and hands the picture to the selected session. */
+  public data object ScreenshotToSession : WorkspaceEvent
+
+  /** Typing goes to the device, or stops going there. */
+  public data object ToggleDeviceKeyboard : WorkspaceEvent
+  public data class TypeOnDevice(val text: String) : WorkspaceEvent
+  public data class PressDeviceKey(val key: DeviceKeyModel) : WorkspaceEvent
+
+  public data class SetLogFilter(val filter: LogFilter) : WorkspaceEvent
+  public data object ToggleLogSearch : WorkspaceEvent
+  public data class SetLogQuery(val query: String) : WorkspaceEvent
+  public data object ClearLogs : WorkspaceEvent
+
+  /** Live ↔ paused: paused, the list stops moving while lines keep arriving underneath. */
+  public data object ToggleLogsPaused : WorkspaceEvent
+
+  /** Hands the error lines shown to the selected session's agent. */
+  public data object SendLogErrors : WorkspaceEvent
+
+  public data object StartPairing : WorkspaceEvent
+  public data class ChoosePairingPlatform(val platform: MobilePlatformModel) : WorkspaceEvent
+  public data class ChoosePairingMethod(val method: PairingMethod) : WorkspaceEvent
+  public data class SetPairingAddress(val address: String) : WorkspaceEvent
+  public data class SetPairingCode(val code: String) : WorkspaceEvent
+  public data object PairWithCode : WorkspaceEvent
+
+  /** Pair or Connect on a device found on this network. */
+  public data class ConnectNearby(val address: String) : WorkspaceEvent
+
+  /** Opens the device just paired. */
+  public data object OpenPairedDevice : WorkspaceEvent
 
   public data object OpenParentSession : WorkspaceEvent
   public data object ToggleNewSubSessionMenu : WorkspaceEvent
@@ -77,6 +142,12 @@ public sealed interface WorkspaceEvent {
 
   /** Compares the diff with [branch] instead. */
   public data class CompareWith(val branch: String) : WorkspaceEvent
+
+  /** Shows or hides the changed files beside the diff. */
+  public data class ShowFileList(val shown: Boolean) : WorkspaceEvent
+
+  /** Picked a file in the list beside the diff: it opens, if it was folded, as the diff scrolls to it. */
+  public data class RevealFile(val fileId: String) : WorkspaceEvent
   public data class ToggleFileExpanded(val fileId: String) : WorkspaceEvent
   public data class ToggleFullFile(val fileId: String) : WorkspaceEvent
   public data class ShowFullFile(val fileId: String) : WorkspaceEvent
@@ -110,3 +181,9 @@ public sealed interface WorkspaceEvent {
 
   public data object DismissError : WorkspaceEvent
 }
+
+/** How to pair, at step 2. */
+public enum class PairingMethod { QrCode, PairingCode, Nearby, Cable }
+
+/** Keys that reach the device while typing goes to it; letters go as text. */
+public enum class DeviceKeyModel { Enter, Backspace, ForwardDelete, Tab, Escape, Up, Down, Left, Right }

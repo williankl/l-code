@@ -9,6 +9,8 @@ internal data class PublishedRelease(
   val prerelease: Boolean,
   val pageUrl: String,
   val assets: List<ReleaseAsset>,
+  /** The release's description, as GitHub stores it (Markdown). */
+  val body: String? = null,
 )
 
 /** A file attached to a release. [complete] is false while it is still uploading. */
@@ -25,6 +27,7 @@ internal data class UpdateCandidate(
   val pageUrl: String,
   val asset: ReleaseAsset,
   val checksums: ReleaseAsset,
+  val notes: String? = null,
 )
 
 internal object ReleaseChooser {
@@ -44,7 +47,7 @@ internal object ReleaseChooser {
       val uploaded = release.assets.filter { it.complete }
       val asset = uploaded.firstOrNull { it.name == name } ?: return@mapNotNull null
       val checksums = uploaded.firstOrNull { it.name == ChecksumsFile } ?: return@mapNotNull null
-      UpdateCandidate(version, release.pageUrl, asset, checksums)
+      UpdateCandidate(version, release.pageUrl, asset, checksums, release.body?.let(::plainNotes))
     }
     .maxByOrNull { it.version }
 
@@ -58,5 +61,32 @@ internal object ReleaseChooser {
     }
     .firstOrNull()
 
+  /**
+   * A release description as a few lines of plain text: headings, emphasis, code marks and link
+   * targets dropped, bullets kept as •, cut at [MaxNotesLength]. Null when nothing is left.
+   */
+  fun plainNotes(markdown: String): String? {
+    val lines = markdown.lineSequence()
+      .map { it.trim() }
+      .filterNot { it.startsWith("<!--") || it.startsWith("```") }
+      .map { line ->
+        line.replace(Heading, "")
+          .replace(Bullet, "• ")
+          .replace(MarkdownLink, "$1")
+          .replace("**", "")
+          .replace("__", "")
+          .replace("`", "")
+      }
+      .toList()
+    val text = lines.joinToString("\n").replace(BlankLines, "\n").trim()
+    if (text.isEmpty()) return null
+    return if (text.length <= MaxNotesLength) text else text.take(MaxNotesLength).trimEnd() + "…"
+  }
+
+  private const val MaxNotesLength = 320
   private val Whitespace = Regex("\\s+")
+  private val Heading = Regex("^#+\\s*")
+  private val Bullet = Regex("^[-*+]\\s+")
+  private val MarkdownLink = Regex("!?\\[([^\\]]*)]\\([^)]*\\)")
+  private val BlankLines = Regex("\\n{2,}")
 }

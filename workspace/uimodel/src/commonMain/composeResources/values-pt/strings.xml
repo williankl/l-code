@@ -15,25 +15,104 @@
   <string name="keep_awake_off">Desligado · este computador pode adormecer</string>
   <plurals name="keep_awake_active">
     <item quantity="one">A manter acordado · %1$d sessão a trabalhar</item>
+    <item quantity="many">A manter acordado · %1$d sessões a trabalhar</item>
     <item quantity="other">A manter acordado · %1$d sessões a trabalhar</item>
   </plurals>
   <string name="keep_awake_idle">Ligado · nenhuma sessão a trabalhar, pode adormecer</string>
 
-  <!-- Atualização -->
-  <string name="update_action">Atualizar</string>
-  <string name="update_action_busy">A atualizar…</string>
-  <string name="update_title">Atualização disponível</string>
-  <string name="update_detail">O Lemonade Code %1$s está pronto a instalar. Tem a versão %2$s.</string>
-  <string name="update_restart_note">O Lemonade Code reinicia para terminar. As sessões voltam, mas os programas a correr nelas param.</string>
-  <string name="update_release_notes">Novidades</string>
-  <string name="update_install">Atualizar e reiniciar</string>
+  <string name="settings_back">Voltar</string>
+  <string name="settings_language">Idioma</string>
+  <string name="settings_plugins">Plugins</string>
+  <string name="settings_updates">Atualizações</string>
+  <string name="value_on">Ligado</string>
+  <string name="value_off">Desligado</string>
+
+  <!-- Settings › Language. Each language's own name is shown as is; these are the names in this language. -->
+  <string name="language_match_system">Idioma do sistema</string>
+  <string name="language_english">Inglês</string>
+  <string name="language_german">Alemão</string>
+  <string name="language_spanish">Espanhol</string>
+  <string name="language_french">Francês</string>
+  <string name="language_portuguese">Português</string>
+  <string name="language_slovak">Eslovaco</string>
+
+  <!-- Settings › Plugins -->
+  <string name="plugins_mobile">Móvel</string>
+  <string name="plugins_mobile_description">Espelhar ecrãs Android e iOS, emparelhar dispositivos por Wi‑Fi e ler os registos.</string>
+  <string name="plugins_value_mobile">Móvel ligado</string>
+  <string name="plugins_value_none">Nenhum ligado</string>
+  <string name="plugins_mobile_status">%1$d Android · %2$d iOS ligados</string>
+  <string name="plugins_open_devices">Abrir dispositivos</string>
+
+  <!-- Settings › Updates -->
+  <string name="updates_version">Lemonade Code %1$s</string>
+  <string name="updates_version_development">Lemonade Code · versão de desenvolvimento</string>
+  <string name="updates_up_to_date">Atualizado · verificado %1$s</string>
+  <string name="updates_not_checked">Ainda não verificado</string>
+  <string name="updates_checking">A procurar atualizações…</string>
+  <string name="updates_available">A versão %1$s está disponível</string>
+  <string name="updates_downloading">A transferir · %1$s</string>
+  <string name="updates_downloading_unknown">A transferir…</string>
+  <string name="updates_downloaded">Reinicia para concluir a atualização</string>
+  <string name="updates_restarting">A reiniciar…</string>
+  <string name="updates_homebrew">O Homebrew mantém-no atualizado: brew upgrade --cask lemonade-code</string>
+  <string name="updates_snap">A Snap Store mantém-no atualizado.</string>
+  <string name="updates_development">Compilado a partir do código-fonte, por isso não se atualiza sozinho.</string>
+  <string name="updates_unsupported">Não há atualizações para este sistema.</string>
+  <string name="updates_summary_up_to_date">Atualizado</string>
+  <string name="updates_summary_available">%1$s disponível</string>
+  <string name="updates_summary_homebrew">Homebrew</string>
+  <string name="updates_summary_snap">Snap Store</string>
+  <string name="updates_whats_new">Novidades · %1$s</string>
+  <string name="update_release_notes">Notas de versão</string>
+  <string name="updates_check">Procurar atualizações</string>
+  <string name="updates_check_busy">A verificar…</string>
+  <string name="updates_install">Atualizar agora</string>
+  <string name="updates_install_busy">A transferir…</string>
+  <string name="updates_restart">Reiniciar agora</string>
+  <string name="update_restart_note">As sessões voltam depois do reinício, mas os programas a correr nelas param.</string>
   <string name="update_retry">Tentar novamente</string>
-  <string name="update_downloading">A transferir… %1$s</string>
-  <string name="update_downloading_unknown">A transferir…</string>
-  <string name="update_restarting">A reiniciar…</string>
   <string name="update_failed_download">Não foi possível transferir a atualização. Verifique a ligação e tente novamente.</string>
   <string name="update_failed_checksum">A transferência não corresponde à soma de verificação da versão e foi descartada. Tente novamente.</string>
   <string name="update_failed_install">Não foi possível instalar a atualização aqui. Transfira-a a partir da página da versão.</string>
+
+  <!-- How long ago something happened -->
+  <string name="time_just_now">agora mesmo</string>
+  <plurals name="time_minutes_ago">
+    <item quantity="one">há %1$d min</item>
+    <item quantity="many">há %1$d min</item>
+    <item quantity="other">há %1$d min</item>
+  </plurals>
+  <plurals name="time_hours_ago">
+    <item quantity="one">há %1$d h</item>
+    <item quantity="many">há %1$d h</item>
+    <item quantity="other">há %1$d h</item>
+  </plurals>
+  <string name="time_yesterday">ontem</string>
+  <plurals name="time_days_ago">
+    <item quantity="one">há %1$d dia</item>
+    <item quantity="many">há %1$d dias</item>
+    <item quantity="other">há %1$d dias</item>
+  </plurals>
+  <plurals name="time_weeks_ago">
+    <item quantity="one">há %1$d semana</item>
+    <item quantity="many">há %1$d semanas</item>
+    <item quantity="other">há %1$d semanas</item>
+  </plurals>
+  <plurals name="time_months_ago">
+    <item quantity="one">há %1$d mês</item>
+    <item quantity="many">há %1$d meses</item>
+    <item quantity="other">há %1$d meses</item>
+  </plurals>
+  <plurals name="time_years_ago">
+    <item quantity="one">há %1$d ano</item>
+    <item quantity="many">há %1$d anos</item>
+    <item quantity="other">há %1$d anos</item>
+  </plurals>
+
+  <!-- Two or three details in a row, e.g. "USB · Android 15" -->
+  <string name="detail_two">%1$s · %2$s</string>
+  <string name="detail_three">%1$s · %2$s · %3$s</string>
 
   <!-- Sessions -->
   <string name="sessions_title">Sessões</string>
@@ -46,10 +125,12 @@
   <string name="fold_hidden_count">%1$d ocultas</string>
   <plurals name="fold_show">
     <item quantity="one">Mostrar %1$d subsessão</item>
+    <item quantity="many">Mostrar %1$d subsessões</item>
     <item quantity="other">Mostrar %1$d subsessões</item>
   </plurals>
   <plurals name="fold_hide">
     <item quantity="one">Ocultar %1$d subsessão</item>
+    <item quantity="many">Ocultar %1$d subsessões</item>
     <item quantity="other">Ocultar %1$d subsessões</item>
   </plurals>
   <!-- Session row subtitle: the agent (or shell), then the branch (or folder) -->
@@ -102,15 +183,30 @@
   <!-- Diff review -->
   <string name="diff_changes">Alterações</string>
   <string name="diff_vs">vs</string>
-  <string name="diff_compare_with">Comparar com</string>
+  <string name="diff_compare_with">Comparar a árvore de trabalho com</string>
+  <string name="diff_compare_aria">A comparar com %1$s. Mudar de branch</string>
+  <string name="diff_find_branch">Procurar um branch</string>
+  <string name="diff_no_branch_match">Nenhum branch corresponde a esse nome.</string>
+  <string name="diff_branch_default">Branch predefinido · atualizado %1$s</string>
+  <string name="diff_branch_head">Último commit · só alterações por fazer commit</string>
+  <string name="diff_files">Ficheiros alterados</string>
+  <string name="diff_files_show">Mostrar ficheiros alterados</string>
+  <string name="diff_files_hide">Ocultar ficheiros alterados</string>
   <string name="diff_refresh">Atualizar diff</string>
   <string name="diff_source_working_tree">árvore de trabalho</string>
   <plurals name="diff_summary_uncommitted">
     <item quantity="one">inclui alterações por fazer commit · %1$d ficheiro</item>
+    <item quantity="many">inclui alterações por fazer commit · %1$d ficheiros</item>
     <item quantity="other">inclui alterações por fazer commit · %1$d ficheiros</item>
+  </plurals>
+  <plurals name="diff_summary_head">
+    <item quantity="one">só alterações por fazer commit · %1$d ficheiro</item>
+    <item quantity="many">só alterações por fazer commit · %1$d ficheiros</item>
+    <item quantity="other">só alterações por fazer commit · %1$d ficheiros</item>
   </plurals>
   <plurals name="diff_summary">
     <item quantity="one">%1$d ficheiro</item>
+    <item quantity="many">%1$d ficheiros</item>
     <item quantity="other">%1$d ficheiros</item>
   </plurals>
   <string name="file_added">Adicionado</string>
@@ -125,14 +221,17 @@
   <string name="file_binary">Ficheiro binário, não mostrado</string>
   <plurals name="file_comment_count">
     <item quantity="one">%1$d comentário</item>
+    <item quantity="many">%1$d comentários</item>
     <item quantity="other">%1$d comentários</item>
   </plurals>
   <plurals name="hunk_show_hidden">
     <item quantity="one">Mostrar %1$d linha oculta</item>
+    <item quantity="many">Mostrar %1$d linhas ocultas</item>
     <item quantity="other">Mostrar %1$d linhas ocultas</item>
   </plurals>
   <plurals name="file_unchanged_below">
     <item quantity="one">%1$d linha sem alterações abaixo</item>
+    <item quantity="many">%1$d linhas sem alterações abaixo</item>
     <item quantity="other">%1$d linhas sem alterações abaixo</item>
   </plurals>
   <string name="comment_on_line">Comentar %1$s</string>
@@ -159,15 +258,158 @@
   <string name="action_send_to_terminal">Colar no terminal</string>
   <plurals name="send_unsent">
     <item quantity="one">%1$d comentário por enviar</item>
+    <item quantity="many">%1$d comentários por enviar</item>
     <item quantity="other">%1$d comentários por enviar</item>
   </plurals>
   <plurals name="send_across_files">
     <item quantity="one">em %1$d ficheiro</item>
+    <item quantity="many">em %1$d ficheiros</item>
     <item quantity="other">em %1$d ficheiros</item>
   </plurals>
   <string name="send_all_delivered">Todos os comentários entregues</string>
   <string name="send_no_comments">Ainda sem comentários</string>
   <string name="send_hint">Clica em + ao lado de uma linha, ou arrasta por várias, para comentar</string>
+
+  <!-- Devices (the Mobile plugin) -->
+  <string name="devices_title">Dispositivos</string>
+  <string name="devices_button">Dispositivos</string>
+  <string name="devices_button_hide">Ocultar dispositivos</string>
+  <string name="devices_button_separate">Dispositivos · abertos numa janela separada</string>
+  <plurals name="devices_connected">
+    <item quantity="one">%1$d ligado</item>
+    <item quantity="many">%1$d ligados</item>
+    <item quantity="other">%1$d ligados</item>
+  </plurals>
+  <string name="devices_android">Android</string>
+  <string name="devices_ios">iOS</string>
+  <string name="devices_none">Nenhum ligado</string>
+  <string name="devices_needs_adb">Instala as ferramentas de plataforma do Android (adb) para veres dispositivos Android.</string>
+  <string name="devices_needs_libimobiledevice">Instala o libimobiledevice para veres iPhones e iPads.</string>
+  <string name="devices_pair">Emparelhar um dispositivo</string>
+  <string name="devices_close">Fechar dispositivos</string>
+  <string name="devices_separate">Abrir numa janela separada</string>
+  <string name="devices_dock">Voltar à janela principal</string>
+  <string name="devices_layout_tabs">Mostrar ecrã e registos em separadores</string>
+  <string name="devices_layout_split">Mostrar ecrã e registos lado a lado</string>
+  <string name="devices_disconnect">Desligar %1$s</string>
+  <string name="devices_disconnected">%1$s desligado</string>
+  <string name="device_usb">USB</string>
+  <string name="device_wifi">Wi‑Fi</string>
+  <string name="device_android_version">Android %1$s</string>
+  <string name="device_ios_version">iOS %1$s</string>
+  <string name="device_allow_debugging">Permite a depuração USB no telemóvel</string>
+  <string name="device_tap_trust">Toca em «Confiar» no dispositivo</string>
+  <string name="device_offline">Não responde</string>
+  <string name="device_tab_screen">Ecrã</string>
+  <string name="device_tab_logs">Registos</string>
+
+  <!-- Devices › the mirrored screen -->
+  <string name="mirror_back">Voltar</string>
+  <string name="mirror_home">Início</string>
+  <string name="mirror_rotate">Rodar</string>
+  <string name="mirror_screenshot">Captura de ecrã para a sessão</string>
+  <string name="mirror_keyboard">Escrever com este teclado</string>
+  <string name="mirror_size">%1$d × %2$d</string>
+  <string name="mirror_fps">%1$d fps</string>
+  <string name="mirror_clicks">os cliques vão para o dispositivo</string>
+  <string name="mirror_keys">o teclado vai para o dispositivo</string>
+  <string name="mirror_view_only">só visualização no iOS</string>
+  <string name="mirror_loading">A ligar ao ecrã…</string>
+  <string name="screen_cable_only_title">Liga por cabo para veres o ecrã</string>
+  <string name="screen_cable_only_detail">O iOS só mostra o ecrã por cabo. Os registos continuam a funcionar por Wi‑Fi.</string>
+  <string name="screen_not_supported_title">Não é possível mostrar este ecrã</string>
+  <string name="screen_not_supported_detail">O libimobiledevice não consegue capturar este dispositivo. Pode ser preciso montar a imagem de disco de programador.</string>
+  <string name="screen_failed_title">Não foi possível ler o ecrã</string>
+  <string name="screen_failed_detail">A tentar novamente…</string>
+  <string name="screenshot_attached">Captura de ecrã anexada a %1$s</string>
+  <string name="screenshot_failed">Não foi possível fazer a captura de ecrã: %1$s</string>
+
+  <!-- Devices › logs -->
+  <string name="logs_all">Todos</string>
+  <string name="logs_warnings">Avisos</string>
+  <string name="logs_errors">Erros</string>
+  <string name="logs_filter">Filtrar linhas</string>
+  <string name="logs_filter_placeholder">Filtrar por etiqueta ou texto</string>
+  <string name="logs_clear">Limpar registos</string>
+  <string name="logs_live">Em direto</string>
+  <string name="logs_paused">Em pausa</string>
+  <string name="logs_pause">Pausar o fluxo</string>
+  <string name="logs_resume">Retomar o fluxo</string>
+  <string name="logs_cleared">Limpo. As novas linhas aparecem à medida que chegam.</string>
+  <string name="logs_no_match">Nenhuma linha corresponde.</string>
+  <string name="logs_waiting">À espera de linhas…</string>
+  <plurals name="logs_send_errors">
+    <item quantity="one">Enviar %1$d erro para %2$s</item>
+    <item quantity="many">Enviar %1$d erros para %2$s</item>
+    <item quantity="other">Enviar %1$d erros para %2$s</item>
+  </plurals>
+  <plurals name="logs_errors_sent">
+    <item quantity="one">%1$d linha de erro enviada para %2$s</item>
+    <item quantity="many">%1$d linhas de erro enviadas para %2$s</item>
+    <item quantity="other">%1$d linhas de erro enviadas para %2$s</item>
+  </plurals>
+
+  <!-- Devices › pairing -->
+  <string name="pair_title">Emparelhar um dispositivo</string>
+  <string name="pair_step">Passo %1$d de 3</string>
+  <string name="pair_step_platform">Passo %1$d de 3 · %2$s</string>
+  <string name="pair_what">O que queres emparelhar?</string>
+  <string name="pair_android">Android</string>
+  <string name="pair_android_note">Emparelha com o adb. Por Wi‑Fi, requer o Android 11 ou posterior.</string>
+  <string name="pair_ios">iPhone ou iPad</string>
+  <string name="pair_ios_note">Confia neste computador uma vez por cabo, com o libimobiledevice.</string>
+  <string name="pair_how">Como queres emparelhar?</string>
+  <string name="pair_qr">Ler um código QR</string>
+  <string name="pair_qr_note">O mais rápido. O telemóvel lê um código mostrado aqui.</string>
+  <string name="pair_code">Introduzir um código de sincronização</string>
+  <string name="pair_code_note">Escreve o endereço e o código de 6 dígitos que o telemóvel mostra.</string>
+  <string name="pair_nearby">Escolher nesta rede</string>
+  <plurals name="pair_nearby_found_android">
+    <item quantity="one">%1$d encontrado com a depuração sem fios ativada</item>
+    <item quantity="many">%1$d encontrados com a depuração sem fios ativada</item>
+    <item quantity="other">%1$d encontrados com a depuração sem fios ativada</item>
+  </plurals>
+  <plurals name="pair_nearby_found_ios">
+    <item quantity="one">%1$d dispositivo de confiança encontrado</item>
+    <item quantity="many">%1$d dispositivos de confiança encontrados</item>
+    <item quantity="other">%1$d dispositivos de confiança encontrados</item>
+  </plurals>
+  <string name="pair_nearby_none">Ainda nada encontrado</string>
+  <string name="pair_cable">Ligar por cabo uma vez</string>
+  <string name="pair_cable_note">Toca em «Confiar» no dispositivo. Depois disso, também se pode ligar por Wi‑Fi.</string>
+  <string name="pair_qr_title">Lê com o telemóvel</string>
+  <string name="pair_qr_text">No telemóvel, abre Opções de programador › Depuração sem fios › Sincronize o dispositivo com o código QR.</string>
+  <string name="pair_qr_label">Código QR de emparelhamento</string>
+  <string name="pair_qr_waiting">À espera da leitura</string>
+  <string name="pair_busy">A emparelhar…</string>
+  <string name="pair_code_title">Introduz o que o telemóvel mostra</string>
+  <string name="pair_code_text">Depuração sem fios › Sincronize dispositivo com código de sincronização.</string>
+  <string name="pair_code_address">Endereço IP e porta</string>
+  <string name="pair_code_address_hint">192.168.1.57:37099</string>
+  <string name="pair_code_code">Código de sincronização</string>
+  <string name="pair_code_code_hint">6 dígitos</string>
+  <string name="pair_action">Emparelhar</string>
+  <string name="pair_connect">Ligar</string>
+  <string name="pair_nearby_title">Encontrados nesta rede</string>
+  <string name="pair_nearby_empty_android">Nada por perto. Ativa a Depuração sem fios no telemóvel.</string>
+  <string name="pair_nearby_empty_ios">Nada por perto. Desbloqueia o dispositivo e mantém-no nesta rede.</string>
+  <string name="nearby_connectable">%1$s · depuração sem fios ativada</string>
+  <string name="nearby_awaiting_code">%1$s · a mostrar um código de sincronização</string>
+  <string name="nearby_trusted">Já de confiança · nesta rede</string>
+  <string name="pair_cable_title">Liga o dispositivo</string>
+  <string name="pair_cable_text">Desbloqueia-o e toca em «Confiar». Depois disso, pode ligar-se por Wi‑Fi quando estiver por perto.</string>
+  <string name="pair_cable_waiting">À espera de um dispositivo</string>
+  <string name="pair_cable_trust">À espera de «Confiar» em %1$s</string>
+  <string name="paired_title">%1$s está ligado</string>
+  <string name="paired_open">Abrir %1$s</string>
+  <string name="paired_another">Emparelhar outro dispositivo</string>
+  <string name="pair_error_wrong_code">Esse código não funcionou. Verifica-o e tenta novamente; os códigos expiram ao fim de um minuto.</string>
+  <string name="pair_error_not_paired">Este dispositivo não foi emparelhado com este computador. Emparelha-o primeiro com um código ou um código QR.</string>
+  <string name="pair_error_discovery">Este adb não consegue encontrar dispositivos na rede. Atualiza as ferramentas de plataforma do Android.</string>
+  <string name="pair_error_timed_out">Não aconteceu nada durante algum tempo. Tenta novamente.</string>
+  <string name="pair_error_gone">O dispositivo já não está ligado.</string>
+  <string name="pair_error_adb_missing">O adb não está instalado. Instala as ferramentas de plataforma do Android.</string>
+  <string name="pair_error_libimobiledevice_missing">O libimobiledevice não está instalado.</string>
 
   <!-- Terminal transcript -->
   <string name="terminal_running">a executar…</string>
@@ -196,6 +438,7 @@
   <string name="preview_seconds">%1$s s</string>
   <plurals name="preview_frames">
     <item quantity="one">%1$s quadro</item>
+    <item quantity="many">%1$s quadros</item>
     <item quantity="other">%1$s quadros</item>
   </plurals>
   <string name="preview_model_hint">Arraste para girar · ⌘ ou Ctrl + rolagem para zoom · clique duplo para redefinir</string>
@@ -214,10 +457,12 @@
   <string name="error_preview">Não foi possível ler o arquivo: %1$s</string>
   <plurals name="preview_model_triangles">
     <item quantity="one">%1$s triângulo</item>
+    <item quantity="many">%1$s triângulos</item>
     <item quantity="other">%1$s triângulos</item>
   </plurals>
   <plurals name="preview_table_more_rows">
     <item quantity="one">Mais %1$d linha não mostrada</item>
+    <item quantity="many">Mais %1$d linhas não mostradas</item>
     <item quantity="other">Mais %1$d linhas não mostradas</item>
   </plurals>
 </resources>

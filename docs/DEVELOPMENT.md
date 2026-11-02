@@ -71,10 +71,11 @@ The images in [`docs/images`](images) come from these renders, resized and frame
 ## Strings
 
 All interface text is in `workspace/uimodel/src/commonMain/composeResources/`: `values/strings.xml`
-for English, `values-pt/strings.xml` for Portuguese and `values-sk/strings.xml` for Slovak. Add a
-`values-<language>` folder to add a language; `TranslationsTest` fails until it has every string,
-with the same `%1$s`-style values as the English. Plurals take the forms the language needs, like
-Slovak's `one`, `few` and `other`.
+for English, and `values-de`, `values-es`, `values-fr`, `values-pt` and `values-sk` for German,
+Spanish, French, Portuguese and Slovak. To add a language, add a `values-<language>` folder and the
+language to `AppLanguage` and `LanguageOption`, so Settings › Language offers it; `TranslationsTest`
+fails until it has every string, with the same `%1$s`-style values as the English. Plurals take the
+forms the language needs, like Slovak's `one`, `few` and `other`.
 
 ## Releasing
 

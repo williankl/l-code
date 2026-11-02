@@ -19,21 +19,93 @@
   </plurals>
   <string name="keep_awake_idle">On · no sessions working, sleep allowed</string>
 
-  <!-- Update -->
-  <string name="update_action">Update</string>
-  <string name="update_action_busy">Updating…</string>
-  <string name="update_title">Update available</string>
-  <string name="update_detail">Lemonade Code %1$s is ready to install. You have %2$s.</string>
-  <string name="update_restart_note">Lemonade Code restarts to finish. Your sessions come back, but programs running in them stop.</string>
-  <string name="update_release_notes">What’s new</string>
-  <string name="update_install">Update and restart</string>
+  <string name="settings_back">Back</string>
+  <string name="settings_language">Language</string>
+  <string name="settings_plugins">Plugins</string>
+  <string name="settings_updates">Updates</string>
+  <string name="value_on">On</string>
+  <string name="value_off">Off</string>
+
+  <!-- Settings › Language. Each language's own name is shown as is; these are the names in this language. -->
+  <string name="language_match_system">Match system</string>
+  <string name="language_english">English</string>
+  <string name="language_german">German</string>
+  <string name="language_spanish">Spanish</string>
+  <string name="language_french">French</string>
+  <string name="language_portuguese">Portuguese</string>
+  <string name="language_slovak">Slovak</string>
+
+  <!-- Settings › Plugins -->
+  <string name="plugins_mobile">Mobile</string>
+  <string name="plugins_mobile_description">Mirror Android and iOS screens, pair devices over Wi‑Fi and read their logs.</string>
+  <string name="plugins_value_mobile">Mobile on</string>
+  <string name="plugins_value_none">None on</string>
+  <string name="plugins_mobile_status">%1$d Android · %2$d iOS connected</string>
+  <string name="plugins_open_devices">Open devices</string>
+
+  <!-- Settings › Updates -->
+  <string name="updates_version">Lemonade Code %1$s</string>
+  <string name="updates_version_development">Lemonade Code · development build</string>
+  <string name="updates_up_to_date">Up to date · checked %1$s</string>
+  <string name="updates_not_checked">Not checked yet</string>
+  <string name="updates_checking">Checking for updates…</string>
+  <string name="updates_available">Version %1$s is available</string>
+  <string name="updates_downloading">Downloading · %1$s</string>
+  <string name="updates_downloading_unknown">Downloading…</string>
+  <string name="updates_downloaded">Restart to finish updating</string>
+  <string name="updates_restarting">Restarting…</string>
+  <string name="updates_homebrew">Homebrew keeps it up to date: brew upgrade --cask lemonade-code</string>
+  <string name="updates_snap">The Snap Store keeps it up to date.</string>
+  <string name="updates_development">Built from source, so it doesn’t update itself.</string>
+  <string name="updates_unsupported">There are no updates for this system.</string>
+  <string name="updates_summary_up_to_date">Up to date</string>
+  <string name="updates_summary_available">%1$s available</string>
+  <string name="updates_summary_homebrew">Homebrew</string>
+  <string name="updates_summary_snap">Snap Store</string>
+  <string name="updates_whats_new">What’s new · %1$s</string>
+  <string name="update_release_notes">Release notes</string>
+  <string name="updates_check">Check for updates</string>
+  <string name="updates_check_busy">Checking…</string>
+  <string name="updates_install">Update now</string>
+  <string name="updates_install_busy">Downloading…</string>
+  <string name="updates_restart">Restart now</string>
+  <string name="update_restart_note">Sessions come back after the restart, but programs running in them stop.</string>
   <string name="update_retry">Try again</string>
-  <string name="update_downloading">Downloading… %1$s</string>
-  <string name="update_downloading_unknown">Downloading…</string>
-  <string name="update_restarting">Restarting…</string>
   <string name="update_failed_download">Couldn’t download the update. Check your connection and try again.</string>
   <string name="update_failed_checksum">The download didn’t match the release’s checksum, so it was thrown away. Try again.</string>
   <string name="update_failed_install">Couldn’t install the update here. Download it from the release page instead.</string>
+
+  <!-- How long ago something happened -->
+  <string name="time_just_now">just now</string>
+  <plurals name="time_minutes_ago">
+    <item quantity="one">%1$d min ago</item>
+    <item quantity="other">%1$d min ago</item>
+  </plurals>
+  <plurals name="time_hours_ago">
+    <item quantity="one">%1$d h ago</item>
+    <item quantity="other">%1$d h ago</item>
+  </plurals>
+  <string name="time_yesterday">yesterday</string>
+  <plurals name="time_days_ago">
+    <item quantity="one">%1$d day ago</item>
+    <item quantity="other">%1$d days ago</item>
+  </plurals>
+  <plurals name="time_weeks_ago">
+    <item quantity="one">%1$d week ago</item>
+    <item quantity="other">%1$d weeks ago</item>
+  </plurals>
+  <plurals name="time_months_ago">
+    <item quantity="one">%1$d month ago</item>
+    <item quantity="other">%1$d months ago</item>
+  </plurals>
+  <plurals name="time_years_ago">
+    <item quantity="one">%1$d year ago</item>
+    <item quantity="other">%1$d years ago</item>
+  </plurals>
+
+  <!-- Two or three details in a row, e.g. "USB · Android 15" -->
+  <string name="detail_two">%1$s · %2$s</string>
+  <string name="detail_three">%1$s · %2$s · %3$s</string>
 
   <!-- Sessions -->
   <string name="sessions_title">Sessions</string>
@@ -102,12 +174,24 @@
   <!-- Diff review -->
   <string name="diff_changes">Changes</string>
   <string name="diff_vs">vs</string>
-  <string name="diff_compare_with">Compare with</string>
+  <string name="diff_compare_with">Compare working tree with</string>
+  <string name="diff_compare_aria">Comparing with %1$s. Change branch</string>
+  <string name="diff_find_branch">Find a branch</string>
+  <string name="diff_no_branch_match">No branch matches that name.</string>
+  <string name="diff_branch_default">Default branch · updated %1$s</string>
+  <string name="diff_branch_head">Last commit · uncommitted changes only</string>
+  <string name="diff_files">Changed files</string>
+  <string name="diff_files_show">Show changed files</string>
+  <string name="diff_files_hide">Hide changed files</string>
   <string name="diff_refresh">Refresh diff</string>
   <string name="diff_source_working_tree">working tree</string>
   <plurals name="diff_summary_uncommitted">
     <item quantity="one">includes uncommitted changes · %1$d file</item>
     <item quantity="other">includes uncommitted changes · %1$d files</item>
+  </plurals>
+  <plurals name="diff_summary_head">
+    <item quantity="one">uncommitted changes only · %1$d file</item>
+    <item quantity="other">uncommitted changes only · %1$d files</item>
   </plurals>
   <plurals name="diff_summary">
     <item quantity="one">%1$d file</item>
@@ -168,6 +252,142 @@
   <string name="send_all_delivered">All comments delivered</string>
   <string name="send_no_comments">No comments yet</string>
   <string name="send_hint">Click + beside any line, or drag across lines, to comment</string>
+
+  <!-- Devices (the Mobile plugin) -->
+  <string name="devices_title">Devices</string>
+  <string name="devices_button">Devices</string>
+  <string name="devices_button_hide">Hide devices</string>
+  <string name="devices_button_separate">Devices · open in a separate window</string>
+  <plurals name="devices_connected">
+    <item quantity="one">%1$d connected</item>
+    <item quantity="other">%1$d connected</item>
+  </plurals>
+  <string name="devices_android">Android</string>
+  <string name="devices_ios">iOS</string>
+  <string name="devices_none">None connected</string>
+  <string name="devices_needs_adb">Install Android’s platform tools (adb) to see Android devices.</string>
+  <string name="devices_needs_libimobiledevice">Install libimobiledevice to see iPhones and iPads.</string>
+  <string name="devices_pair">Pair a device</string>
+  <string name="devices_close">Close devices</string>
+  <string name="devices_separate">Open in a separate window</string>
+  <string name="devices_dock">Return to the main window</string>
+  <string name="devices_layout_tabs">Show screen and logs as tabs</string>
+  <string name="devices_layout_split">Show screen and logs side by side</string>
+  <string name="devices_disconnect">Disconnect %1$s</string>
+  <string name="devices_disconnected">%1$s disconnected</string>
+  <string name="device_usb">USB</string>
+  <string name="device_wifi">Wi‑Fi</string>
+  <string name="device_android_version">Android %1$s</string>
+  <string name="device_ios_version">iOS %1$s</string>
+  <string name="device_allow_debugging">Allow USB debugging on the phone</string>
+  <string name="device_tap_trust">Tap Trust on the device</string>
+  <string name="device_offline">Not answering</string>
+  <string name="device_tab_screen">Screen</string>
+  <string name="device_tab_logs">Logs</string>
+
+  <!-- Devices › the mirrored screen -->
+  <string name="mirror_back">Back</string>
+  <string name="mirror_home">Home</string>
+  <string name="mirror_rotate">Rotate</string>
+  <string name="mirror_screenshot">Screenshot to session</string>
+  <string name="mirror_keyboard">Type from this keyboard</string>
+  <string name="mirror_size">%1$d × %2$d</string>
+  <string name="mirror_fps">%1$d fps</string>
+  <string name="mirror_clicks">clicks go to the device</string>
+  <string name="mirror_keys">keyboard goes to the device</string>
+  <string name="mirror_view_only">view only on iOS</string>
+  <string name="mirror_loading">Connecting to the screen…</string>
+  <string name="screen_cable_only_title">Plug in to see the screen</string>
+  <string name="screen_cable_only_detail">iOS shows its screen over a cable only. Logs keep working over Wi‑Fi.</string>
+  <string name="screen_not_supported_title">Can’t show this screen</string>
+  <string name="screen_not_supported_detail">libimobiledevice can’t capture this device. It may need its developer disk image mounted.</string>
+  <string name="screen_failed_title">Couldn’t read the screen</string>
+  <string name="screen_failed_detail">Trying again…</string>
+  <string name="screenshot_attached">Screenshot attached to %1$s</string>
+  <string name="screenshot_failed">Couldn’t take the screenshot: %1$s</string>
+
+  <!-- Devices › logs -->
+  <string name="logs_all">All</string>
+  <string name="logs_warnings">Warnings</string>
+  <string name="logs_errors">Errors</string>
+  <string name="logs_filter">Filter lines</string>
+  <string name="logs_filter_placeholder">Filter by tag or text</string>
+  <string name="logs_clear">Clear logs</string>
+  <string name="logs_live">Live</string>
+  <string name="logs_paused">Paused</string>
+  <string name="logs_pause">Pause the stream</string>
+  <string name="logs_resume">Resume the stream</string>
+  <string name="logs_cleared">Cleared. New lines appear as they arrive.</string>
+  <string name="logs_no_match">No lines match.</string>
+  <string name="logs_waiting">Waiting for lines…</string>
+  <plurals name="logs_send_errors">
+    <item quantity="one">Send %1$d error to %2$s</item>
+    <item quantity="other">Send %1$d errors to %2$s</item>
+  </plurals>
+  <plurals name="logs_errors_sent">
+    <item quantity="one">%1$d error line sent to %2$s</item>
+    <item quantity="other">%1$d error lines sent to %2$s</item>
+  </plurals>
+
+  <!-- Devices › pairing -->
+  <string name="pair_title">Pair a device</string>
+  <string name="pair_step">Step %1$d of 3</string>
+  <string name="pair_step_platform">Step %1$d of 3 · %2$s</string>
+  <string name="pair_what">What are you pairing?</string>
+  <string name="pair_android">Android</string>
+  <string name="pair_android_note">Pairs with adb. Wi‑Fi needs Android 11 or later.</string>
+  <string name="pair_ios">iPhone or iPad</string>
+  <string name="pair_ios_note">Trusts this computer over a cable once, with libimobiledevice.</string>
+  <string name="pair_how">How do you want to pair?</string>
+  <string name="pair_qr">Scan a QR code</string>
+  <string name="pair_qr_note">Fastest. The phone scans a code shown here.</string>
+  <string name="pair_code">Enter a pairing code</string>
+  <string name="pair_code_note">Type the address and 6‑digit code the phone shows.</string>
+  <string name="pair_nearby">Pick from this network</string>
+  <plurals name="pair_nearby_found_android">
+    <item quantity="one">%1$d found with wireless debugging on</item>
+    <item quantity="other">%1$d found with wireless debugging on</item>
+  </plurals>
+  <plurals name="pair_nearby_found_ios">
+    <item quantity="one">%1$d trusted device found</item>
+    <item quantity="other">%1$d trusted devices found</item>
+  </plurals>
+  <string name="pair_nearby_none">Nothing found yet</string>
+  <string name="pair_cable">Connect with a cable once</string>
+  <string name="pair_cable_note">Tap Trust on the device. After that it can connect over Wi‑Fi too.</string>
+  <string name="pair_qr_title">Scan with the phone</string>
+  <string name="pair_qr_text">On the phone open Developer options › Wireless debugging › Pair device with QR code.</string>
+  <string name="pair_qr_label">Pairing QR code</string>
+  <string name="pair_qr_waiting">Waiting for a scan</string>
+  <string name="pair_busy">Pairing…</string>
+  <string name="pair_code_title">Enter what the phone shows</string>
+  <string name="pair_code_text">Wireless debugging › Pair device with pairing code.</string>
+  <string name="pair_code_address">IP address and port</string>
+  <string name="pair_code_address_hint">192.168.1.57:37099</string>
+  <string name="pair_code_code">Pairing code</string>
+  <string name="pair_code_code_hint">6 digits</string>
+  <string name="pair_action">Pair</string>
+  <string name="pair_connect">Connect</string>
+  <string name="pair_nearby_title">Found on this network</string>
+  <string name="pair_nearby_empty_android">Nothing nearby. Turn on Wireless debugging on the phone.</string>
+  <string name="pair_nearby_empty_ios">Nothing nearby. Unlock the device and keep it on this network.</string>
+  <string name="nearby_connectable">%1$s · wireless debugging on</string>
+  <string name="nearby_awaiting_code">%1$s · showing a pairing code</string>
+  <string name="nearby_trusted">Trusted before · on this network</string>
+  <string name="pair_cable_title">Plug in the device</string>
+  <string name="pair_cable_text">Unlock it and tap Trust. After this it can connect over Wi‑Fi when it’s nearby.</string>
+  <string name="pair_cable_waiting">Waiting for a device</string>
+  <string name="pair_cable_trust">Waiting for Trust on %1$s</string>
+  <string name="paired_title">%1$s is connected</string>
+  <string name="paired_open">Open %1$s</string>
+  <string name="paired_another">Pair another device</string>
+  <string name="pair_error_wrong_code">That code didn’t work. Check it and try again; codes expire after a minute.</string>
+  <string name="pair_error_not_paired">This device hasn’t been paired with this computer. Pair it with a code or a QR code first.</string>
+  <string name="pair_error_discovery">This adb can’t find devices on the network. Update Android’s platform tools.</string>
+  <string name="pair_error_timed_out">Nothing happened for a while. Try again.</string>
+  <string name="pair_error_gone">The device isn’t connected any more.</string>
+  <string name="pair_error_adb_missing">adb isn’t installed. Install Android’s platform tools.</string>
+  <string name="pair_error_libimobiledevice_missing">libimobiledevice isn’t installed.</string>
 
   <!-- Terminal transcript -->
   <string name="terminal_running">running…</string>

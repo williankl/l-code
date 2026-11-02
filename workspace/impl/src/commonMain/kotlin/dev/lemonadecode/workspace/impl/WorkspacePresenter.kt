@@ -12,6 +12,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.SnapshotStateMap
+import dev.lemonadecode.domain.mobile.CablePairing
+import dev.lemonadecode.domain.mobile.DeviceButton
+import dev.lemonadecode.domain.mobile.DeviceId
+import dev.lemonadecode.domain.mobile.DeviceKey
+import dev.lemonadecode.domain.mobile.DeviceLogLine
+import dev.lemonadecode.domain.mobile.LogLevel
+import dev.lemonadecode.domain.mobile.MobileDevice
+import dev.lemonadecode.domain.mobile.MobileError
+import dev.lemonadecode.domain.mobile.NearbyKind
+import dev.lemonadecode.domain.mobile.QrPairing
 import dev.lemonadecode.domain.review.CommentId
 import dev.lemonadecode.domain.review.DiffState
 import dev.lemonadecode.domain.review.FileContent
@@ -23,9 +33,13 @@ import dev.lemonadecode.domain.session.Session
 import dev.lemonadecode.domain.session.SessionId
 import dev.lemonadecode.domain.session.SessionStatus
 import dev.lemonadecode.domain.session.SubSessionLocation
+import dev.lemonadecode.domain.settings.DevicesLayout
+import dev.lemonadecode.mobile.api.MobileService
+import dev.lemonadecode.platform.architecture.WallClock
 import dev.lemonadecode.platform.core.LemonadeCodeResult
 import dev.lemonadecode.platform.localization.LemonadeCodeString
 import dev.lemonadecode.platform.localization.asLemonadeCodeString
+import dev.lemonadecode.platform.localization.systemLanguageTag
 import dev.lemonadecode.platform.presenter.LemonadeCodePresenter
 import dev.lemonadecode.platform.process.HomeDirectory
 import dev.lemonadecode.review.api.ReviewService
@@ -33,11 +47,23 @@ import dev.lemonadecode.sessions.api.SessionError
 import dev.lemonadecode.sessions.api.SessionService
 import dev.lemonadecode.settings.api.SettingsService
 import dev.lemonadecode.updates.api.UpdateService
+import dev.lemonadecode.workspace.impl.DevicesMapper.toDomain
+import dev.lemonadecode.workspace.impl.SettingsMapper.toDomain
 import dev.lemonadecode.workspace.impl.WorkspaceModelMapper.toDomain
 import dev.lemonadecode.workspace.impl.WorkspaceModelMapper.toPreference
 import dev.lemonadecode.workspace.strings.Res
+import dev.lemonadecode.workspace.strings.devices_disconnected
+import dev.lemonadecode.workspace.strings.logs_errors_sent
+import dev.lemonadecode.workspace.strings.screenshot_attached
+import dev.lemonadecode.workspace.strings.screenshot_failed
 import dev.lemonadecode.workspace.strings.session_path_copied
+import dev.lemonadecode.workspace.uimodel.DeviceKeyModel
+import dev.lemonadecode.workspace.uimodel.DeviceTab
+import dev.lemonadecode.workspace.uimodel.DevicesLayoutOption
+import dev.lemonadecode.workspace.uimodel.DevicesWindow
+import dev.lemonadecode.workspace.uimodel.PairingMethod
 import dev.lemonadecode.workspace.uimodel.PreviewAssetLoader
+import dev.lemonadecode.workspace.uimodel.SettingsPage
 import dev.lemonadecode.workspace.uimodel.WorkspaceEvent
 import dev.lemonadecode.workspace.uimodel.WorkspaceModel
 import dev.lemonadecode.workspace.uimodel.WorkspaceView
@@ -60,12 +86,17 @@ public class WorkspacePresenter internal constructor(
   private val settingsService: SettingsService,
   private val homeDirectory: HomeDirectory,
   private val updateService: UpdateService,
+  private val mobileService: MobileService,
+  private val clock: WallClock,
 ) : LemonadeCodePresenter<WorkspaceModel>() {
   @Composable
   override fun present(): WorkspaceModel {
     val sessions by sessionService.sessions.collectAsState()
     val settings by settingsService.settings.collectAsState()
     val updateState by updateService.state.collectAsState()
+    val updateChecks by updateService.checks.collectAsState()
+    val mobileTools by mobileService.tools.collectAsState()
+    val mobileDevices by mobileService.devices.collectAsState()
     var view by remember { mutableStateOf(WorkspaceViewState()) }
     val scope = rememberCoroutineScope()
     val toastTimer = remember { ToastTimer() }
@@ -87,6 +118,26 @@ public class WorkspacePresenter internal constructor(
     RefreshWhenTerminalSettles(selected, onRefresh = { previewGeneration++ })
 
     val diffRows = remember { DiffRowCache() }
+    // The Devices panel reads only what its step shows.
+    val devicesView = view.devices?.takeIf { settings.mobilePlugin }
+    val openDevice = devicesView?.takeIf { it.step == DevicesStep.Device }?.deviceId
+    val screenShown = openDevice != null && (settings.devicesLayout == DevicesLayout.SideBySide || devicesView.tab == DeviceTab.Screen)
+    val deviceLogs by remember(openDevice) { openDevice?.let(mobileService::logs) ?: flowOf(null) }.collectAsState(initial = null)
+    val deviceScreen by remember(openDevice, screenShown) { if (screenShown && openDevice != null) mobileService.screen(openDevice) else flowOf(null) }.collectAsState(initial = null)
+    val nearbyPlatform = devicesView?.takeIf { it.step == DevicesStep.PairMethod || it.step == DevicesStep.PairNearby }?.pairPlatform
+    val nearby by remember(nearbyPlatform) { nearbyPlatform?.let(mobileService::nearby) ?: flowOf(emptyList()) }.collectAsState(initial = emptyList())
+    val pairingAttempt = devicesView?.attempt ?: 0
+    val qrShown = devicesView?.step == DevicesStep.PairQr
+    val qrPairing by remember(qrShown, pairingAttempt) { if (qrShown) mobileService.pairWithQr() else flowOf(null) }.collectAsState(initial = null)
+    val cableShown = devicesView?.step == DevicesStep.PairCable
+    val cablePairing by remember(cableShown, pairingAttempt) { if (cableShown) mobileService.pairOverCable() else flowOf(null) }.collectAsState(initial = null)
+    LaunchedEffect(qrPairing, cablePairing) {
+      val added = (qrPairing as? QrPairing.Paired)?.device ?: (cablePairing as? CablePairing.Paired)?.device ?: return@LaunchedEffect
+      val panel = view.devices ?: return@LaunchedEffect
+      if (panel.step == DevicesStep.PairQr || panel.step == DevicesStep.PairCable) {
+        view = view.copy(devices = panel.copy(step = DevicesStep.Paired, paired = added.id))
+      }
+    }
 
     val eventSink: (WorkspaceEvent) -> Unit = remember {
       { event ->
@@ -95,6 +146,15 @@ public class WorkspacePresenter internal constructor(
           view = transform(view)
         }
         fun fail(message: LemonadeCodeString) = update { it.copy(error = message) }
+        fun updateDevices(transform: (DevicesViewState) -> DevicesViewState) = update { state -> state.devices?.let { state.copy(devices = transform(it)) } ?: state }
+        fun showToast(message: LemonadeCodeString) {
+          update { it.copy(toast = message) }
+          toastTimer.restart(scope) { update { state -> if (state.toast === message) state.copy(toast = null) else state } }
+        }
+        fun onDevice(action: suspend (DeviceId) -> LemonadeCodeResult<Unit, *>) {
+          val device = view.devices?.deviceId ?: return
+          scope.launch { val _ = action(device) }
+        }
         fun fileOf(path: String?): FileDiff? = (review?.diff as? DiffState.Ready)?.snapshot?.files?.firstOrNull { it.path == path }
         fun commented(path: String): Boolean = review?.comments.orEmpty().any { it.filePath == path }
         fun sessionOf(id: String): Session? = sessionService.sessions.value.firstOrNull { it.id.value == id }
@@ -197,15 +257,158 @@ public class WorkspacePresenter internal constructor(
             }
           }
 
-          WorkspaceEvent.ToggleSettings -> update { if (it.settingsOpen) it.copy(settingsOpen = false) else it.closingPopovers().copy(settingsOpen = true) }
+          WorkspaceEvent.ToggleSettings -> update {
+            if (it.settingsOpen) it.copy(settingsOpen = false) else it.closingPopovers().copy(settingsOpen = true, settingsPage = SettingsPage.List)
+          }
           WorkspaceEvent.DismissSettings -> update { it.copy(settingsOpen = false) }
+          is WorkspaceEvent.OpenSettingsPage -> update { it.copy(settingsOpen = true, settingsPage = event.page) }
+          WorkspaceEvent.SettingsBack -> update { if (it.settingsPage != SettingsPage.List) it.copy(settingsPage = SettingsPage.List) else it.copy(settingsOpen = false) }
           is WorkspaceEvent.SetTheme -> scope.launch { settingsService.update { it.copy(theme = event.theme.toPreference()) } }
+          is WorkspaceEvent.SetLanguage -> scope.launch { settingsService.update { it.copy(language = event.language.toDomain()) } }
           is WorkspaceEvent.SetKeepAwake -> scope.launch { settingsService.update { it.copy(keepAwake = event.enabled) } }
+          is WorkspaceEvent.SetMobilePlugin -> {
+            if (!event.enabled) update { it.copy(devices = null) }
+            scope.launch { settingsService.update { it.copy(mobilePlugin = event.enabled) } }
+          }
 
-          WorkspaceEvent.ToggleUpdate -> update { if (it.updateOpen) it.copy(updateOpen = false) else it.closingPopovers().copy(updateOpen = true) }
-          WorkspaceEvent.DismissUpdate -> update { it.copy(updateOpen = false) }
-          // The panel stays open to show the download's progress.
+          WorkspaceEvent.CheckForUpdates -> scope.launch { updateService.check() }
+          // The Updates page stays open to show the download's progress.
           WorkspaceEvent.InstallUpdate -> updateService.install()
+          WorkspaceEvent.RestartToUpdate -> updateService.restart()
+
+          WorkspaceEvent.ToggleDevices -> update { state ->
+            when {
+              state.devices == null -> state.closingPopovers().copy(devices = DevicesViewState())
+              state.devicesWindow == DevicesWindow.Separate -> state.copy(devicesFocusRequest = state.devicesFocusRequest + 1)
+              else -> state.copy(devices = null)
+            }
+          }
+          WorkspaceEvent.OpenDevices -> update { state ->
+            val panel = (state.devices ?: DevicesViewState()).copy(step = DevicesStep.List)
+            state.closingPopovers().copy(devices = panel, devicesFocusRequest = state.devicesFocusRequest + 1)
+          }
+          WorkspaceEvent.CloseDevices -> update { it.copy(devices = null) }
+          WorkspaceEvent.DevicesBack -> updateDevices { panel ->
+            val back = when (panel.step) {
+              DevicesStep.List, DevicesStep.Device, DevicesStep.PairPlatform, DevicesStep.Paired -> DevicesStep.List
+              DevicesStep.PairMethod -> DevicesStep.PairPlatform
+              DevicesStep.PairQr, DevicesStep.PairCode, DevicesStep.PairNearby, DevicesStep.PairCable -> DevicesStep.PairMethod
+            }
+            panel.copy(step = back, pairError = null, pairing = false, connecting = null, keyboard = false)
+          }
+          is WorkspaceEvent.MoveDevices -> update { it.copy(devicesWindow = event.window) }
+          is WorkspaceEvent.SetDevicesLayout -> scope.launch {
+            settingsService.update { it.copy(devicesLayout = if (event.layout == DevicesLayoutOption.Tabs) DevicesLayout.Tabs else DevicesLayout.SideBySide) }
+          }
+          is WorkspaceEvent.SelectDevice -> updateDevices {
+            it.copy(
+              step = DevicesStep.Device,
+              deviceId = DeviceId(event.deviceId),
+              keyboard = false,
+              logSearch = false,
+              logQuery = "",
+              pausedAt = null,
+              logsCleared = false,
+            )
+          }
+          is WorkspaceEvent.SetDeviceTab -> updateDevices { it.copy(tab = event.tab) }
+          is WorkspaceEvent.DisconnectDevice -> {
+            val device = mobileService.devices.value.firstOrNull { it.id.value == event.deviceId }
+            if (device != null) {
+              scope.launch {
+                when (val dropped = mobileService.disconnect(device.id)) {
+                  is LemonadeCodeResult.Success -> {
+                    updateDevices { it.copy(step = DevicesStep.List) }
+                    showToast(Res.string.devices_disconnected.asLemonadeCodeString(device.name))
+                  }
+                  is LemonadeCodeResult.Failure -> fail(DevicesMapper.errorText(dropped.error))
+                }
+              }
+            }
+          }
+          is WorkspaceEvent.TapDevice -> onDevice { mobileService.tap(it, event.x, event.y) }
+          is WorkspaceEvent.SwipeDevice -> onDevice { mobileService.swipe(it, event.fromX, event.fromY, event.toX, event.toY, event.durationMillis) }
+          WorkspaceEvent.PressDeviceBack -> onDevice { mobileService.press(it, DeviceButton.Back) }
+          WorkspaceEvent.PressDeviceHome -> onDevice { mobileService.press(it, DeviceButton.Home) }
+          WorkspaceEvent.RotateDevice -> onDevice { mobileService.rotate(it) }
+          is WorkspaceEvent.TypeOnDevice -> onDevice { mobileService.type(it, event.text) }
+          is WorkspaceEvent.PressDeviceKey -> onDevice { mobileService.key(it, event.key.toDomain()) }
+          WorkspaceEvent.ToggleDeviceKeyboard -> updateDevices { it.copy(keyboard = !it.keyboard) }
+          WorkspaceEvent.ScreenshotToSession -> {
+            val device = view.devices?.deviceId
+            if (device != null && current != null) {
+              scope.launch {
+                when (val shot = mobileService.screenshot(device)) {
+                  is LemonadeCodeResult.Success -> when (val pasted = sessionService.paste(current.id, quotedPath(shot.value) + " ")) {
+                    is LemonadeCodeResult.Success -> showToast(Res.string.screenshot_attached.asLemonadeCodeString(current.displayName))
+                    is LemonadeCodeResult.Failure -> fail(ErrorMessages.of(pasted.error))
+                  }
+                  is LemonadeCodeResult.Failure -> fail(Res.string.screenshot_failed.asLemonadeCodeString(DevicesMapper.errorText(shot.error)))
+                }
+              }
+            }
+          }
+          is WorkspaceEvent.SetLogFilter -> updateDevices { it.copy(logFilter = event.filter) }
+          WorkspaceEvent.ToggleLogSearch -> updateDevices { it.copy(logSearch = !it.logSearch, logQuery = if (it.logSearch) "" else it.logQuery) }
+          is WorkspaceEvent.SetLogQuery -> updateDevices { it.copy(logQuery = event.query) }
+          WorkspaceEvent.ClearLogs -> view.devices?.deviceId?.let { device ->
+            mobileService.clearLogs(device)
+            updateDevices { it.copy(logsCleared = true, pausedAt = null) }
+          }
+          WorkspaceEvent.ToggleLogsPaused -> updateDevices { panel ->
+            if (panel.pausedAt != null) panel.copy(pausedAt = null) else panel.copy(pausedAt = deviceLogs?.lines?.lastOrNull()?.sequence ?: -1L)
+          }
+          WorkspaceEvent.SendLogErrors -> {
+            val panel = view.devices
+            val device = panel?.deviceId?.let { id -> mobileService.devices.value.firstOrNull { it.id == id } }
+            val errors = panel?.let { DevicesMapper.shownErrors(deviceLogs, it) }.orEmpty()
+            if (device != null && current != null && errors.isNotEmpty()) {
+              when (val pasted = sessionService.paste(current.id, errorReport(device.name, deviceLogs?.source.orEmpty(), errors))) {
+                is LemonadeCodeResult.Success -> showToast(Res.plurals.logs_errors_sent.asLemonadeCodeString(errors.size, errors.size, current.displayName))
+                is LemonadeCodeResult.Failure -> fail(ErrorMessages.of(pasted.error))
+              }
+            }
+          }
+          WorkspaceEvent.StartPairing -> updateDevices { DevicesViewState(step = DevicesStep.PairPlatform, attempt = it.attempt) }
+          is WorkspaceEvent.ChoosePairingPlatform -> updateDevices { it.copy(step = DevicesStep.PairMethod, pairPlatform = event.platform.toDomain(), pairError = null) }
+          is WorkspaceEvent.ChoosePairingMethod -> updateDevices { panel ->
+            val step = when (event.method) {
+              PairingMethod.QrCode -> DevicesStep.PairQr
+              PairingMethod.PairingCode -> DevicesStep.PairCode
+              PairingMethod.Nearby -> DevicesStep.PairNearby
+              PairingMethod.Cable -> DevicesStep.PairCable
+            }
+            panel.copy(step = step, attempt = panel.attempt + 1, pairError = null, pairing = false, connecting = null)
+          }
+          is WorkspaceEvent.SetPairingAddress -> updateDevices { it.copy(pairAddress = event.address, pairError = null) }
+          is WorkspaceEvent.SetPairingCode -> updateDevices { it.copy(pairCode = event.code.filter(Char::isDigit).take(6), pairError = null) }
+          WorkspaceEvent.PairWithCode -> {
+            val panel = view.devices
+            if (panel != null && !panel.pairing && DevicesMapper.canPairWithCode(panel.pairAddress, panel.pairCode)) {
+              updateDevices { it.copy(pairing = true, pairError = null) }
+              scope.launch {
+                val paired = mobileService.pairWithCode(panel.pairAddress.trim(), panel.pairCode.trim())
+                updateDevices { it.afterPairing(paired) }
+              }
+            }
+          }
+          is WorkspaceEvent.ConnectNearby -> {
+            val found = nearby.firstOrNull { it.address == event.address }
+            when {
+              found == null -> Unit
+              found.kind == NearbyKind.AwaitingCode -> updateDevices { it.copy(step = DevicesStep.PairCode, pairAddress = found.address, pairCode = "", pairError = null) }
+              else -> {
+                updateDevices { it.copy(connecting = found.address, pairError = null) }
+                scope.launch {
+                  val connected = mobileService.connect(found)
+                  updateDevices { it.afterPairing(connected).copy(connecting = null) }
+                }
+              }
+            }
+          }
+          WorkspaceEvent.OpenPairedDevice -> updateDevices { panel ->
+            panel.paired?.let { panel.copy(step = DevicesStep.Device, deviceId = it, tab = DeviceTab.Screen) } ?: panel.copy(step = DevicesStep.List)
+          }
 
           WorkspaceEvent.OpenParentSession -> current?.parentId?.let { parent -> update { it.selecting(parent) } }
           WorkspaceEvent.ToggleNewSubSessionMenu -> update {
@@ -239,6 +442,8 @@ public class WorkspacePresenter internal constructor(
           }
           WorkspaceEvent.ToggleDiffBasePicker -> update { if (it.basePickerOpen) it.copy(basePickerOpen = false) else it.closingPopovers().copy(basePickerOpen = true) }
           WorkspaceEvent.DismissDiffBasePicker -> update { it.copy(basePickerOpen = false) }
+          is WorkspaceEvent.ShowFileList -> update { it.copy(fileList = event.shown) }
+          is WorkspaceEvent.RevealFile -> update { it.copy(fileExpansion = it.fileExpansion + (event.fileId to true)) }
           is WorkspaceEvent.CompareWith -> {
             update { it.copy(basePickerOpen = false, dragging = null) }
             current?.let {
@@ -356,6 +561,20 @@ public class WorkspacePresenter internal constructor(
       previewAssets = previewAssets,
       update = updateState,
       diffRows = diffRows,
+      installation = updateService.installation,
+      updateChecks = updateChecks,
+      mobile = MobileInput(
+        enabled = settings.mobilePlugin,
+        tools = mobileTools,
+        devices = mobileDevices,
+        logs = deviceLogs,
+        screen = deviceScreen,
+        nearby = nearby,
+        qr = qrPairing,
+        cable = cablePairing,
+      ),
+      nowMillis = clock.nowMillis(),
+      systemLanguage = SettingsMapper.languageFor(systemLanguageTag()),
     )
     return WorkspaceModelMapper.map(input, eventSink)
   }
@@ -430,7 +649,6 @@ private fun WorkspaceViewState.selecting(id: SessionId): WorkspaceViewState = co
 
 private fun WorkspaceViewState.closingPopovers(): WorkspaceViewState = copy(
   settingsOpen = false,
-  updateOpen = false,
   subSessionMenu = null,
   sessionMenu = null,
   basePickerOpen = false,
@@ -438,6 +656,45 @@ private fun WorkspaceViewState.closingPopovers(): WorkspaceViewState = copy(
   worktreeBranch = null,
   takenBranch = null,
 )
+
+/** Where a pairing or connection leaves the panel: on the device it added, or back with what went wrong. */
+private fun DevicesViewState.afterPairing(result: LemonadeCodeResult<MobileDevice, MobileError>): DevicesViewState = when (result) {
+  is LemonadeCodeResult.Success -> copy(step = DevicesStep.Paired, paired = result.value.id, pairing = false, pairError = null, pairAddress = "", pairCode = "")
+  is LemonadeCodeResult.Failure -> copy(pairing = false, pairError = result.error)
+}
+
+/** A path as a terminal pastes a dropped file: spaces and quotes escaped with a backslash. */
+internal fun quotedPath(path: String): String = path.replace(Regex("([\\\\ '\"()&;])"), "\\\\$1")
+
+/** The error lines handed to an agent: which device and log they're from, then the lines as shown. */
+internal fun errorReport(device: String, source: String, errors: List<DeviceLogLine>): String = buildString {
+  append("Errors from ").append(device)
+  if (source.isNotEmpty()) append(" (").append(source).append(')')
+  append(":\n")
+  errors.forEach { line -> append(line.time).append(' ').append(line.level.letter).append(' ').append(line.tag).append(": ").append(line.message).append('\n') }
+}
+
+private val LogLevel.letter: String
+  get() = when (this) {
+    LogLevel.Verbose -> "V"
+    LogLevel.Debug -> "D"
+    LogLevel.Info -> "I"
+    LogLevel.Warning -> "W"
+    LogLevel.Error -> "E"
+    LogLevel.Fatal -> "F"
+  }
+
+private fun DeviceKeyModel.toDomain(): DeviceKey = when (this) {
+  DeviceKeyModel.Enter -> DeviceKey.Enter
+  DeviceKeyModel.Backspace -> DeviceKey.Backspace
+  DeviceKeyModel.ForwardDelete -> DeviceKey.ForwardDelete
+  DeviceKeyModel.Tab -> DeviceKey.Tab
+  DeviceKeyModel.Escape -> DeviceKey.Escape
+  DeviceKeyModel.Up -> DeviceKey.Up
+  DeviceKeyModel.Down -> DeviceKey.Down
+  DeviceKeyModel.Left -> DeviceKey.Left
+  DeviceKeyModel.Right -> DeviceKey.Right
+}
 
 /** How long a toast stays up, as in the design. */
 internal const val ToastMillis: Long = 2_200

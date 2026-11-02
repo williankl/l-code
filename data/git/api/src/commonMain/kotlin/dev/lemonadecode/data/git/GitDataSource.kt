@@ -9,6 +9,13 @@ public data class GitCheckout(
   val branch: String?,
 )
 
+/** The newest commit on a branch: when it was made and by whom. */
+public data class GitBranchTip(
+  /** Milliseconds since the epoch. */
+  val committedAtMillis: Long,
+  val author: String,
+)
+
 public sealed interface GitError {
   public data object NotARepository : GitError
 
@@ -38,6 +45,9 @@ public interface GitDataSource {
 
   /** The checkout's local branches, in the order git lists them (by name). */
   public suspend fun branches(repositoryRoot: String): LemonadeCodeResult<List<String>, GitError>
+
+  /** The newest commit of each local branch, by branch name. */
+  public suspend fun branchTips(repositoryRoot: String): LemonadeCodeResult<Map<String, GitBranchTip>, GitError>
 
   /**
    * Unified diff of the working tree, staged and unstaged, against the merge base of [baseRef]

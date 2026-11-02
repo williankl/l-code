@@ -14,6 +14,8 @@ import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
+import dev.lemonadecode.workspace.uimodel.DevicesWindow
+import dev.lemonadecode.workspace.uimodel.WorkspaceEvent
 import dev.zacsweers.metro.createGraph
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -48,22 +50,43 @@ public fun main(args: Array<String>) {
     val exitRequested by graph.appExit.requested.collectAsState()
     LaunchedEffect(exitRequested) { if (exitRequested) quit() }
 
+    val model by graph.workspaceScreen.rememberModel()
+    val icon = remember { appIcon() }
     Window(
       title = "Lemonade Code",
-      icon = remember { appIcon() },
+      icon = icon,
       state = rememberWindowState(size = DpSize(1440.dp, 900.dp), position = WindowPosition(Alignment.Center)),
       onCloseRequest = ::quit,
     ) {
-      graph.workspaceScreen.Content(
-        onBackground = { color ->
-          // A live resize uncovers new space a frame before Compose paints it; match it to the app, not white.
-          val awt = java.awt.Color(color.red, color.green, color.blue)
-          window.background = awt
-          window.contentPane.background = awt
-        },
-      )
+      graph.workspaceScreen.Content(model = model, onBackground = { window.paintBehind(it) })
+    }
+    // The Devices panel's own window, after ↗, so it can sit on another display. Closing it closes the panel.
+    val devices = model.devices?.takeIf { it.window == DevicesWindow.Separate }
+    if (devices != null) {
+      Window(
+        title = "Devices · Lemonade Code",
+        icon = icon,
+        state = rememberWindowState(size = DpSize(760.dp, 880.dp)),
+        onCloseRequest = { model.eventSink(WorkspaceEvent.CloseDevices) },
+      ) {
+        // The phone button in the main window brings this one forward.
+        LaunchedEffect(devices.focusRequest) {
+          if (devices.focusRequest > 0) {
+            window.toFront()
+            window.requestFocus()
+          }
+        }
+        graph.workspaceScreen.Devices(model = model, onBackground = { window.paintBehind(it) })
+      }
     }
   }
+}
+
+/** A live resize uncovers new space a frame before Compose paints it; match it to the app, not white. */
+private fun java.awt.Window.paintBehind(color: androidx.compose.ui.graphics.Color) {
+  val awt = java.awt.Color(color.red, color.green, color.blue)
+  background = awt
+  (this as? javax.swing.RootPaneContainer)?.contentPane?.background = awt
 }
 
 private fun appIcon(): Painter? = Thread.currentThread().contextClassLoader

@@ -11,6 +11,8 @@ public data class DiffReviewModel(
   val sendBar: SendBarModel,
   /** Reads what previews refer to, like the pictures in a README. */
   val assets: PreviewAssetLoader = PreviewAssetLoader.None,
+  /** The changed files beside the diff: shown, hidden, or (null) shown when the window is wide enough. */
+  val fileList: Boolean? = null,
 )
 
 /**
@@ -53,8 +55,15 @@ public data class DiffToolbarModel(
 @Immutable
 public data class DiffBaseModel(
   val selected: String?,
-  val options: List<String>,
+  val options: List<BaseBranchModel>,
   val pickerOpen: Boolean = false,
+)
+
+/** A branch the diff can compare with, e.g. `main` · "Default branch · updated 2 h ago". */
+@Immutable
+public data class BaseBranchModel(
+  val name: String,
+  val detail: LemonadeCodeString? = null,
 )
 
 @Immutable

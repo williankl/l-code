@@ -44,9 +44,20 @@ public data class Review(
    * parent session's branch, then the rest as git lists them.
    */
   val bases: List<String> = emptyList(),
+  /** The checkout's default branch; null outside git or when it has none. */
+  val defaultBranch: String? = null,
+  /** The newest commit of each branch in [bases], where git told. */
+  val branchTips: Map<String, BranchTip> = emptyMap(),
 ) {
   val unsent: List<ReviewComment> get() = comments.filter { it.status == CommentStatus.Unsent }
 }
+
+/** A branch's newest commit: when it was made and by whom. */
+public data class BranchTip(
+  /** Milliseconds since the epoch. */
+  val committedAtMillis: Long,
+  val author: String,
+)
 
 public data class NewComment(
   val filePath: String,

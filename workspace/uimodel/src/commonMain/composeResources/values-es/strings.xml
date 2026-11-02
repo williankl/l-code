@@ -1,0 +1,468 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- Top bar and settings -->
+  <string name="app_name">Lemonade Code</string>
+  <string name="sessions_collapse">Contraer sesiones</string>
+  <string name="sessions_expand">Expandir sesiones</string>
+  <string name="settings_title">Ajustes</string>
+  <string name="settings_appearance">Apariencia</string>
+  <string name="theme_dark">Oscuro</string>
+  <string name="theme_light">Claro</string>
+  <string name="theme_system">Sistema</string>
+  <string name="keep_awake_title">Mantener activo mientras trabajan las sesiones</string>
+  <string name="keep_awake_description">Impide que este equipo entre en reposo, y que la pantalla se atenúe o se bloquee, mientras alguna sesión esté trabajando.</string>
+  <string name="keep_awake_tag">Manteniendo activo · %1$d trabajando</string>
+  <string name="keep_awake_off">Desactivado · este equipo puede entrar en reposo</string>
+  <plurals name="keep_awake_active">
+    <item quantity="one">Manteniendo activo · %1$d sesión trabajando</item>
+    <item quantity="many">Manteniendo activo · %1$d sesiones trabajando</item>
+    <item quantity="other">Manteniendo activo · %1$d sesiones trabajando</item>
+  </plurals>
+  <string name="keep_awake_idle">Activado · ninguna sesión trabajando, reposo permitido</string>
+
+  <string name="settings_back">Atrás</string>
+  <string name="settings_language">Idioma</string>
+  <string name="settings_plugins">Plugins</string>
+  <string name="settings_updates">Actualizaciones</string>
+  <string name="value_on">Activado</string>
+  <string name="value_off">Desactivado</string>
+
+  <!-- Settings › Language. Each language's own name is shown as is; these are the names in this language. -->
+  <string name="language_match_system">Idioma del sistema</string>
+  <string name="language_english">Inglés</string>
+  <string name="language_german">Alemán</string>
+  <string name="language_spanish">Español</string>
+  <string name="language_french">Francés</string>
+  <string name="language_portuguese">Portugués</string>
+  <string name="language_slovak">Eslovaco</string>
+
+  <!-- Settings › Plugins -->
+  <string name="plugins_mobile">Móvil</string>
+  <string name="plugins_mobile_description">Duplicar pantallas de Android e iOS, emparejar dispositivos por Wi‑Fi y leer sus registros.</string>
+  <string name="plugins_value_mobile">Móvil activo</string>
+  <string name="plugins_value_none">Ninguno activo</string>
+  <string name="plugins_mobile_status">%1$d Android · %2$d iOS conectados</string>
+  <string name="plugins_open_devices">Abrir dispositivos</string>
+
+  <!-- Settings › Updates -->
+  <string name="updates_version">Lemonade Code %1$s</string>
+  <string name="updates_version_development">Lemonade Code · versión de desarrollo</string>
+  <string name="updates_up_to_date">Actualizado · comprobado %1$s</string>
+  <string name="updates_not_checked">Aún no comprobado</string>
+  <string name="updates_checking">Buscando actualizaciones…</string>
+  <string name="updates_available">La versión %1$s está disponible</string>
+  <string name="updates_downloading">Descargando · %1$s</string>
+  <string name="updates_downloading_unknown">Descargando…</string>
+  <string name="updates_downloaded">Reinicia para terminar de actualizar</string>
+  <string name="updates_restarting">Reiniciando…</string>
+  <string name="updates_homebrew">Homebrew lo mantiene actualizado: brew upgrade --cask lemonade-code</string>
+  <string name="updates_snap">Snap Store lo mantiene actualizado.</string>
+  <string name="updates_development">Compilado desde el código fuente, así que no se actualiza solo.</string>
+  <string name="updates_unsupported">No hay actualizaciones para este sistema.</string>
+  <string name="updates_summary_up_to_date">Actualizado</string>
+  <string name="updates_summary_available">%1$s disponible</string>
+  <string name="updates_summary_homebrew">Homebrew</string>
+  <string name="updates_summary_snap">Snap Store</string>
+  <string name="updates_whats_new">Novedades · %1$s</string>
+  <string name="update_release_notes">Notas de la versión</string>
+  <string name="updates_check">Buscar actualizaciones</string>
+  <string name="updates_check_busy">Comprobando…</string>
+  <string name="updates_install">Actualizar ahora</string>
+  <string name="updates_install_busy">Descargando…</string>
+  <string name="updates_restart">Reiniciar ahora</string>
+  <string name="update_restart_note">Las sesiones vuelven tras el reinicio, pero los programas que se ejecutan en ellas se detienen.</string>
+  <string name="update_retry">Reintentar</string>
+  <string name="update_failed_download">No se pudo descargar la actualización. Comprueba la conexión y vuelve a intentarlo.</string>
+  <string name="update_failed_checksum">La descarga no coincidía con la suma de comprobación de la versión, así que se descartó. Vuelve a intentarlo.</string>
+  <string name="update_failed_install">No se pudo instalar la actualización aquí. Descárgala desde la página de la versión.</string>
+
+  <!-- How long ago something happened -->
+  <string name="time_just_now">ahora mismo</string>
+  <plurals name="time_minutes_ago">
+    <item quantity="one">hace %1$d min</item>
+    <item quantity="many">hace %1$d min</item>
+    <item quantity="other">hace %1$d min</item>
+  </plurals>
+  <plurals name="time_hours_ago">
+    <item quantity="one">hace %1$d h</item>
+    <item quantity="many">hace %1$d h</item>
+    <item quantity="other">hace %1$d h</item>
+  </plurals>
+  <string name="time_yesterday">ayer</string>
+  <plurals name="time_days_ago">
+    <item quantity="one">hace %1$d día</item>
+    <item quantity="many">hace %1$d días</item>
+    <item quantity="other">hace %1$d días</item>
+  </plurals>
+  <plurals name="time_weeks_ago">
+    <item quantity="one">hace %1$d semana</item>
+    <item quantity="many">hace %1$d semanas</item>
+    <item quantity="other">hace %1$d semanas</item>
+  </plurals>
+  <plurals name="time_months_ago">
+    <item quantity="one">hace %1$d mes</item>
+    <item quantity="many">hace %1$d meses</item>
+    <item quantity="other">hace %1$d meses</item>
+  </plurals>
+  <plurals name="time_years_ago">
+    <item quantity="one">hace %1$d año</item>
+    <item quantity="many">hace %1$d años</item>
+    <item quantity="other">hace %1$d años</item>
+  </plurals>
+
+  <!-- Two or three details in a row, e.g. "USB · Android 15" -->
+  <string name="detail_two">%1$s · %2$s</string>
+  <string name="detail_three">%1$s · %2$s · %3$s</string>
+
+  <!-- Sessions -->
+  <string name="sessions_title">Sesiones</string>
+  <string name="sessions_resize">Redimensionar sesiones</string>
+  <string name="action_new_session">Nueva sesión</string>
+  <string name="status_working">trabajando</string>
+  <string name="status_needs_input">te necesita</string>
+  <string name="status_idle">inactiva</string>
+  <string name="status_exited">terminada</string>
+  <string name="fold_hidden_count">%1$d sin mostrar</string>
+  <plurals name="fold_show">
+    <item quantity="one">Mostrar %1$d subsesión</item>
+    <item quantity="many">Mostrar %1$d subsesiones</item>
+    <item quantity="other">Mostrar %1$d subsesiones</item>
+  </plurals>
+  <plurals name="fold_hide">
+    <item quantity="one">Ocultar %1$d subsesión</item>
+    <item quantity="many">Ocultar %1$d subsesiones</item>
+    <item quantity="other">Ocultar %1$d subsesiones</item>
+  </plurals>
+  <!-- Session row subtitle: the agent (or shell), then the branch (or folder) -->
+  <string name="session_meta">%1$s · %2$s</string>
+
+  <!-- Session menu (right click) and rename -->
+  <string name="session_options">Opciones de la sesión</string>
+  <string name="session_new_sub_same_folder">Nueva subsesión en el worktree actual</string>
+  <string name="session_new_sub_worktree">Nueva subsesión en un worktree nuevo</string>
+  <string name="session_sub_same_folder">Misma carpeta</string>
+  <string name="session_sub_same_folder_branch">Misma carpeta · %1$s</string>
+  <string name="session_sub_new_branch">Nueva rama desde %1$s</string>
+  <string name="session_worktree_needs_repo">Necesita un repositorio git</string>
+  <string name="session_rename">Cambiar nombre</string>
+  <string name="session_rename_action">Cambiar nombre de la sesión</string>
+  <string name="session_name_field">Nombre de la sesión</string>
+  <string name="session_copy_path">Copiar ruta de la carpeta</string>
+  <string name="session_path_copied">Copiado: %1$s</string>
+  <string name="session_close">Cerrar sesión</string>
+
+  <!-- New session -->
+  <string name="action_new_terminal">Nuevo terminal</string>
+  <string name="no_sessions_title">Aún no hay sesiones</string>
+  <string name="no_sessions_detail">Cada sesión es un terminal que empieza en tu carpeta personal.</string>
+
+  <!-- Session header -->
+  <string name="view_terminal">Terminal</string>
+  <string name="view_diff">Diff</string>
+  <string name="tag_sub_session_same_folder">subsesión · misma carpeta</string>
+  <string name="tag_sub_session_worktree">subsesión · worktree</string>
+
+  <!-- New sub-session -->
+  <string name="sub_session_title">Nueva subsesión</string>
+  <string name="sub_session_from">desde %1$s</string>
+  <string name="sub_session_location">Ubicación</string>
+  <string name="location_same_folder">Misma carpeta</string>
+  <string name="location_new_worktree">Nuevo worktree</string>
+  <string name="branch_note_same">misma rama</string>
+  <string name="branch_note_new">rama nueva desde %1$s</string>
+  <string name="sub_help_same">Comparte archivos y rama con %1$s. Los cambios van al mismo árbol de trabajo.</string>
+  <string name="sub_help_worktree">Carpeta y rama propias, así que los cambios nunca chocan con %1$s.</string>
+  <string name="sub_help_no_repo">Esta carpeta no es un repositorio git, así que una subsesión solo puede compartirla.</string>
+  <string name="worktree_branch_field">Rama</string>
+  <string name="worktree_branch_invalid">Git no acepta este nombre de rama.</string>
+  <string name="worktree_branch_taken">Ya hay una rama llamada %1$s.</string>
+  <string name="action_create_sub_session">Crear subsesión</string>
+  <string name="action_cancel">Cancelar</string>
+  <string name="action_dismiss">Cerrar</string>
+
+  <!-- Diff review -->
+  <string name="diff_changes">Cambios</string>
+  <string name="diff_vs">vs</string>
+  <string name="diff_compare_with">Comparar el árbol de trabajo con</string>
+  <string name="diff_compare_aria">Comparando con %1$s. Cambiar de rama</string>
+  <string name="diff_find_branch">Buscar una rama</string>
+  <string name="diff_no_branch_match">Ninguna rama coincide con ese nombre.</string>
+  <string name="diff_branch_default">Rama predeterminada · actualizada %1$s</string>
+  <string name="diff_branch_head">Último commit · solo cambios sin confirmar</string>
+  <string name="diff_files">Archivos modificados</string>
+  <string name="diff_files_show">Mostrar archivos modificados</string>
+  <string name="diff_files_hide">Ocultar archivos modificados</string>
+  <string name="diff_refresh">Actualizar diff</string>
+  <string name="diff_source_working_tree">árbol de trabajo</string>
+  <plurals name="diff_summary_uncommitted">
+    <item quantity="one">incluye cambios sin confirmar · %1$d archivo</item>
+    <item quantity="many">incluye cambios sin confirmar · %1$d archivos</item>
+    <item quantity="other">incluye cambios sin confirmar · %1$d archivos</item>
+  </plurals>
+  <plurals name="diff_summary_head">
+    <item quantity="one">solo cambios sin confirmar · %1$d archivo</item>
+    <item quantity="many">solo cambios sin confirmar · %1$d archivos</item>
+    <item quantity="other">solo cambios sin confirmar · %1$d archivos</item>
+  </plurals>
+  <plurals name="diff_summary">
+    <item quantity="one">%1$d archivo</item>
+    <item quantity="many">%1$d archivos</item>
+    <item quantity="other">%1$d archivos</item>
+  </plurals>
+  <string name="file_added">Añadido</string>
+  <string name="file_modified">Modificado</string>
+  <string name="file_deleted">Eliminado</string>
+  <string name="file_renamed">Renombrado</string>
+  <string name="file_collapse">Contraer archivo</string>
+  <string name="file_expand">Expandir archivo</string>
+  <string name="file_full">Archivo completo</string>
+  <string name="file_show_full">Mostrar archivo completo</string>
+  <string name="file_show_full_link">mostrar archivo completo</string>
+  <string name="file_binary">Archivo binario, no se muestra</string>
+  <plurals name="file_comment_count">
+    <item quantity="one">%1$d comentario</item>
+    <item quantity="many">%1$d comentarios</item>
+    <item quantity="other">%1$d comentarios</item>
+  </plurals>
+  <plurals name="hunk_show_hidden">
+    <item quantity="one">Mostrar %1$d línea oculta</item>
+    <item quantity="many">Mostrar %1$d líneas ocultas</item>
+    <item quantity="other">Mostrar %1$d líneas ocultas</item>
+  </plurals>
+  <plurals name="file_unchanged_below">
+    <item quantity="one">%1$d línea sin cambios debajo</item>
+    <item quantity="many">%1$d líneas sin cambios debajo</item>
+    <item quantity="other">%1$d líneas sin cambios debajo</item>
+  </plurals>
+  <string name="comment_on_line">Comentar %1$s</string>
+  <string name="comment_author_you">Tú</string>
+  <string name="comment_unsent">Sin enviar</string>
+  <string name="comment_sent_to">Enviado a %1$s</string>
+  <string name="comment_in_session">En %1$s</string>
+  <string name="comment_delete">Eliminar comentario</string>
+  <string name="comment_placeholder">¿Qué debería cambiar aquí?</string>
+  <string name="action_add_comment">Añadir comentario</string>
+  <string name="message_loading_diff">Leyendo el diff…</string>
+  <string name="message_no_changes">Sin cambios respecto a %1$s</string>
+  <string name="message_not_repo">No es un repositorio git</string>
+  <string name="message_not_repo_detail">Lemonade Code revisa los cambios de un repositorio git.</string>
+  <string name="message_no_base">No hay una rama %1$s con la que comparar</string>
+  <string name="message_no_base_detail">Haz fetch o créala y luego actualiza.</string>
+  <string name="message_diff_failed">No se pudo leer el diff</string>
+  <string name="message_terminal_closed">El terminal de esta sesión se ha cerrado</string>
+
+  <!-- Send bar -->
+  <string name="send_preview_note">Se pega en el terminal sin pulsar Enter, así que no se ejecuta nada hasta que lo hagas. Una subsesión recibe el mismo texto.</string>
+  <string name="action_preview">Vista previa</string>
+  <string name="action_new_sub_session">Nueva subsesión</string>
+  <string name="action_send_to_terminal">Pegar en el terminal</string>
+  <plurals name="send_unsent">
+    <item quantity="one">%1$d comentario sin enviar</item>
+    <item quantity="many">%1$d comentarios sin enviar</item>
+    <item quantity="other">%1$d comentarios sin enviar</item>
+  </plurals>
+  <plurals name="send_across_files">
+    <item quantity="one">en %1$d archivo</item>
+    <item quantity="many">en %1$d archivos</item>
+    <item quantity="other">en %1$d archivos</item>
+  </plurals>
+  <string name="send_all_delivered">Todos los comentarios entregados</string>
+  <string name="send_no_comments">Aún no hay comentarios</string>
+  <string name="send_hint">Haz clic en + junto a una línea, o arrastra sobre varias, para comentar</string>
+
+  <!-- Devices (the Mobile plugin) -->
+  <string name="devices_title">Dispositivos</string>
+  <string name="devices_button">Dispositivos</string>
+  <string name="devices_button_hide">Ocultar dispositivos</string>
+  <string name="devices_button_separate">Dispositivos · abiertos en una ventana aparte</string>
+  <plurals name="devices_connected">
+    <item quantity="one">%1$d conectado</item>
+    <item quantity="many">%1$d conectados</item>
+    <item quantity="other">%1$d conectados</item>
+  </plurals>
+  <string name="devices_android">Android</string>
+  <string name="devices_ios">iOS</string>
+  <string name="devices_none">Ninguno conectado</string>
+  <string name="devices_needs_adb">Instala las herramientas de plataforma de Android (adb) para ver dispositivos Android.</string>
+  <string name="devices_needs_libimobiledevice">Instala libimobiledevice para ver iPhones y iPads.</string>
+  <string name="devices_pair">Emparejar un dispositivo</string>
+  <string name="devices_close">Cerrar dispositivos</string>
+  <string name="devices_separate">Abrir en una ventana aparte</string>
+  <string name="devices_dock">Volver a la ventana principal</string>
+  <string name="devices_layout_tabs">Mostrar pantalla y registros en pestañas</string>
+  <string name="devices_layout_split">Mostrar pantalla y registros lado a lado</string>
+  <string name="devices_disconnect">Desconectar %1$s</string>
+  <string name="devices_disconnected">%1$s desconectado</string>
+  <string name="device_usb">USB</string>
+  <string name="device_wifi">Wi‑Fi</string>
+  <string name="device_android_version">Android %1$s</string>
+  <string name="device_ios_version">iOS %1$s</string>
+  <string name="device_allow_debugging">Permite la depuración por USB en el teléfono</string>
+  <string name="device_tap_trust">Toca «Confiar» en el dispositivo</string>
+  <string name="device_offline">No responde</string>
+  <string name="device_tab_screen">Pantalla</string>
+  <string name="device_tab_logs">Registros</string>
+
+  <!-- Devices › the mirrored screen -->
+  <string name="mirror_back">Atrás</string>
+  <string name="mirror_home">Inicio</string>
+  <string name="mirror_rotate">Girar</string>
+  <string name="mirror_screenshot">Captura a la sesión</string>
+  <string name="mirror_keyboard">Escribir con este teclado</string>
+  <string name="mirror_size">%1$d × %2$d</string>
+  <string name="mirror_fps">%1$d fps</string>
+  <string name="mirror_clicks">los clics van al dispositivo</string>
+  <string name="mirror_keys">el teclado va al dispositivo</string>
+  <string name="mirror_view_only">solo visualización en iOS</string>
+  <string name="mirror_loading">Conectando con la pantalla…</string>
+  <string name="screen_cable_only_title">Conéctalo por cable para ver la pantalla</string>
+  <string name="screen_cable_only_detail">iOS solo muestra la pantalla por cable. Los registros siguen funcionando por Wi‑Fi.</string>
+  <string name="screen_not_supported_title">No se puede mostrar esta pantalla</string>
+  <string name="screen_not_supported_detail">libimobiledevice no puede capturar este dispositivo. Puede que necesite tener montada su imagen de disco de desarrollador.</string>
+  <string name="screen_failed_title">No se pudo leer la pantalla</string>
+  <string name="screen_failed_detail">Reintentando…</string>
+  <string name="screenshot_attached">Captura adjuntada a %1$s</string>
+  <string name="screenshot_failed">No se pudo hacer la captura: %1$s</string>
+
+  <!-- Devices › logs -->
+  <string name="logs_all">Todos</string>
+  <string name="logs_warnings">Advertencias</string>
+  <string name="logs_errors">Errores</string>
+  <string name="logs_filter">Filtrar líneas</string>
+  <string name="logs_filter_placeholder">Filtrar por etiqueta o texto</string>
+  <string name="logs_clear">Borrar registros</string>
+  <string name="logs_live">En directo</string>
+  <string name="logs_paused">En pausa</string>
+  <string name="logs_pause">Pausar el flujo</string>
+  <string name="logs_resume">Reanudar el flujo</string>
+  <string name="logs_cleared">Borrado. Las líneas nuevas aparecen a medida que llegan.</string>
+  <string name="logs_no_match">Ninguna línea coincide.</string>
+  <string name="logs_waiting">Esperando líneas…</string>
+  <plurals name="logs_send_errors">
+    <item quantity="one">Enviar %1$d error a %2$s</item>
+    <item quantity="many">Enviar %1$d errores a %2$s</item>
+    <item quantity="other">Enviar %1$d errores a %2$s</item>
+  </plurals>
+  <plurals name="logs_errors_sent">
+    <item quantity="one">%1$d línea de error enviada a %2$s</item>
+    <item quantity="many">%1$d líneas de error enviadas a %2$s</item>
+    <item quantity="other">%1$d líneas de error enviadas a %2$s</item>
+  </plurals>
+
+  <!-- Devices › pairing -->
+  <string name="pair_title">Emparejar un dispositivo</string>
+  <string name="pair_step">Paso %1$d de 3</string>
+  <string name="pair_step_platform">Paso %1$d de 3 · %2$s</string>
+  <string name="pair_what">¿Qué quieres emparejar?</string>
+  <string name="pair_android">Android</string>
+  <string name="pair_android_note">Se empareja con adb. Por Wi‑Fi necesita Android 11 o posterior.</string>
+  <string name="pair_ios">iPhone o iPad</string>
+  <string name="pair_ios_note">Confía en este equipo una vez por cable, con libimobiledevice.</string>
+  <string name="pair_how">¿Cómo quieres emparejarlo?</string>
+  <string name="pair_qr">Escanear un código QR</string>
+  <string name="pair_qr_note">Lo más rápido. El teléfono escanea un código que se muestra aquí.</string>
+  <string name="pair_code">Introducir un código de sincronización</string>
+  <string name="pair_code_note">Escribe la dirección y el código de 6 dígitos que muestra el teléfono.</string>
+  <string name="pair_nearby">Elegir en esta red</string>
+  <plurals name="pair_nearby_found_android">
+    <item quantity="one">%1$d encontrado con la depuración inalámbrica activada</item>
+    <item quantity="many">%1$d encontrados con la depuración inalámbrica activada</item>
+    <item quantity="other">%1$d encontrados con la depuración inalámbrica activada</item>
+  </plurals>
+  <plurals name="pair_nearby_found_ios">
+    <item quantity="one">%1$d dispositivo de confianza encontrado</item>
+    <item quantity="many">%1$d dispositivos de confianza encontrados</item>
+    <item quantity="other">%1$d dispositivos de confianza encontrados</item>
+  </plurals>
+  <string name="pair_nearby_none">Aún no se ha encontrado nada</string>
+  <string name="pair_cable">Conectar por cable una vez</string>
+  <string name="pair_cable_note">Toca «Confiar» en el dispositivo. Después también podrá conectarse por Wi‑Fi.</string>
+  <string name="pair_qr_title">Escanea con el teléfono</string>
+  <string name="pair_qr_text">En el teléfono, abre Opciones para desarrolladores › Depuración inalámbrica › Emparejar dispositivo con código QR.</string>
+  <string name="pair_qr_label">Código QR de emparejamiento</string>
+  <string name="pair_qr_waiting">Esperando el escaneo</string>
+  <string name="pair_busy">Emparejando…</string>
+  <string name="pair_code_title">Introduce lo que muestra el teléfono</string>
+  <string name="pair_code_text">Depuración inalámbrica › Emparejar dispositivo con código de sincronización.</string>
+  <string name="pair_code_address">Dirección IP y puerto</string>
+  <string name="pair_code_address_hint">192.168.1.57:37099</string>
+  <string name="pair_code_code">Código de sincronización</string>
+  <string name="pair_code_code_hint">6 dígitos</string>
+  <string name="pair_action">Emparejar</string>
+  <string name="pair_connect">Conectar</string>
+  <string name="pair_nearby_title">Encontrados en esta red</string>
+  <string name="pair_nearby_empty_android">No hay nada cerca. Activa Depuración inalámbrica en el teléfono.</string>
+  <string name="pair_nearby_empty_ios">No hay nada cerca. Desbloquea el dispositivo y mantenlo en esta red.</string>
+  <string name="nearby_connectable">%1$s · depuración inalámbrica activada</string>
+  <string name="nearby_awaiting_code">%1$s · muestra un código de sincronización</string>
+  <string name="nearby_trusted">Ya de confianza · en esta red</string>
+  <string name="pair_cable_title">Conecta el dispositivo</string>
+  <string name="pair_cable_text">Desbloquéalo y toca «Confiar». Después podrá conectarse por Wi‑Fi cuando esté cerca.</string>
+  <string name="pair_cable_waiting">Esperando un dispositivo</string>
+  <string name="pair_cable_trust">Esperando «Confiar» en %1$s</string>
+  <string name="paired_title">%1$s está conectado</string>
+  <string name="paired_open">Abrir %1$s</string>
+  <string name="paired_another">Emparejar otro dispositivo</string>
+  <string name="pair_error_wrong_code">Ese código no ha funcionado. Revísalo y vuelve a intentarlo; los códigos caducan al cabo de un minuto.</string>
+  <string name="pair_error_not_paired">Este dispositivo no se ha emparejado con este equipo. Emparéjalo primero con un código o un código QR.</string>
+  <string name="pair_error_discovery">Este adb no encuentra dispositivos en la red. Actualiza las herramientas de plataforma de Android.</string>
+  <string name="pair_error_timed_out">No ha pasado nada en un rato. Vuelve a intentarlo.</string>
+  <string name="pair_error_gone">El dispositivo ya no está conectado.</string>
+  <string name="pair_error_adb_missing">adb no está instalado. Instala las herramientas de plataforma de Android.</string>
+  <string name="pair_error_libimobiledevice_missing">libimobiledevice no está instalado.</string>
+
+  <!-- Terminal transcript -->
+  <string name="terminal_running">ejecutando…</string>
+
+  <!-- Errors -->
+  <string name="error_folder_missing">Esa carpeta ya no existe: %1$s</string>
+  <string name="error_not_repo">Los worktrees necesitan un repositorio git.</string>
+  <string name="error_worktree">No se pudo crear el worktree: %1$s</string>
+  <string name="error_launch">No se pudo arrancar la sesión: %1$s</string>
+  <string name="error_send">No se pudieron enviar los comentarios: %1$s</string>
+
+  <!-- File previews -->
+  <string name="file_preview">Vista previa</string>
+  <string name="file_preview_hide">Mostrar diff</string>
+  <string name="preview_before">Antes</string>
+  <string name="preview_after">Después</string>
+  <string name="preview_side_by_side">Lado a lado</string>
+  <string name="preview_loading">Cargando vista previa…</string>
+  <string name="preview_too_large">Demasiado grande para la vista previa (%1$s)</string>
+  <string name="preview_unreadable">No se pudo mostrar este archivo: %1$s</string>
+  <string name="preview_empty">Archivo vacío</string>
+  <string name="preview_image_info">%1$d × %2$d · %3$s</string>
+  <string name="preview_play">Reproducir</string>
+  <string name="preview_pause">Pausar</string>
+  <string name="preview_position">Posición</string>
+  <string name="preview_seconds">%1$s s</string>
+  <plurals name="preview_frames">
+    <item quantity="one">%1$s fotograma</item>
+    <item quantity="many">%1$s fotogramas</item>
+    <item quantity="other">%1$s fotogramas</item>
+  </plurals>
+  <string name="preview_model_hint">Arrastra para girar · ⌘ o Ctrl + desplazar para hacer zoom · doble clic para restablecer</string>
+  <string name="preview_model_partial">Mostrando %1$s de %2$s triángulos</string>
+  <string name="preview_reset_view">Restablecer vista</string>
+  <string name="preview_zoom_in">Acercar</string>
+  <string name="preview_zoom_out">Alejar</string>
+  <string name="preview_markdown_image">Imagen: %1$s</string>
+  <string name="preview_markdown_truncated">La vista previa termina aquí. Muestra el diff para ver el resto del archivo.</string>
+  <string name="preview_markdown_details">Detalles</string>
+  <string name="preview_markdown_alert_note">Nota</string>
+  <string name="preview_markdown_alert_tip">Sugerencia</string>
+  <string name="preview_markdown_alert_important">Importante</string>
+  <string name="preview_markdown_alert_warning">Advertencia</string>
+  <string name="preview_markdown_alert_caution">Precaución</string>
+  <string name="error_preview">No se pudo leer el archivo: %1$s</string>
+  <plurals name="preview_model_triangles">
+    <item quantity="one">%1$s triángulo</item>
+    <item quantity="many">%1$s triángulos</item>
+    <item quantity="other">%1$s triángulos</item>
+  </plurals>
+  <plurals name="preview_table_more_rows">
+    <item quantity="one">%1$d fila más sin mostrar</item>
+    <item quantity="many">%1$d filas más sin mostrar</item>
+    <item quantity="other">%1$d filas más sin mostrar</item>
+  </plurals>
+</resources>

@@ -61,6 +61,8 @@ import dev.lemonadecode.workspace.strings.action_dismiss
 import dev.lemonadecode.workspace.strings.action_new_terminal
 import dev.lemonadecode.workspace.strings.no_sessions_detail
 import dev.lemonadecode.workspace.strings.no_sessions_title
+import dev.lemonadecode.workspace.uimodel.DevicesPanelModel
+import dev.lemonadecode.workspace.uimodel.DevicesWindow
 import dev.lemonadecode.workspace.uimodel.SessionsPanelModel
 import dev.lemonadecode.workspace.uimodel.ThemeOption
 import dev.lemonadecode.workspace.uimodel.WorkspaceContentModel
@@ -119,6 +121,7 @@ public fun WorkspaceContent(
       .focusable(),
   ) {
     val narrow = maxWidth < NarrowLayoutBreakpoint
+    val windowWidth = maxWidth
     val drawerWidth = min(DrawerMaxWidth, maxWidth - 16.dp)
     val panel = model.sessions
     val sessionsVisible = if (narrow) panel.drawerOpen else panel.expanded
@@ -174,8 +177,36 @@ public fun WorkspaceContent(
           MainPanel(
             model = model,
             terminal = terminal,
+            narrowLayout = narrow,
             onEvent = onEvent,
             modifier = Modifier.weight(1f).fillMaxHeight(),
+          )
+          val docked = model.devices?.takeIf { it.window == DevicesWindow.Docked }
+          if (docked != null && !narrow) {
+            Spacer(modifier = Modifier.width(gap))
+            DevicesPanel(
+              panel = docked,
+              onEvent = onEvent,
+              modifier = Modifier
+                .width(devicesPanelWidth(docked))
+                .fillMaxHeight()
+                .clip(LemonadeTheme.shapes.semantic.radiusContainerDefault),
+            )
+          }
+        }
+        // Below the breakpoint the panel floats over the session, at the right.
+        model.devices?.takeIf { it.window == DevicesWindow.Docked && narrow }?.let { docked ->
+          val shape = LemonadeTheme.shapes.semantic.radiusContainerDefault
+          DevicesPanel(
+            panel = docked,
+            onEvent = onEvent,
+            modifier = Modifier
+              .align(Alignment.TopEnd)
+              .padding(end = gap, bottom = gap)
+              .width(min(devicesPanelWidth(docked), windowWidth - gap * 2))
+              .fillMaxHeight()
+              .lemonadeShadow(shadow = LemonadeShadow.Xlarge, shape = shape)
+              .clip(shape),
           )
         }
         if (narrow && panel.drawerOpen) {
@@ -241,6 +272,7 @@ private fun SessionsDrawer(
 private fun MainPanel(
   model: WorkspaceModel,
   terminal: TerminalSlot,
+  narrowLayout: Boolean,
   onEvent: (WorkspaceEvent) -> Unit,
   modifier: Modifier = Modifier,
 ) {
@@ -266,7 +298,7 @@ private fun MainPanel(
         content.diffToolbar?.let { DiffToolbar(toolbar = it, onEvent = onEvent) }
         MessageState(content = content, modifier = fill)
       }
-      is WorkspaceContentModel.Diff -> DiffPane(review = content.review, onEvent = onEvent, modifier = fill)
+      is WorkspaceContentModel.Diff -> DiffPane(review = content.review, narrowLayout = narrowLayout, onEvent = onEvent, modifier = fill)
       WorkspaceContentModel.NoSessions -> NoSessions(onEvent = onEvent, modifier = fill)
     }
   }
@@ -333,7 +365,7 @@ private fun ErrorBanner(
 private fun shortcutFor(model: WorkspaceModel, key: Key, command: Boolean): WorkspaceEvent? = when {
   key == Key.Escape && model.sessions.menu?.rename != null -> WorkspaceEvent.CancelRenamingSession
   key == Key.Escape && model.sessions.menu != null -> WorkspaceEvent.DismissSessionMenu
-  key == Key.Escape && model.settings.open -> WorkspaceEvent.DismissSettings
+  key == Key.Escape && model.settings.open -> WorkspaceEvent.SettingsBack
   key == Key.Escape && model.newSubSession.open -> WorkspaceEvent.DismissNewSubSessionMenu
   key == Key.Escape && model.sessions.drawerOpen -> WorkspaceEvent.CloseDrawer
   command && key == Key.Enter -> {
@@ -343,4 +375,17 @@ private fun shortcutFor(model: WorkspaceModel, key: Key, command: Boolean): Work
   command && key == Key.T -> WorkspaceEvent.NewSession
   command && key == Key.W && model.header != null -> WorkspaceEvent.CloseSelectedSession
   else -> null
+}
+
+/**
+ * The Devices panel in a window of its own, for another display. Closing that window closes the
+ * panel; the ↙ button puts it back beside the session.
+ */
+@Composable
+public fun DevicesWindowContent(
+  panel: DevicesPanelModel,
+  onEvent: (WorkspaceEvent) -> Unit,
+  modifier: Modifier = Modifier,
+) {
+  DevicesPanel(panel = panel, onEvent = onEvent, modifier = modifier.fillMaxSize())
 }

@@ -16,6 +16,7 @@ ffmpeg = "8.1.2-1.5.14"
 spotless = "8.7.0"
 ktlint = "1.5.0"
 jsvg = "2.2.0"
+zxing = "3.5.3"
 
 [libraries]
 lemonade-ui = { module = "com.teya.foundation:lemonade-ui", version.ref = "lemonade" }
@@ -37,6 +38,7 @@ kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serializa
 kotlinx-collections-immutable = { module = "org.jetbrains.kotlinx:kotlinx-collections-immutable", version.ref = "kotlinx-collections-immutable" }
 molecule-runtime = { module = "app.cash.molecule:molecule-runtime", version.ref = "molecule" }
 turbine = { module = "app.cash.turbine:turbine", version.ref = "turbine" }
+zxing-core = { module = "com.google.zxing:core", version.ref = "zxing" }
 
 # Video previews: FFmpeg through JavaCV. The natives take a platform classifier; see build-logic's Ffmpeg.kt.
 javacv = { module = "org.bytedeco:javacv", version.ref = "javacv" }

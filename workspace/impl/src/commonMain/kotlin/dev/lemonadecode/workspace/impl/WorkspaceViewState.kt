@@ -1,10 +1,17 @@
 package dev.lemonadecode.workspace.impl
 
+import dev.lemonadecode.domain.mobile.DeviceId
+import dev.lemonadecode.domain.mobile.MobileError
+import dev.lemonadecode.domain.mobile.MobilePlatform
 import dev.lemonadecode.domain.review.FileContent
 import dev.lemonadecode.domain.session.SessionId
 import dev.lemonadecode.domain.session.SubSessionLocation
 import dev.lemonadecode.platform.localization.LemonadeCodeString
+import dev.lemonadecode.workspace.uimodel.DeviceTab
+import dev.lemonadecode.workspace.uimodel.DevicesWindow
+import dev.lemonadecode.workspace.uimodel.LogFilter
 import dev.lemonadecode.workspace.uimodel.PreviewLayout
+import dev.lemonadecode.workspace.uimodel.SettingsPage
 import dev.lemonadecode.workspace.uimodel.WorkspaceView
 
 /** How the session list is drawn: one level with elbows, or any depth with lineage rails. */
@@ -46,8 +53,15 @@ internal data class WorkspaceViewState(
   val composer: Composer? = null,
   val previewOpen: Boolean = false,
   val settingsOpen: Boolean = false,
-  /** The panel under the Update button is open. */
-  val updateOpen: Boolean = false,
+  val settingsPage: SettingsPage = SettingsPage.List,
+  /** The Devices panel while it's open. */
+  val devices: DevicesViewState? = null,
+  /** Where the Devices panel opens; kept while it's closed. */
+  val devicesWindow: DevicesWindow = DevicesWindow.Docked,
+  /** Counts the times the Devices window was asked to come forward. */
+  val devicesFocusRequest: Int = 0,
+  /** The changed files beside the diff, picked by hand; null follows the window's width. */
+  val fileList: Boolean? = null,
   val subSessionMenu: SubSessionLocation? = null,
   /** The list of branches the diff can compare with is open. */
   val basePickerOpen: Boolean = false,
@@ -75,4 +89,35 @@ internal data class PreviewLoad(
   val before: FileContent? = null,
   val after: FileContent? = null,
   val error: LemonadeCodeString? = null,
+)
+
+/** The steps of the Devices panel: the list, a device, and the three steps of pairing. */
+internal enum class DevicesStep { List, Device, PairPlatform, PairMethod, PairQr, PairCode, PairNearby, PairCable, Paired }
+
+/** The Devices panel's own state; the devices themselves come from the mobile service. */
+internal data class DevicesViewState(
+  val step: DevicesStep = DevicesStep.List,
+  val deviceId: DeviceId? = null,
+  val tab: DeviceTab = DeviceTab.Screen,
+  /** Typing goes to the device. */
+  val keyboard: Boolean = false,
+  val logFilter: LogFilter = LogFilter.All,
+  val logSearch: Boolean = false,
+  val logQuery: String = "",
+  /** The newest line shown while paused; null while live. */
+  val pausedAt: Long? = null,
+  /** The logs were cleared by hand, so an empty list says so instead of "waiting". */
+  val logsCleared: Boolean = false,
+  val pairPlatform: MobilePlatform = MobilePlatform.Android,
+  val pairAddress: String = "",
+  val pairCode: String = "",
+  /** A pairing or connection is under way. */
+  val pairing: Boolean = false,
+  /** The nearby device being connected to. */
+  val connecting: String? = null,
+  val pairError: MobileError? = null,
+  /** The device the last pairing added. */
+  val paired: DeviceId? = null,
+  /** Goes up by one to start a QR or cable pairing over. */
+  val attempt: Int = 0,
 )

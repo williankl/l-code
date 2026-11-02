@@ -179,7 +179,7 @@ private fun Stage(
         Box(
           modifier = Modifier
             .padding(spaces.spacing200)
-            .size(width = sample.widthDp.dp, height = 900.dp)
+            .size(width = sample.widthDp.dp, height = sample.heightDp.dp)
             .lemonadeShadow(LemonadeShadow.Xlarge, shape)
             .clip(shape),
         ) { content() }

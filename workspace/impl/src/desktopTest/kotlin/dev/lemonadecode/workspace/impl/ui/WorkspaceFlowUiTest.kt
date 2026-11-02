@@ -29,6 +29,7 @@ import dev.lemonadecode.domain.session.SessionId
 import dev.lemonadecode.domain.session.SessionStatus
 import dev.lemonadecode.domain.session.SubSessionLocation
 import dev.lemonadecode.domain.settings.ThemePreference
+import dev.lemonadecode.mobile.fake.FakeMobileService
 import dev.lemonadecode.platform.designsystem.LemonadeCodeTheme
 import dev.lemonadecode.platform.process.HomeDirectory
 import dev.lemonadecode.review.fake.FakeReviewService
@@ -60,6 +61,8 @@ class WorkspaceFlowUiTest {
       override val path: String = ShowcaseFixtures.Home
     },
     updateService = updates,
+    mobileService = FakeMobileService(),
+    clock = { 0L },
   )
   private val ar = SessionId("ar")
 
@@ -129,12 +132,18 @@ class WorkspaceFlowUiTest {
   }
 
   @Test
-  fun `settings change the theme and keep awake`() {
+  fun `settings change the theme and keep awake, one page at a time`() {
     withRepository()
     flow {
       onNodeWithContentDescription("Settings").performClick()
       waitFor(hasText("Appearance"))
+      onNodeWithText("Appearance").performClick()
+      waitFor(hasText("Light"))
       onNodeWithText("Light").performClick()
+      onNodeWithContentDescription("Back").performClick()
+      waitFor(hasText("Keep awake while sessions work"))
+      onNodeWithText("Keep awake while sessions work").performClick()
+      waitFor(isToggleable())
       onNode(isToggleable()).performClick()
       waitUntil(timeoutMillis = 5_000) { settings.settings.value.keepAwake }
       assertEquals(ThemePreference.Light, settings.settings.value.theme)

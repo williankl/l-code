@@ -5,42 +5,95 @@ import dev.lemonadecode.platform.localization.LemonadeCodeString
 
 public enum class ThemeOption { Dark, Light, System }
 
+/** The settings popover shows its list, or one item's own page. */
+public enum class SettingsPage { List, Appearance, Language, KeepAwake, Plugins, Updates }
+
+/** The interface language; [System] follows the computer's. [tag] is the language's BCP 47 tag. */
+public enum class LanguageOption(public val tag: String?) {
+  System(null),
+  English("en"),
+  German("de"),
+  Spanish("es"),
+  French("fr"),
+  Portuguese("pt"),
+  Slovak("sk"),
+}
+
 @Immutable
 public data class SettingsModel(
   val open: Boolean,
   val theme: ThemeOption,
   val keepAwake: Boolean,
   val keepAwakeStatus: KeepAwakeStatusModel,
+  val page: SettingsPage = SettingsPage.List,
+  val language: LanguageOption = LanguageOption.System,
+  /** The language Match system stands for on this computer. */
+  val systemLanguage: LanguageOption = LanguageOption.English,
+  val mobile: MobilePluginModel = MobilePluginModel(enabled = false),
+  val updates: UpdatesModel = UpdatesModel.Unknown,
 )
 
-/** A newer Lemonade Code to install, and how installing it is going. */
+/** Plugins › Mobile. */
 @Immutable
-public data class UpdateModel(
-  /** e.g. `1.3.0`. */
-  val version: String,
-  val currentVersion: String,
-  /** The release's page, with its notes. */
-  val releaseUrl: String,
-  /** The panel under the button is open. */
-  val open: Boolean,
-  val status: UpdateStatusModel,
+public data class MobilePluginModel(
+  val enabled: Boolean,
+  /** e.g. "1 Android · 1 iOS connected"; null while it's off. */
+  val status: LemonadeCodeString? = null,
 )
 
-@Immutable
-public sealed interface UpdateStatusModel {
-  @Immutable
-  public data object Ready : UpdateStatusModel
+/** Where updating stands, as the Updates page shows it. */
+public enum class UpdatePhase {
+  /** Nothing newer: up to date, or not checked yet. */
+  UpToDate,
+  Checking,
+  Available,
+  Downloading,
 
-  /** [percent] is null until the download's size is known. */
-  @Immutable
-  public data class Downloading(val percent: Int?) : UpdateStatusModel
+  /** Downloaded: a restart finishes it. */
+  Downloaded,
+  Restarting,
+  Failed,
 
-  @Immutable
-  public data object Restarting : UpdateStatusModel
-
-  @Immutable
-  public data class Failed(val message: LemonadeCodeString) : UpdateStatusModel
+  /** Homebrew, the Snap Store or nothing at all updates this installation; there's nothing to press. */
+  Elsewhere,
 }
+
+@Immutable
+public data class UpdatesModel(
+  /** e.g. "Lemonade Code 1.8.2". */
+  val title: LemonadeCodeString,
+  val phase: UpdatePhase,
+  /** The line under the title, e.g. "Up to date · checked 2 h ago". */
+  val status: LemonadeCodeString,
+  /** The value beside Updates in the list, e.g. "1.9.0 available". */
+  val summary: LemonadeCodeString,
+  /** What the newer version brings; null while there's none. */
+  val release: ReleaseNotesModel? = null,
+  /** 0 to 1 while downloading, once the size is known. */
+  val progress: Float? = null,
+) {
+  /** The gear and the Updates row carry a dot. */
+  val needsAttention: Boolean get() = phase == UpdatePhase.Available || phase == UpdatePhase.Downloaded
+
+  public companion object {
+    public val Unknown: UpdatesModel = UpdatesModel(
+      title = LemonadeCodeString.Literal("Lemonade Code"),
+      phase = UpdatePhase.Elsewhere,
+      status = LemonadeCodeString.Literal(""),
+      summary = LemonadeCodeString.Literal(""),
+    )
+  }
+}
+
+@Immutable
+public data class ReleaseNotesModel(
+  /** e.g. `1.9.0`. */
+  val version: String,
+  /** A few lines of what's new; null when the release says nothing. */
+  val notes: String?,
+  /** The release's page, with all its notes. */
+  val url: String,
+)
 
 @Immutable
 public data class KeepAwakeStatusModel(

@@ -1,22 +1,19 @@
 package dev.lemonadecode.workspace.ui
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.scrollBy
-import androidx.compose.foundation.hoverable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -26,29 +23,35 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import com.teya.lemonade.Badge
 import com.teya.lemonade.Button
 import com.teya.lemonade.Chip
+import com.teya.lemonade.ExperimentalLemonadeComponent
 import com.teya.lemonade.Icon
 import com.teya.lemonade.IconButton
 import com.teya.lemonade.LemonadeTheme
 import com.teya.lemonade.LemonadeUi
+import com.teya.lemonade.SearchField
 import com.teya.lemonade.SymbolContainer
 import com.teya.lemonade.Tag
 import com.teya.lemonade.Text
@@ -63,12 +66,20 @@ import com.teya.lemonade.core.SymbolContainerSize
 import com.teya.lemonade.core.SymbolContainerVoice
 import com.teya.lemonade.core.TagVoice
 import dev.lemonadecode.platform.designsystem.AnchoredPopover
+import dev.lemonadecode.platform.designsystem.HoverTooltip
+import dev.lemonadecode.platform.designsystem.LemonadeCodeTheme
 import dev.lemonadecode.platform.designsystem.TooltipPlacement
 import dev.lemonadecode.platform.designsystem.bottomHairline
 import dev.lemonadecode.platform.localization.resolve
 import dev.lemonadecode.workspace.strings.Res
 import dev.lemonadecode.workspace.strings.diff_changes
+import dev.lemonadecode.workspace.strings.diff_compare_aria
 import dev.lemonadecode.workspace.strings.diff_compare_with
+import dev.lemonadecode.workspace.strings.diff_files
+import dev.lemonadecode.workspace.strings.diff_files_hide
+import dev.lemonadecode.workspace.strings.diff_files_show
+import dev.lemonadecode.workspace.strings.diff_find_branch
+import dev.lemonadecode.workspace.strings.diff_no_branch_match
 import dev.lemonadecode.workspace.strings.diff_refresh
 import dev.lemonadecode.workspace.strings.diff_vs
 import dev.lemonadecode.workspace.strings.file_added
@@ -81,6 +92,7 @@ import dev.lemonadecode.workspace.strings.file_modified
 import dev.lemonadecode.workspace.strings.file_preview
 import dev.lemonadecode.workspace.strings.file_renamed
 import dev.lemonadecode.workspace.ui.preview.FilePreviewBody
+import dev.lemonadecode.workspace.uimodel.BaseBranchModel
 import dev.lemonadecode.workspace.uimodel.DiffBaseModel
 import dev.lemonadecode.workspace.uimodel.DiffFileModel
 import dev.lemonadecode.workspace.uimodel.DiffReviewModel
@@ -88,43 +100,78 @@ import dev.lemonadecode.workspace.uimodel.DiffRowModel
 import dev.lemonadecode.workspace.uimodel.DiffToolbarModel
 import dev.lemonadecode.workspace.uimodel.FileChangeKind
 import dev.lemonadecode.workspace.uimodel.WorkspaceEvent
+import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
 
 @Composable
 internal fun DiffPane(
   review: DiffReviewModel,
+  narrowLayout: Boolean,
   onEvent: (WorkspaceEvent) -> Unit,
   modifier: Modifier = Modifier,
 ) {
   val spaces = LemonadeTheme.spaces
   val listState = rememberLazyListState()
+  val scope = rememberCoroutineScope()
+  val fileListShown = review.fileList ?: !narrowLayout
   // Here rather than in the rows, which are only composed while on screen.
   val fileStates = remember { HashMap<String, DiffFileRowsState>() }
   SideEffect { fileStates.keys.retainAll(review.files.mapTo(HashSet()) { it.id }) }
   val measure = rememberCodeMeasure()
   RevealOpenComposer(review = review, listState = listState)
+  // Where each file's header sits in the list below, to follow the scroll and to jump to a file.
+  val headers = remember(review.files) { review.headerItemIndices() }
+  val activeFile by remember(headers, review.files) {
+    derivedStateOf {
+      when {
+        review.files.isEmpty() -> null
+        !listState.canScrollForward && listState.canScrollBackward -> review.files.last().id
+        // A gap at the top already belongs to the file below it.
+        else -> review.files[headers.indexOfLast { it <= listState.firstVisibleItemIndex + 1 }.coerceAtLeast(0)].id
+      }
+    }
+  }
   Column(modifier = modifier) {
-    DiffToolbar(toolbar = review.toolbar, onEvent = onEvent)
-    LazyColumn(
-      state = listState,
-      contentPadding = PaddingValues(start = spaces.spacing400, end = spaces.spacing400, bottom = spaces.spacing400),
-      modifier = Modifier.weight(1f).fillMaxWidth(),
-    ) {
-      review.files.forEachIndexed { index, file ->
-        if (index > 0) {
-          item(key = "gap:${file.id}") { Spacer(modifier = Modifier.height(spaces.spacing300)) }
-        }
-        stickyHeader(key = "head:${file.id}") {
-          DiffFileHeader(file = file, onEvent = onEvent)
-        }
-        val preview = file.preview
-        when {
-          !file.expanded -> Unit
-          preview != null && preview.showing -> item(key = "body:${file.id}") {
-            FilePreviewBody(file = file, preview = preview, assets = review.assets, onEvent = onEvent)
+    DiffToolbar(
+      toolbar = review.toolbar,
+      onEvent = onEvent,
+      fileList = FileListToggle(shown = fileListShown, onToggle = { onEvent(WorkspaceEvent.ShowFileList(!fileListShown)) }),
+    )
+    Row(modifier = Modifier.weight(1f).fillMaxWidth()) {
+      if (fileListShown) {
+        ChangedFiles(
+          files = review.files,
+          activeFile = activeFile,
+          onPick = { file ->
+            if (!file.expanded) onEvent(WorkspaceEvent.RevealFile(file.id))
+            // Opening a file only adds items below its header, so the header's place holds.
+            val header = headers[review.files.indexOf(file)]
+            scope.launch { listState.animateScrollToItem(header) }
+          },
+          modifier = Modifier.width(FileListWidth).fillMaxHeight(),
+        )
+      }
+      LazyColumn(
+        state = listState,
+        contentPadding = PaddingValues(start = spaces.spacing400, end = spaces.spacing400, bottom = spaces.spacing400),
+        modifier = Modifier.weight(1f).fillMaxHeight(),
+      ) {
+        review.files.forEachIndexed { index, file ->
+          if (index > 0) {
+            item(key = "gap:${file.id}") { Spacer(modifier = Modifier.height(spaces.spacing300)) }
           }
-          else -> diffFileRows(file = file, state = fileStates.getOrPut(file.id) { DiffFileRowsState() }, measure = measure, onEvent = onEvent)
+          stickyHeader(key = "head:${file.id}") {
+            DiffFileHeader(file = file, onEvent = onEvent)
+          }
+          val preview = file.preview
+          when {
+            !file.expanded -> Unit
+            preview != null && preview.showing -> item(key = "body:${file.id}") {
+              FilePreviewBody(file = file, preview = preview, assets = review.assets, onEvent = onEvent)
+            }
+            else -> diffFileRows(file = file, state = fileStates.getOrPut(file.id) { DiffFileRowsState() }, measure = measure, onEvent = onEvent)
+          }
         }
       }
     }
@@ -168,11 +215,29 @@ private fun DiffReviewModel.composerItemIndex(): Int? {
   return null
 }
 
+/** Where each file's header sits in [DiffPane]'s list, counted the way it lays the items out. */
+private fun DiffReviewModel.headerItemIndices(): IntArray {
+  var item = 0
+  return IntArray(files.size) { index ->
+    if (index > 0) item++ // The gap above the file.
+    val header = item
+    item += 1 + files[index].bodyItemCount
+    header
+  }
+}
+
+/** The button that shows or hides the changed files beside the diff. */
+internal class FileListToggle(
+  val shown: Boolean,
+  val onToggle: () -> Unit,
+)
+
 /** "Changes · working tree vs <branch>", the branch a picker; the summary once there is a diff. */
 @Composable
 internal fun DiffToolbar(
   toolbar: DiffToolbarModel,
   onEvent: (WorkspaceEvent) -> Unit,
+  fileList: FileListToggle? = null,
 ) {
   val spaces = LemonadeTheme.spaces
   val secondary = LemonadeTheme.colors.content.contentSecondary
@@ -181,8 +246,21 @@ internal fun DiffToolbar(
     horizontalArrangement = Arrangement.spacedBy(spaces.spacing300),
     modifier = Modifier
       .fillMaxWidth()
-      .padding(start = spaces.spacing600, end = spaces.spacing400, top = spaces.spacing300, bottom = spaces.spacing300),
+      .padding(start = if (fileList != null) spaces.spacing400 else spaces.spacing600, end = spaces.spacing400, top = spaces.spacing300, bottom = spaces.spacing300),
   ) {
+    fileList?.let { toggle ->
+      val label = stringResource(if (toggle.shown) Res.string.diff_files_hide else Res.string.diff_files_show)
+      HoverTooltip(text = label, placement = TooltipPlacement.BelowStart) {
+        LemonadeUi.IconButton(
+          icon = LemonadeIcons.List,
+          contentDescription = label,
+          onClick = toggle.onToggle,
+          variant = LemonadeButtonVariant.Neutral,
+          type = if (toggle.shown) LemonadeButtonType.Solid else LemonadeButtonType.Ghost,
+          size = LemonadeButtonSize.XSmall,
+        )
+      }
+    }
     LemonadeUi.Text(text = stringResource(Res.string.diff_changes), textStyle = LemonadeTheme.typography.headingXXSmall)
     Row(
       verticalAlignment = Alignment.CenterVertically,
@@ -210,40 +288,64 @@ internal fun DiffToolbar(
   }
 }
 
-/** The branch the diff compares with; opens the list of the others. */
+/** The branch the diff compares with; opens a searchable list of the others. */
+@OptIn(ExperimentalLemonadeComponent::class)
 @Composable
 private fun DiffBasePicker(
   base: DiffBaseModel,
   onEvent: (WorkspaceEvent) -> Unit,
 ) {
+  val colors = LemonadeTheme.colors
+  val spaces = LemonadeTheme.spaces
+  val selected = base.selected ?: "…"
+  val pickerLabel = stringResource(Res.string.diff_compare_aria, selected)
   Box {
     LemonadeUi.Button(
-      label = base.selected ?: "…",
+      label = selected,
       onClick = { onEvent(WorkspaceEvent.ToggleDiffBasePicker) },
       trailingIcon = LemonadeIcons.ChevronDown,
       variant = LemonadeButtonVariant.Neutral,
       type = if (base.pickerOpen) LemonadeButtonType.Solid else LemonadeButtonType.Subtle,
-      size = LemonadeButtonSize.Small,
+      size = LemonadeButtonSize.XSmall,
       enabled = base.options.isNotEmpty(),
+      modifier = Modifier.semantics { contentDescription = pickerLabel },
     )
     if (base.pickerOpen) {
+      var query by remember { mutableStateOf("") }
+      val shown = base.options.filter { query.isBlank() || it.name.contains(query.trim(), ignoreCase = true) }
       AnchoredPopover(
         onDismissRequest = { onEvent(WorkspaceEvent.DismissDiffBasePicker) },
         width = BasePickerWidth,
         placement = TooltipPlacement.BelowStart,
+        padding = spaces.spacing300,
+        spacing = spaces.spacing200,
       ) {
         LemonadeUi.Text(
-          text = stringResource(Res.string.diff_compare_with).uppercase(),
-          textStyle = LemonadeTheme.typography.bodyXSmallOverline,
-          color = LemonadeTheme.colors.content.contentSecondary,
+          text = stringResource(Res.string.diff_compare_with),
+          textStyle = LemonadeTheme.typography.bodySmallSemiBold,
+          modifier = Modifier.padding(start = spaces.spacing200, end = spaces.spacing200, top = spaces.spacing100),
+        )
+        LemonadeUi.SearchField(
+          input = query,
+          onInputChanged = { query = it },
+          placeholder = stringResource(Res.string.diff_find_branch),
+          modifier = Modifier.fillMaxWidth(),
         )
         Column(
           modifier = Modifier
             .heightIn(max = BasePickerMaxHeight)
             .verticalScroll(rememberScrollState()),
         ) {
-          base.options.forEach { branch ->
-            BaseOption(branch = branch, selected = branch == base.selected, onClick = { onEvent(WorkspaceEvent.CompareWith(branch)) })
+          shown.forEach { branch ->
+            BaseOption(branch = branch, selected = branch.name == base.selected, onClick = { onEvent(WorkspaceEvent.CompareWith(branch.name)) })
+          }
+          if (shown.isEmpty()) {
+            LemonadeUi.Text(
+              text = stringResource(Res.string.diff_no_branch_match),
+              textStyle = LemonadeTheme.typography.bodySmallRegular,
+              color = colors.content.contentSecondary,
+              modifier = Modifier.padding(horizontal = spaces.spacing200, vertical = spaces.spacing300),
+            )
           }
         }
       }
@@ -251,44 +353,101 @@ private fun DiffBasePicker(
   }
 }
 
-/** One branch in the picker, ticked when it is the one compared with. */
+/** One branch in the picker: its name, when it last changed, and a tick when it's the one compared with. */
 @Composable
 private fun BaseOption(
-  branch: String,
+  branch: BaseBranchModel,
   selected: Boolean,
   onClick: () -> Unit,
 ) {
-  val interactionSource = remember { MutableInteractionSource() }
-  val hovered by interactionSource.collectIsHoveredAsState()
   val colors = LemonadeTheme.colors
-  val spaces = LemonadeTheme.spaces
-  Row(
-    verticalAlignment = Alignment.CenterVertically,
-    horizontalArrangement = Arrangement.spacedBy(spaces.spacing200),
-    modifier = Modifier
-      .fillMaxWidth()
-      .clip(LemonadeTheme.shapes.radius300)
-      .background(if (hovered) colors.background.bgElevated else Color.Transparent)
-      .hoverable(interactionSource)
-      .clickable(interactionSource = interactionSource, indication = null, role = Role.Button, onClick = onClick)
-      .padding(horizontal = spaces.spacing300, vertical = spaces.spacing200),
-  ) {
-    Box(modifier = Modifier.size(16.dp), contentAlignment = Alignment.Center) {
-      if (selected) {
-        LemonadeUi.Icon(icon = LemonadeIcons.Check, contentDescription = null, size = LemonadeAssetSize.Small, tint = colors.content.contentPrimary)
+  HoverRow(onClick = onClick, role = Role.RadioButton, modifier = Modifier.semantics { this.selected = selected }) {
+    Column(modifier = Modifier.weight(1f)) {
+      LemonadeUi.Text(text = branch.name, textStyle = LemonadeCodeTheme.typography.code.copy(color = colors.content.contentPrimary))
+      branch.detail?.let { detail ->
+        LemonadeUi.Text(text = detail.resolve(), textStyle = LemonadeTheme.typography.bodyXSmallRegular, color = colors.content.contentSecondary, maxLines = 1)
       }
     }
-    LemonadeUi.Text(
-      text = branch,
-      textStyle = if (selected) LemonadeTheme.typography.bodySmallSemiBold else LemonadeTheme.typography.bodySmallMedium,
-      color = colors.content.contentPrimary,
-      maxLines = 1,
-    )
+    if (selected) {
+      LemonadeUi.Icon(icon = LemonadeIcons.CircleCheck, contentDescription = null, size = LemonadeAssetSize.Small, tint = colors.content.contentBrand)
+    }
   }
 }
 
-private val BasePickerWidth = 280.dp
-private val BasePickerMaxHeight = 320.dp
+private val BasePickerWidth = 340.dp
+private val BasePickerMaxHeight = 300.dp
+private val FileListWidth = 248.dp
+
+/** The changed files beside the diff; the one in view is lit, and picking one scrolls the diff to it. */
+@Composable
+private fun ChangedFiles(
+  files: List<DiffFileModel>,
+  activeFile: String?,
+  onPick: (DiffFileModel) -> Unit,
+  modifier: Modifier = Modifier,
+) {
+  val spaces = LemonadeTheme.spaces
+  val colors = LemonadeTheme.colors
+  val label = stringResource(Res.string.diff_files)
+  Column(
+    verticalArrangement = Arrangement.spacedBy(2.dp),
+    modifier = modifier
+      .semantics { contentDescription = label }
+      .verticalScroll(rememberScrollState())
+      .padding(start = spaces.spacing400, bottom = spaces.spacing400),
+  ) {
+    files.forEach { file ->
+      val changeName = changeName(file.change)
+      HoverRow(
+        onClick = { onPick(file) },
+        minHeight = 44.dp,
+        selectedBackground = file.id == activeFile,
+        modifier = Modifier.semantics { selected = file.id == activeFile },
+      ) {
+        LemonadeUi.SymbolContainer(
+          text = changeName.take(1).uppercase(),
+          voice = changeVoice(file.change),
+          size = SymbolContainerSize.XSmall,
+          shape = SymbolContainerShape.Rounded,
+          modifier = Modifier.semantics { contentDescription = changeName },
+        )
+        Column(modifier = Modifier.weight(1f)) {
+          LemonadeUi.Text(text = file.fileName, textStyle = LemonadeTheme.typography.bodySmallMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+          if (file.directory.isNotEmpty()) {
+            LemonadeUi.Text(
+              text = file.directory.removeSuffix("/"),
+              textStyle = LemonadeTheme.typography.bodyXSmallRegular,
+              color = colors.content.contentSecondary,
+              maxLines = 1,
+              overflow = TextOverflow.Ellipsis,
+            )
+          }
+        }
+        if (file.commentCount > 0) {
+          Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+            LemonadeUi.Icon(icon = LemonadeIcons.Bubble, contentDescription = null, size = LemonadeAssetSize.XSmall, tint = colors.content.contentSecondary)
+            LemonadeUi.Text(text = file.commentCount.toString(), textStyle = LemonadeTheme.typography.bodyXSmallSemiBold, color = colors.content.contentSecondary)
+          }
+        }
+      }
+    }
+  }
+}
+
+@Composable
+private fun changeName(change: FileChangeKind): String = when (change) {
+  FileChangeKind.Added -> stringResource(Res.string.file_added)
+  FileChangeKind.Modified -> stringResource(Res.string.file_modified)
+  FileChangeKind.Deleted -> stringResource(Res.string.file_deleted)
+  FileChangeKind.Renamed -> stringResource(Res.string.file_renamed)
+}
+
+private fun changeVoice(change: FileChangeKind): SymbolContainerVoice = when (change) {
+  FileChangeKind.Added -> SymbolContainerVoice.Positive
+  FileChangeKind.Modified -> SymbolContainerVoice.Info
+  FileChangeKind.Deleted -> SymbolContainerVoice.Critical
+  FileChangeKind.Renamed -> SymbolContainerVoice.Warning
+}
 
 @Composable
 private fun DiffFileHeader(
@@ -299,12 +458,7 @@ private fun DiffFileHeader(
   val colors = LemonadeTheme.colors
   val radius = LemonadeTheme.radius.radius500
   val shape = if (file.expanded) RoundedCornerShape(topStart = radius, topEnd = radius) else RoundedCornerShape(radius)
-  val changeName = when (file.change) {
-    FileChangeKind.Added -> stringResource(Res.string.file_added)
-    FileChangeKind.Modified -> stringResource(Res.string.file_modified)
-    FileChangeKind.Deleted -> stringResource(Res.string.file_deleted)
-    FileChangeKind.Renamed -> stringResource(Res.string.file_renamed)
-  }
+  val changeName = changeName(file.change)
   Row(
     verticalAlignment = Alignment.CenterVertically,
     horizontalArrangement = Arrangement.spacedBy(spaces.spacing200),
@@ -324,12 +478,7 @@ private fun DiffFileHeader(
     )
     LemonadeUi.SymbolContainer(
       text = changeName.take(1).uppercase(),
-      voice = when (file.change) {
-        FileChangeKind.Added -> SymbolContainerVoice.Positive
-        FileChangeKind.Modified -> SymbolContainerVoice.Info
-        FileChangeKind.Deleted -> SymbolContainerVoice.Critical
-        FileChangeKind.Renamed -> SymbolContainerVoice.Warning
-      },
+      voice = changeVoice(file.change),
       size = SymbolContainerSize.XSmall,
       shape = SymbolContainerShape.Rounded,
       modifier = Modifier.semantics { contentDescription = changeName },

@@ -22,6 +22,16 @@ What Lemonade Code doesn't do yet. Want something that isn't here?
   captions under *Paste into terminal* and *New sub-session* ("this session", "clean context") are
   left out for now.
 
+## Devices
+
+- **Screens arrive a few times a second.** The mirror is made of `adb` screen captures, not a video
+  stream, so animations look choppy.
+- **iOS is view only.** iPhones and iPads can't be tapped or typed on from Lemonade Code, and their
+  screen only shows over a cable. Newer iOS versions may need the developer disk image mounted
+  before `idevicescreenshot` can capture them.
+- **Tested against recorded tool output.** The Android and iOS support is checked against what
+  `adb` and libimobiledevice print, not yet against every device.
+
 ## Platforms and releases
 
 - **Signed Windows installer.** Windows SmartScreen warns on the first run until the MSI is signed.

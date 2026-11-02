@@ -10,6 +10,7 @@ short tour.
 - [Sending comments](#sending-comments)
 - [Sub-sessions and worktrees](#sub-sessions-and-worktrees)
 - [File previews](#file-previews)
+- [Devices](#devices)
 - [Settings](#settings)
 - [Updates](#updates)
 - [Sessions come back](#sessions-come-back)
@@ -85,11 +86,16 @@ programs and coding agents.
 
 Switch a session to the **Diff** tab to see what changed in its folder.
 
-<img src="images/review-diff.png" width="100%" alt="The diff of app.ts with the full file shown and a comment on line 9">
+<img src="images/review-diff.png" width="100%" alt="The diff with the changed files listed beside it">
 
 - **Against the right branch.** Changes are compared with `main` by default (or your repository's
   default branch). A sub-session compares with its parent session's branch. Pick any other branch
-  from the list next to **vs**.
+  from the list next to **vs**: type part of a name to find it, and each branch says when it last
+  changed and who made the change. **HEAD** compares with the last commit, so you see only what
+  isn't committed yet.
+- **Every changed file at a glance.** The list beside the diff names each changed file and its
+  comments, and lights up the one you're reading as you scroll. Click a file to jump to it; a folded
+  file opens. The list button next to **Changes** hides it. On a narrow window it starts hidden.
 - **Everything included.** Uncommitted changes and new files that git doesn't track yet show up too.
 - **Readable.** Code is coloured by language, with three lines of context around each change.
 - **The whole file.** Press **Full file** to read a changed file top to bottom.
@@ -191,16 +197,51 @@ web, like badges, are downloaded when the preview opens.
 
 ---
 
+## Devices
+
+Turn on **Settings › Plugins › Mobile** and a phone button joins the top bar, with the number of
+devices connected. It opens the Devices panel at the right of the session. Android needs Android's
+platform tools (`adb`); iPhones and iPads need [libimobiledevice](https://libimobiledevice.org).
+Lemonade Code finds them on your `PATH`, in the Android SDK and in Homebrew's folder.
+
+<img src="images/devices.png" width="100%" alt="A Pixel 8's screen beside its logs, with two errors ready to send to claude">
+
+- **One step at a time.** The panel opens on the list of devices, Android and iOS apart. Pick one to
+  see its screen beside its logs, or switch to tabs from the header.
+- **Use the phone from here.** On Android, clicks and drags on the screen reach the phone, and so do
+  Back, Home, turning it sideways and, with the keyboard button on, your typing. iPhones and iPads
+  show their screen over a cable only, to look at.
+- **Logs that matter.** Android shows the lines of the app in front; iOS shows the whole system log.
+  Filter by level or by text, pause the stream while you read, or clear it.
+- **Hand it to the agent.** **Send errors** pastes the error lines into the session's terminal,
+  saying which device and log they came from. The camera button saves a screenshot and pastes its
+  path, which Claude Code attaches as a picture. Nothing runs until you press Enter.
+- **Pair new devices.** Pairing asks one thing per step: Android or iOS, then how. An Android phone
+  scans a QR code, types a pairing code or is picked from the devices on your network with wireless
+  debugging on. An iPhone is plugged in once and trusts this computer.
+- **On another display.** The ↗ button moves the panel into a window of its own, and the main window
+  gets its space back. The phone button gets a small ↗ mark and brings that window forward. ↙ puts
+  the panel back.
+
+<img src="images/pairing.png" width="100%" alt="Pairing an Android phone in three steps: the platform, the method, then the code">
+
+---
+
 ## Settings
 
-The gear at the top right opens settings.
+The gear at the top right opens settings: a short list where every item shows its value. Open one to
+change it on its own page; the back arrow or Esc returns to the list.
 
-<img src="images/settings.png" width="100%" alt="Settings open with the Dark theme picked and Keep awake on">
+<img src="images/settings.png" width="100%" alt="The settings list: Appearance, Language, Keep awake, Plugins and Updates">
 
 - **Appearance:** Dark, Light, or follow the System.
+- **Language:** English, Deutsch, Español, Français, Português or Slovenčina, or match the computer's
+  own. The whole app changes at once.
 - **Keep awake while sessions work:** while any session is working, your computer won't go to
   sleep and the screen won't dim or lock. Once nothing is working, both behave as usual again. While
   it's holding the computer awake, a tag in the top bar says so.
+- **Plugins:** turns on [Devices](#devices).
+- **Updates:** the version you have, and the newer one when it's out.
 
 <img src="images/light-diff.png" width="100%" alt="The diff review in the light theme, with the Keeping awake tag in the top bar">
 
@@ -209,10 +250,11 @@ The gear at the top right opens settings.
 ## Updates
 
 Installed from a release file (DMG, MSI, .deb or tar.gz), Lemonade Code checks for a new version at
-launch and every few hours. When one is out, an **Update** button appears next to Settings. One click
-downloads it, checks it, restarts the app on the new version, and brings your sessions back.
+launch and every few hours, and whenever you press **Check for updates** in **Settings › Updates**.
+When one is out, the gear gets a blue dot and the page says what's new. **Update now** downloads it
+and checks it; **Restart now** puts the new version in place and brings your sessions back.
 
-<img src="images/update.png" width="100%" alt="The Update available panel, downloading version 1.3.0">
+<img src="images/update.png" width="100%" alt="Settings › Updates offering version 1.9.0 with what's new">
 
 Installed with Homebrew or the Snap Store? Those update the app for you.
 

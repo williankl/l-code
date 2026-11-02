@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -15,13 +16,17 @@ import com.teya.lemonade.LemonadeTheme
 import dev.lemonadecode.domain.session.SessionId
 import dev.lemonadecode.platform.designsystem.LemonadeCodeTheme
 import dev.lemonadecode.platform.di.AppScope
+import dev.lemonadecode.platform.localization.ProvideAppLanguage
 import dev.lemonadecode.platform.presenter.presenterAsState
 import dev.lemonadecode.platform.terminal.TerminalColors
 import dev.lemonadecode.platform.terminal.TerminalView
 import dev.lemonadecode.platform.terminal.openInBrowser
 import dev.lemonadecode.sessions.api.SessionTerminals
+import dev.lemonadecode.workspace.ui.DevicesWindowContent
 import dev.lemonadecode.workspace.ui.WorkspaceContent
 import dev.lemonadecode.workspace.ui.toThemeMode
+import dev.lemonadecode.workspace.uimodel.DevicesWindow
+import dev.lemonadecode.workspace.uimodel.WorkspaceModel
 import dev.zacsweers.metro.ContributesTo
 import dev.zacsweers.metro.Inject
 
@@ -31,20 +36,46 @@ public class WorkspaceScreen internal constructor(
   private val presenterProvider: () -> WorkspacePresenter,
   private val terminals: SessionTerminals,
 ) {
+  /** The workspace's Model, for the main window and the Devices window to share. Call it once. */
+  @Composable
+  public fun rememberModel(): State<WorkspaceModel> = presenterAsState { presenterProvider() }
+
   /** [onBackground] gets the colour behind everything, for the window to paint while it resizes. */
   @Composable
   public fun Content(modifier: Modifier = Modifier, onBackground: (Color) -> Unit = {}) {
-    val model by presenterAsState { presenterProvider() }
-    LemonadeCodeTheme(mode = model.settings.theme.toThemeMode()) {
-      val background = LemonadeTheme.colors.background.bgSubtle
-      LaunchedEffect(background) { onBackground(background) }
-      // Links in the UI open the way terminal links do, which works on Linux desktops too.
-      CompositionLocalProvider(LocalUriHandler provides BrowserUriHandler) {
-        WorkspaceContent(
-          model = model,
-          terminal = { sessionId, slotModifier -> LiveTerminal(sessionId, slotModifier) },
-          modifier = modifier,
-        )
+    val model by rememberModel()
+    Content(model = model, modifier = modifier, onBackground = onBackground)
+  }
+
+  @Composable
+  public fun Content(model: WorkspaceModel, modifier: Modifier = Modifier, onBackground: (Color) -> Unit = {}) {
+    Themed(model, onBackground) {
+      WorkspaceContent(
+        model = model,
+        terminal = { sessionId, slotModifier -> LiveTerminal(sessionId, slotModifier) },
+        modifier = modifier,
+      )
+    }
+  }
+
+  /** The Devices panel for its own window; draws nothing while it's docked or closed. */
+  @Composable
+  public fun Devices(model: WorkspaceModel, modifier: Modifier = Modifier, onBackground: (Color) -> Unit = {}) {
+    val panel = model.devices?.takeIf { it.window == DevicesWindow.Separate } ?: return
+    Themed(model, onBackground) {
+      DevicesWindowContent(panel = panel, onEvent = model.eventSink, modifier = modifier)
+    }
+  }
+
+  /** The theme and language the settings pick, and links that open the way terminal links do. */
+  @Composable
+  private fun Themed(model: WorkspaceModel, onBackground: (Color) -> Unit, content: @Composable () -> Unit) {
+    ProvideAppLanguage(model.settings.language.tag) {
+      LemonadeCodeTheme(mode = model.settings.theme.toThemeMode()) {
+        val background = LemonadeTheme.colors.background.bgSubtle
+        LaunchedEffect(background) { onBackground(background) }
+        // Links in the UI open the way terminal links do, which works on Linux desktops too.
+        CompositionLocalProvider(LocalUriHandler provides BrowserUriHandler, content = content)
       }
     }
   }

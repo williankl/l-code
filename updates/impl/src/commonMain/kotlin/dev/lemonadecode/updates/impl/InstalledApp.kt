@@ -1,6 +1,7 @@
 package dev.lemonadecode.updates.impl
 
 import dev.lemonadecode.domain.update.AppVersion
+import dev.lemonadecode.domain.update.UpdateChannel
 
 /** The running app: its version and how it was installed. */
 internal interface InstalledApp {
@@ -52,3 +53,13 @@ internal fun InstallKind.assetName(version: AppVersion): String? = when (this) {
   is InstallKind.LinuxFolder -> "lemonade-code-$version-linux-x64.tar.gz"
   InstallKind.Development, InstallKind.Homebrew, InstallKind.Snap, InstallKind.Unsupported -> null
 }
+
+/** How the installation gets new versions, as the settings show it. */
+internal val InstallKind.channel: UpdateChannel
+  get() = when (this) {
+    InstallKind.Development -> UpdateChannel.Development
+    InstallKind.Homebrew -> UpdateChannel.Homebrew
+    InstallKind.Snap -> UpdateChannel.Snap
+    InstallKind.Unsupported -> UpdateChannel.Unsupported
+    is InstallKind.MacApp, is InstallKind.WindowsMsi, is InstallKind.Deb, is InstallKind.LinuxFolder -> UpdateChannel.SelfUpdate
+  }

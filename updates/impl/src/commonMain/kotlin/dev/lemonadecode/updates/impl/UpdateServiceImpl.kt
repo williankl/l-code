@@ -1,10 +1,13 @@
 package dev.lemonadecode.updates.impl
 
+import dev.lemonadecode.domain.update.AppInstallation
 import dev.lemonadecode.domain.update.AppRelease
+import dev.lemonadecode.domain.update.UpdateChecks
 import dev.lemonadecode.domain.update.UpdateFailure
 import dev.lemonadecode.domain.update.UpdateProgress
 import dev.lemonadecode.domain.update.UpdateState
 import dev.lemonadecode.platform.architecture.AppExit
+import dev.lemonadecode.platform.architecture.WallClock
 import dev.lemonadecode.platform.core.LemonadeCodeResult
 import dev.lemonadecode.platform.core.getOrNull
 import dev.lemonadecode.platform.di.AppScope
@@ -55,36 +58,63 @@ internal class UpdateServiceImpl(
   private val installer: UpdateInstaller,
   private val appExit: AppExit,
   private val scope: CoroutineScope,
+  private val clock: WallClock,
 ) : UpdateService {
   private val mutableState = MutableStateFlow<UpdateState>(UpdateState.None)
   override val state: StateFlow<UpdateState> = mutableState.asStateFlow()
+
+  override val installation: AppInstallation = AppInstallation(app.version, app.kind.channel)
+
+  private val mutableChecks = MutableStateFlow(UpdateChecks())
+  override val checks: StateFlow<UpdateChecks> = mutableChecks.asStateFlow()
 
   private val lock = Mutex()
 
   /** The release [state] offers, with its files. */
   private var candidate: UpdateCandidate? = null
 
+  /** The update, once downloaded and checked. */
+  private var downloaded: String? = null
+
   override suspend fun check() {
     val current = app.version ?: return
     if (app.kind.assetName(current) == null) return
-    val listed = releases.releases().getOrNull() ?: return
-    val newest = ReleaseChooser.newest(listed, current, app.kind::assetName)
-    lock.withLock {
-      // A download in progress keeps the release it started with.
-      if (isBusy()) return
-      candidate = newest
-      mutableState.update { previous ->
-        when {
-          newest == null -> UpdateState.None
-          previous is UpdateState.Available && previous.release.version == newest.version -> previous
-          else -> UpdateState.Available(current, AppRelease(newest.version, newest.pageUrl))
+    mutableChecks.update { it.copy(checking = true) }
+    try {
+      val listed = releases.releases().getOrNull() ?: return
+      val newest = ReleaseChooser.newest(listed, current, app.kind::assetName)
+      lock.withLock {
+        mutableChecks.update { it.copy(lastCheckedMillis = clock.nowMillis()) }
+        // A download in progress, or one waiting for the restart, keeps the release it started with.
+        if (isBusy()) return
+        candidate = newest
+        mutableState.update { previous ->
+          when {
+            newest == null -> UpdateState.None
+            previous is UpdateState.Available && previous.release.version == newest.version -> previous
+            else -> UpdateState.Available(current, AppRelease(newest.version, newest.pageUrl, newest.notes))
+          }
         }
       }
+    } finally {
+      mutableChecks.update { it.copy(checking = false) }
     }
   }
 
   override fun install() {
     scope.launch { installAvailable() }
+  }
+
+  override fun restart() {
+    scope.launch {
+      val file = lock.withLock {
+        val file = downloaded?.takeIf { progress() == UpdateProgress.Downloaded } ?: return@launch
+        setProgress(UpdateProgress.Restarting)
+        file
+      }
+      if (installer.start(app.kind, file).isFailure) return@launch fail(UpdateFailure.Install)
+      appExit.exit()
+    }
   }
 
   private suspend fun installAvailable() {
@@ -100,13 +130,16 @@ internal class UpdateServiceImpl(
       is LemonadeCodeResult.Success -> downloaded.value
       is LemonadeCodeResult.Failure -> return fail(downloaded.error)
     }
-    setProgress(UpdateProgress.Restarting)
-    if (installer.start(app.kind, file).isFailure) return fail(UpdateFailure.Install)
-    appExit.exit()
+    lock.withLock {
+      downloaded = file
+      setProgress(UpdateProgress.Downloaded)
+    }
   }
 
-  private fun isBusy(): Boolean = when ((mutableState.value as? UpdateState.Available)?.progress) {
-    is UpdateProgress.Downloading, UpdateProgress.Restarting -> true
+  private fun progress(): UpdateProgress? = (mutableState.value as? UpdateState.Available)?.progress
+
+  private fun isBusy(): Boolean = when (progress()) {
+    is UpdateProgress.Downloading, UpdateProgress.Downloaded, UpdateProgress.Restarting -> true
     else -> false
   }
 

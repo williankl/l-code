@@ -25,7 +25,8 @@ new terminal window. Open as many as you like with **+** or **⌘T**.
 <img src="images/terminals.png" width="100%" alt="Four sessions in the sidebar and a terminal where Claude Code finished its work">
 
 As you `cd` around, Lemonade Code follows along. The session's name, the top bar, the diff and your
-comments all switch to the folder and branch the shell is in.
+comments all switch to the folder and branch the shell is in. While a program runs in it, they follow
+the program instead, so when Claude Code moves into a worktree, the session moves with it.
 
 **Status at a glance.** When an agent like Claude Code is running, the session shows what it's doing:
 

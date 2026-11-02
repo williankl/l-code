@@ -12,7 +12,7 @@ public data class Session(
   val name: String,
   /** Short name of the shell, e.g. `zsh`. */
   val shell: String,
-  /** The shell's current folder, absolute. */
+  /** The current folder of the program holding the terminal, else of the shell; absolute. */
   val workingDirectory: String,
   /** Top-level folder of the git checkout, or null outside a repository. */
   val repositoryRoot: String?,

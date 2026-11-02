@@ -338,7 +338,10 @@ internal class SessionServiceImpl(
     }
   }
 
-  /** Keeps folder, repository and branch in step with the shell, as it `cd`s and switches branches. */
+  /**
+   * Keeps folder, repository and branch in step with the shell, or the program holding its terminal,
+   * as they move and switch branches.
+   */
   private suspend fun followFolder(id: SessionId, terminal: TerminalSession) {
     var lastFolder: String? = null
     var tick = 0

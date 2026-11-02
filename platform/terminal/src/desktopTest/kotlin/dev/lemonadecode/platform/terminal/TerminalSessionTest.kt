@@ -62,6 +62,26 @@ class TerminalSessionTest {
   }
 
   @Test
+  fun `the current folder follows the program in the foreground, then the shell again`() = runBlocking<Unit> {
+    val start = java.nio.file.Files.createTempDirectory("lemonade-code-cwd").toFile().canonicalFile
+    val inner = java.io.File(start, "inner").apply { mkdirs() }
+    TerminalSession(TerminalLaunch(command = listOf("/bin/sh"), workingDirectory = start.path)).use { session ->
+      withTimeout(5_000) {
+        while (session.currentDirectory()?.let { java.io.File(it).canonicalPath } != start.path) delay(50)
+      }
+      // The shell stays where it is; only the program it starts moves, like an agent entering a worktree.
+      session.send("(cd inner && exec sleep 30)\r")
+      withTimeout(5_000) {
+        while (session.currentDirectory()?.let { java.io.File(it).canonicalPath } != inner.canonicalPath) delay(50)
+      }
+      session.send("\u0003")
+      withTimeout(5_000) {
+        while (session.currentDirectory()?.let { java.io.File(it).canonicalPath } != start.path) delay(50)
+      }
+    }
+  }
+
+  @Test
   fun `the folder a shell reports is remembered`() = runBlocking<Unit> {
     val script = "printf 'one\\033]7;file://host/srv/my%%20code\\007two'; sleep 1; printf '\\033]9;9;/opt\\033\\\\three'; sleep 1"
     TerminalSession(TerminalLaunch(command = listOf("/bin/sh", "-c", script), workingDirectory = System.getProperty("java.io.tmpdir"))).use { session ->

@@ -2,6 +2,7 @@ package dev.lemonadecode.mobile.impl
 
 import dev.lemonadecode.domain.mobile.MobileTools
 import dev.lemonadecode.domain.mobile.QrMatrix
+import dev.lemonadecode.domain.mobile.ScreenPicture
 import dev.lemonadecode.platform.core.LemonadeCodeResult
 import dev.lemonadecode.platform.process.BinaryProcessOutput
 import dev.lemonadecode.platform.process.ProcessOutput
@@ -26,6 +27,7 @@ internal class FakeDeviceCommands : DeviceCommands {
   private val answers = mutableMapOf<String, () -> ProcessOutput>()
   private val pictures = mutableMapOf<String, () -> BinaryProcessOutput>()
   private val streams = mutableMapOf<String, Channel<String>>()
+  private val byteStreams = mutableMapOf<String, Channel<ByteArray>>()
 
   fun answer(command: String, stdout: String = "", exitCode: Int = 0, stderr: String = "") = answer(command) { ProcessOutput(exitCode, stdout, stderr) }
 
@@ -39,6 +41,9 @@ internal class FakeDeviceCommands : DeviceCommands {
 
   /** The lines a long-running [command] prints; send to it to print more. */
   fun stream(command: String): Channel<String> = streams.getOrPut(command) { Channel(Channel.UNLIMITED) }
+
+  /** The bytes a long-running [command] writes; send to it to write more, close it to end the program. */
+  fun byteStream(command: String): Channel<ByteArray> = byteStreams.getOrPut(command) { Channel(Channel.UNLIMITED) }
 
   fun count(prefix: String): Int = ran.count { it.startsWith(prefix) }
 
@@ -64,6 +69,13 @@ internal class FakeDeviceCommands : DeviceCommands {
     } finally {
       openStreams[key] = openStreams.getValue(key) - 1
     }
+  }
+
+  override fun bytes(command: List<String>): Flow<ByteArray> = flow {
+    val key = key(command)
+    ran += key
+    val stream = byteStreams[key] ?: throw CommandExitException(1, "not faked: $key")
+    emitAll(stream.receiveAsFlow())
   }
 
   private fun key(command: List<String>): String = (listOf(command.first().substringAfterLast('/')) + command.drop(1)).joinToString(" ")
@@ -110,3 +122,38 @@ internal fun png(width: Int, height: Int): ByteArray {
 
 /** What [AndroidInfoScript] prints: the device's name, model, Android version, `wm size` and serial number. */
 internal fun androidInfo(name: String, model: String, version: String, wmSize: String, serialNumber: String): String = listOf(name, model, version, wmSize, serialNumber).joinToString("\n$InfoMarker\n", postfix = "\n")
+
+/**
+ * Decodes each access unit that holds a picture's slice into one 2 by 1 picture whose first byte
+ * counts the pictures so far, and records the units it was given.
+ */
+internal class FakeScreenDecoders : ScreenDecoders {
+  val units = mutableListOf<ByteArray>()
+  var opened = 0
+  var closed = 0
+
+  override fun h264(): ScreenDecoder {
+    opened++
+    return object : ScreenDecoder {
+      override fun decode(accessUnit: ByteArray): List<ScreenPicture.Bgra> {
+        units += accessUnit
+        val pictures = units.count(::holdsSlice)
+        return if (holdsSlice(accessUnit)) listOf(ScreenPicture.Bgra(ByteArray(8) { if (it == 0) pictures.toByte() else 0 }, 2, 1, 8)) else emptyList()
+      }
+
+      override fun close() {
+        closed++
+      }
+    }
+  }
+
+  private fun holdsSlice(unit: ByteArray): Boolean = (0 until unit.size - 3).any { at ->
+    unit[at] == 0.toByte() && unit[at + 1] == 0.toByte() && unit[at + 2] == 1.toByte() && (unit[at + 3].toInt() and 0x1F).let { it == 1 || it == 5 }
+  }
+}
+
+/** An H.264 NAL unit of [type] after a start code, with [payload]; a slice starting a picture has its first bit set. */
+internal fun nal(type: Int, vararg payload: Int): ByteArray = byteArrayOf(0, 0, 0, 1, (0x60 or type).toByte()) + payload.map(Int::toByte).toByteArray()
+
+/** One picture's access unit as `screenrecord` writes it: a slice starting a picture, then some data. */
+internal fun picture(idr: Boolean = false): ByteArray = nal(if (idr) 5 else 1, 0x88, 0x84, 0x21, 0x7F)

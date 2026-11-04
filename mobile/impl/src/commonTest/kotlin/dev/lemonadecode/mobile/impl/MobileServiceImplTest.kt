@@ -18,13 +18,16 @@ import dev.lemonadecode.domain.mobile.MobileTools
 import dev.lemonadecode.domain.mobile.NearbyDevice
 import dev.lemonadecode.domain.mobile.NearbyKind
 import dev.lemonadecode.domain.mobile.QrPairing
+import dev.lemonadecode.domain.mobile.ScreenPicture
 import dev.lemonadecode.domain.mobile.ScreenUnavailable
 import dev.lemonadecode.domain.settings.AppSettings
+import dev.lemonadecode.platform.architecture.testing.FakeLemonadeCodeCoroutineDispatchers
 import dev.lemonadecode.platform.core.LemonadeCodeResult
 import dev.lemonadecode.platform.process.ProcessOutput
 import dev.lemonadecode.settings.fake.FakeSettingsService
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
@@ -43,6 +46,7 @@ class MobileServiceImplTest {
   private val commands = FakeDeviceCommands()
   private val finder = FakeToolFinder()
   private val files = FakeDeviceFiles()
+  private val decoders = FakeScreenDecoders()
 
   private val pixel = DeviceId("38021FDH2000AB")
   private val logcat = "adb -s 38021FDH2000AB logcat -v threadtime -T 300"
@@ -53,6 +57,8 @@ class MobileServiceImplTest {
     commands = commands,
     files = files,
     qr = FakeQrEncoder,
+    decoders = decoders,
+    dispatchers = FakeLemonadeCodeCoroutineDispatchers(StandardTestDispatcher(testScheduler)),
     scope = backgroundScope,
     timeSource = testScheduler.timeSource,
     random = Random(7),
@@ -245,6 +251,61 @@ class MobileServiceImplTest {
     // The frame was wide, so rotating turns it back to portrait without asking.
     assertEquals(LemonadeCodeResult.success(Unit), service.rotate(pixel))
     assertEquals("adb -s 38021FDH2000AB shell settings put system accelerometer_rotation 0 && settings put system user_rotation 0", commands.ran.last { "user_rotation" in it })
+  }
+
+  @Test
+  fun `an Android screen plays as a video at its size, recorded smaller, and starts again when it turns`() = runTest {
+    answerPixel()
+    var screenSize = "1080x2400"
+    commands.answer("adb -s 38021FDH2000AB shell dumpsys window displays") { ProcessOutput(0, "  init=1080x2400 420dpi base=1080x2400 cur=$screenSize app=1080x2337\n", "") }
+    val portrait = commands.byteStream("adb -s 38021FDH2000AB exec-out screenrecord --output-format=h264 --size 576x1280 --bit-rate 8000000 -")
+    val landscape = commands.byteStream("adb -s 38021FDH2000AB exec-out screenrecord --output-format=h264 --size 1280x576 --bit-rate 8000000 -")
+    commands.answer("adb -s 38021FDH2000AB shell settings put")
+    val service = service()
+    runCurrent()
+
+    service.screen(pixel).test {
+      assertEquals(DeviceScreen.Loading, awaitItem())
+      portrait.send(nal(7, 0x42) + nal(8, 0xCE) + picture(idr = true))
+      portrait.send(picture())
+      val first = assertIs<DeviceScreen.Frame>(awaitItem())
+      assertEquals(1080 to 2400, first.width to first.height)
+      assertIs<ScreenPicture.Bgra>(first.picture)
+      // The last picture before the screen stops changing shows once the stream goes quiet.
+      assertIs<DeviceScreen.Frame>(awaitItem())
+
+      // Turned to landscape: recorded again, the other way round.
+      screenSize = "2400x1080"
+      landscape.send(picture(idr = true))
+      val turned = assertIs<DeviceScreen.Frame>(awaitItem())
+      assertEquals(2400 to 1080, turned.width to turned.height)
+      cancelAndIgnoreRemainingEvents()
+    }
+    runCurrent()
+    assertEquals(2, decoders.opened)
+    assertEquals(2, decoders.closed)
+    assertEquals(0, commands.count("adb -s 38021FDH2000AB exec-out screencap"))
+    // It knows the screen is wide, so rotating turns it back to portrait without asking.
+    assertEquals(LemonadeCodeResult.success(Unit), service.rotate(pixel))
+    assertEquals("adb -s 38021FDH2000AB shell settings put system accelerometer_rotation 0 && settings put system user_rotation 0", commands.ran.last { "user_rotation" in it })
+  }
+
+  @Test
+  fun `an Android screen that can't be recorded falls back on screenshots`() = runTest {
+    answerPixel()
+    commands.answer("adb -s 38021FDH2000AB shell dumpsys window displays", "cur=1080x2400\n")
+    commands.picture("adb -s 38021FDH2000AB exec-out screencap -p", png(1080, 2400))
+    // No recording is faked, so each try fails at once.
+    val service = service()
+    runCurrent()
+
+    service.screen(pixel).test {
+      assertEquals(DeviceScreen.Loading, awaitItem())
+      val frame = assertIs<DeviceScreen.Frame>(awaitItem())
+      assertIs<ScreenPicture.Encoded>(frame.picture)
+      cancelAndIgnoreRemainingEvents()
+    }
+    assertEquals(3, commands.count("adb -s 38021FDH2000AB exec-out screenrecord"))
   }
 
   @Test

@@ -211,6 +211,9 @@ Lemonade Code finds them on your `PATH`, in the Android SDK and in Homebrew's fo
   see its screen beside its logs, or above them when the screen is on its side or the panel is narrow,
   or switch to tabs from the header. Drag the panel's edge to resize it; a device's screen and logs
   together remember their own width.
+- **Smooth on Android.** The screen streams as video, up to 60 frames a second while it moves, and
+  starts again by itself when the phone turns. Devices that can't record their screen fall back to
+  screenshots.
 - **Use the phone from here.** On Android, clicks and drags on the screen reach the phone, and so do
   Back, Home, turning it sideways and, with the keyboard button on, your typing. iPhones and iPads
   show their screen over a cable only, to look at.

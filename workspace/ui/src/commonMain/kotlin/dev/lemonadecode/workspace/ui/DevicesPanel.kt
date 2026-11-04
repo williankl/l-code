@@ -49,6 +49,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asComposeImageBitmap
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -188,9 +189,14 @@ import dev.lemonadecode.workspace.uimodel.MirrorControlsModel
 import dev.lemonadecode.workspace.uimodel.MobilePlatformModel
 import dev.lemonadecode.workspace.uimodel.PairingMethod
 import dev.lemonadecode.workspace.uimodel.QrCodeModel
+import dev.lemonadecode.workspace.uimodel.ScreenPictureModel
 import dev.lemonadecode.workspace.uimodel.WorkspaceEvent
 import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
+import org.jetbrains.skia.Bitmap
+import org.jetbrains.skia.ColorAlphaType
+import org.jetbrains.skia.ColorType
+import org.jetbrains.skia.ImageInfo
 import org.jetbrains.skia.Image as SkiaImage
 
 private val ScreenPaneWidth = 320.dp
@@ -532,7 +538,7 @@ private fun MirroredScreen(
 ) {
   val colors = LemonadeTheme.colors
   val shape = LemonadeTheme.shapes.radius300
-  val image = remember(frame) { frame?.let { decodePng(it.png) } }
+  val image = remember(frame?.picture) { frame?.picture?.let(::decodePicture) }
   val currentFrame by rememberUpdatedState(frame)
   val slop = LocalViewConfiguration.current.touchSlop
   val keys = remember { FocusRequester() }
@@ -624,7 +630,15 @@ private fun Modifier.deviceKeyboard(focus: FocusRequester, onEvent: (WorkspaceEv
     true
   }
 
-private fun decodePng(png: ByteArray): ImageBitmap? = runCatching { SkiaImage.makeFromEncoded(png).toComposeImageBitmap() }.getOrNull()
+private fun decodePicture(picture: ScreenPictureModel): ImageBitmap? = runCatching {
+  when (picture) {
+    is ScreenPictureModel.Encoded -> SkiaImage.makeFromEncoded(picture.bytes).toComposeImageBitmap()
+    is ScreenPictureModel.Bgra -> Bitmap().apply {
+      installPixels(ImageInfo(picture.width, picture.height, ColorType.BGRA_8888, ColorAlphaType.OPAQUE), picture.pixels, picture.rowBytes)
+      setImmutable()
+    }.asComposeImageBitmap()
+  }
+}.getOrNull()
 
 @Composable
 private fun MirrorControls(

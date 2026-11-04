@@ -17,6 +17,7 @@ import dev.lemonadecode.domain.mobile.NearbyDevice
 import dev.lemonadecode.domain.mobile.NearbyKind
 import dev.lemonadecode.domain.mobile.QrMatrix
 import dev.lemonadecode.domain.mobile.QrPairing
+import dev.lemonadecode.domain.mobile.ScreenPicture
 import dev.lemonadecode.domain.mobile.ScreenUnavailable
 import dev.lemonadecode.domain.settings.DevicesLayout
 import dev.lemonadecode.platform.localization.LemonadeCodeString
@@ -85,6 +86,7 @@ import dev.lemonadecode.workspace.uimodel.MirrorControlsModel
 import dev.lemonadecode.workspace.uimodel.MobilePlatformModel
 import dev.lemonadecode.workspace.uimodel.NearbyDeviceModel
 import dev.lemonadecode.workspace.uimodel.QrCodeModel
+import dev.lemonadecode.workspace.uimodel.ScreenPictureModel
 import kotlin.math.roundToInt
 
 /** What the Mobile plugin knows right now, for the Devices panel. */
@@ -291,7 +293,7 @@ internal object DevicesMapper {
     val frame = input.screen as? DeviceScreen.Frame
     val screen = when {
       DeviceCapability.Mirror !in caps -> unavailable(if (device.platform == MobilePlatform.Ios && device.connection == DeviceConnection.Wifi) ScreenUnavailable.CableOnly else ScreenUnavailable.NotSupported)
-      frame != null -> DeviceScreenModel.Frame(frame.png, frame.width, frame.height)
+      frame != null -> DeviceScreenModel.Frame(picture(frame.picture), frame.width, frame.height)
       input.screen is DeviceScreen.Unavailable -> unavailable((input.screen as DeviceScreen.Unavailable).reason)
       else -> DeviceScreenModel.Loading
     }
@@ -466,4 +468,9 @@ internal object DevicesMapper {
   /** `192.168.1.57:37099`, as Wireless debugging shows it. */
   private val AddressPattern = Regex("^\\d{1,3}(\\.\\d{1,3}){3}:\\d{2,5}$")
   private val CodePattern = Regex("^\\d{6}$")
+}
+
+private fun picture(picture: ScreenPicture): ScreenPictureModel = when (picture) {
+  is ScreenPicture.Encoded -> ScreenPictureModel.Encoded(picture.bytes)
+  is ScreenPicture.Bgra -> ScreenPictureModel.Bgra(picture.pixels, picture.width, picture.height, picture.rowBytes)
 }

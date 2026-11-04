@@ -12,6 +12,7 @@ import dev.lemonadecode.domain.mobile.MobilePlatform
 import dev.lemonadecode.domain.mobile.MobileTools
 import dev.lemonadecode.domain.mobile.NearbyDevice
 import dev.lemonadecode.domain.mobile.NearbyKind
+import dev.lemonadecode.domain.mobile.ScreenPicture
 import org.jetbrains.skia.Color
 import org.jetbrains.skia.EncodedImageFormat
 import org.jetbrains.skia.Font
@@ -86,7 +87,7 @@ internal object ShowcaseDevices {
   )
 
   /** The store's cart with its rate-limit error, as the design's phone shows it. */
-  fun screen(width: Int = 1080, height: Int = 2400, framesPerSecond: Float = 4f): DeviceScreen.Frame = DeviceScreen.Frame(cartScreen(width, height), width, height, framesPerSecond)
+  fun screen(width: Int = 1080, height: Int = 2400, framesPerSecond: Float = 4f): DeviceScreen.Frame = DeviceScreen.Frame(ScreenPicture.Encoded(cartScreen(width, height)), width, height, framesPerSecond)
 
   private val cache = mutableMapOf<Pair<Int, Int>, ByteArray>()
 

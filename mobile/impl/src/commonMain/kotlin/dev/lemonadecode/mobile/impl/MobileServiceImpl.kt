@@ -14,8 +14,10 @@ import dev.lemonadecode.domain.mobile.MobileTool
 import dev.lemonadecode.domain.mobile.MobileTools
 import dev.lemonadecode.domain.mobile.NearbyDevice
 import dev.lemonadecode.domain.mobile.QrPairing
+import dev.lemonadecode.domain.mobile.ScreenPicture
 import dev.lemonadecode.domain.mobile.ScreenUnavailable
 import dev.lemonadecode.mobile.api.MobileService
+import dev.lemonadecode.platform.architecture.LemonadeCodeCoroutineDispatchers
 import dev.lemonadecode.platform.core.LemonadeCodeResult
 import dev.lemonadecode.platform.core.getOrElse
 import dev.lemonadecode.platform.core.safeSuspendRunCatching
@@ -40,6 +42,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.transformLatest
 import kotlinx.coroutines.flow.transformWhile
@@ -65,6 +68,8 @@ internal class MobileServiceImpl(
   commands: DeviceCommands,
   files: DeviceFiles,
   qr: QrEncoder,
+  private val decoders: ScreenDecoders,
+  private val dispatchers: LemonadeCodeCoroutineDispatchers,
   scope: CoroutineScope,
   private val timeSource: TimeSource.WithComparableMarks = TimeSource.Monotonic,
   random: Random = Random.Default,
@@ -160,7 +165,29 @@ internal class MobileServiceImpl(
     }
   }
 
-  override fun screen(id: DeviceId): Flow<DeviceScreen> = captureScreens(timeSource) { capture(id) }
+  override fun screen(id: DeviceId): Flow<DeviceScreen> = mirrorScreens(
+    timeSource = timeSource,
+    size = { recordableSize(id) },
+    stream = { width, height -> recording(id, width, height) },
+    capture = { capture(id) },
+  )
+
+  /** The screen's size now when [id] is an Android device ready to be recorded; null otherwise. */
+  private suspend fun recordableSize(id: DeviceId): Pair<Int, Int>? {
+    val device = device(id)?.takeIf { it.platform == MobilePlatform.Android && it.availability == DeviceAvailability.Ready } ?: return null
+    val adb = currentTools()?.adb ?: return null
+    val size = android.screenSize(adb, device) ?: return null
+    frameSizes.update { it + (id to size) }
+    return size
+  }
+
+  /** [id]'s screen as a video, [width] by [height] device pixels: recorded smaller, and decoded off the caller's thread. */
+  private fun recording(id: DeviceId, width: Int, height: Int): Flow<ScreenPicture.Bgra> = flow {
+    val device = device(id) ?: return@flow
+    val adb = currentTools()?.adb ?: return@flow
+    val (recordedWidth, recordedHeight) = recordingSize(width, height)
+    emitAll(decodeVideo(android.recordScreen(adb, device, recordedWidth, recordedHeight), decoders))
+  }.flowOn(dispatchers.default)
 
   private suspend fun capture(id: DeviceId): Capture {
     val device = device(id)?.takeIf { it.availability == DeviceAvailability.Ready }

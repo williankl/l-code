@@ -68,17 +68,32 @@ public sealed interface DeviceScreen {
   public data object Loading : DeviceScreen
 
   /**
-   * One capture. [width] and [height] are the picture's, so a device turned to landscape gives a
-   * wide frame. [framesPerSecond] is how often frames have been arriving; null for the first.
+   * One picture of the screen. [width] and [height] are the screen's, in the device's own pixels,
+   * so a device turned to landscape gives a wide frame and taps can be placed; the [picture] can
+   * be smaller. [framesPerSecond] is how often frames have been arriving; null for the first.
    */
   public class Frame(
-    public val png: ByteArray,
+    public val picture: ScreenPicture,
     public val width: Int,
     public val height: Int,
     public val framesPerSecond: Float?,
   ) : DeviceScreen
 
   public data class Unavailable(val reason: ScreenUnavailable) : DeviceScreen
+}
+
+/** What a [DeviceScreen.Frame] shows. */
+public sealed interface ScreenPicture {
+  /** An encoded image, such as a screenshot's PNG. */
+  public class Encoded(public val bytes: ByteArray) : ScreenPicture
+
+  /** Decoded pixels, as a video gives them: 4 bytes each, blue, green, red and alpha, [rowBytes] to a row. */
+  public class Bgra(
+    public val pixels: ByteArray,
+    public val width: Int,
+    public val height: Int,
+    public val rowBytes: Int,
+  ) : ScreenPicture
 }
 
 public enum class ScreenUnavailable {

@@ -250,3 +250,16 @@ internal val DeviceKey.keyCode: Int
   }
 
 internal val Whitespace = Regex("""\s+""")
+
+/**
+ * The screen's size now from `dumpsys window displays`, turned the way the device is: the first
+ * display's `cur=1080x2400`. Null when it isn't there.
+ */
+internal fun parseCurrentScreenSize(output: String): Pair<Int, Int>? {
+  val match = CurrentScreenSize.find(output) ?: return null
+  val width = match.groupValues[1].toIntOrNull() ?: return null
+  val height = match.groupValues[2].toIntOrNull() ?: return null
+  return if (width > 0 && height > 0) width to height else null
+}
+
+private val CurrentScreenSize = Regex("""\bcur=(\d+)x(\d+)""")

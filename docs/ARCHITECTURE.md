@@ -79,7 +79,7 @@ An `impl` never depends on another `impl`. Bindings are contributed with
 | `review/{api,impl,fake}` | `ReviewService`: the diff and comments per checkout, the review text, pasting it into the session or into a review sub-session. |
 | `settings/{api,impl,fake}` | `SettingsService` (persisted) and the keep-awake coordinator. |
 | `updates/{api,impl,fake}` | `UpdateService`: finds a newer GitHub release for this install, downloads and checks it, and, on Restart now, hands over to a helper that swaps it in after the app quits. See [RELEASING.md](../RELEASING.md). |
-| `mobile/{api,impl,fake}` | `MobileService`, the Mobile plugin: Android devices through `adb` (list, screen captures, input, `logcat`, pairing by QR code or code, mDNS discovery) and iOS devices through libimobiledevice (list, screenshots, `idevicesyslog`, trusting over a cable). Idle while the plugin is off. |
+| `mobile/{api,impl,fake}` | `MobileService`, the Mobile plugin: Android devices through `adb` (list, the screen as video from `screenrecord` decoded with FFmpeg, screenshots, input, `logcat`, pairing by QR code or code, mDNS discovery) and iOS devices through libimobiledevice (list, screenshots, `idevicesyslog`, trusting over a cable). Idle while the plugin is off. |
 | `workspace/uimodel` | `WorkspaceModel`, `WorkspaceEvent` and the localized strings (`composeResources`: English, German, Spanish, French, Portuguese and Slovak). |
 | `workspace/ui` | The composables: `WorkspaceContent(model, terminal)` and its parts, including the file previews. Pure rendering. |
 | `workspace/impl` | `WorkspacePresenter`, the Model mapper, `WorkspaceScreen` (presenter plus live terminals), and the showcase built from fixtures through the same mapper. |

@@ -1,10 +1,9 @@
 package dev.lemonadecode.mobile.impl
 
 import dev.lemonadecode.domain.mobile.DeviceScreen
+import dev.lemonadecode.domain.mobile.ScreenPicture
 import dev.lemonadecode.domain.mobile.ScreenUnavailable
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flow
 import kotlin.time.ComparableTimeMark
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
@@ -21,27 +20,30 @@ internal sealed interface Capture {
 }
 
 /**
- * Calls [capture] again and again while collected, with a short gap between frames. After a
- * failure it waits longer each time, and longest when the device can't be captured at all.
+ * Screenshots one at a time, each followed by a pause: short after a picture, so the device isn't
+ * kept busy, and longer after each failure, longest when the device can't be captured at all.
  */
-internal fun captureScreens(timeSource: TimeSource.WithComparableMarks, capture: suspend () -> Capture): Flow<DeviceScreen> = flow {
-  emit(DeviceScreen.Loading)
-  val rate = FrameRate(timeSource)
-  var failures = 0
+internal class Screenshots(private val rate: FrameRate, private val capture: suspend () -> Capture) {
+  private var failures = 0
+
+  /** What was sent last, so a screen that stays unavailable isn't sent again. */
   var shown: DeviceScreen = DeviceScreen.Loading
-  while (true) {
+
+  /** Takes one screenshot, sends what it shows when that's new, then waits. */
+  suspend fun next(send: suspend (DeviceScreen) -> Unit) {
     when (val shot = capture()) {
       is Capture.Picture -> {
         failures = 0
-        shown = DeviceScreen.Frame(shot.png.bytes, shot.png.width, shot.png.height, rate.tick())
-        emit(shown)
+        val frame = DeviceScreen.Frame(ScreenPicture.Encoded(shot.png.bytes), shot.png.width, shot.png.height, rate.tick())
+        shown = frame
+        send(frame)
         delay(FrameGap)
       }
       is Capture.Unavailable -> {
         failures++
         rate.reset()
         val screen = DeviceScreen.Unavailable(shot.reason)
-        if (screen != shown) emit(screen)
+        if (screen != shown) send(screen)
         shown = screen
         delay(retryDelay(shot.reason, failures))
       }

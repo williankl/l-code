@@ -139,6 +139,18 @@ internal class AdbDevices(
     }
   }
 
+  /** The screen's size now, turned the way the device is, in the pixels taps are given in; null when it can't be read. */
+  suspend fun screenSize(adb: String, device: MobileDevice): Pair<Int, Int>? = shellOutput(adb, device.id.value, "dumpsys", "window", "displays")
+    ?.let(::parseCurrentScreenSize)
+
+  /** The screen recorded as H.264 at [width] by [height], as it's written; `screenrecord` stops by itself after a few minutes. */
+  fun recordScreen(adb: String, device: MobileDevice, width: Int, height: Int): Flow<ByteArray> {
+    val bitRate = if (device.connection == DeviceConnection.Wifi) WifiBitRate else UsbBitRate
+    return commands.bytes(
+      listOf(adb, "-s", device.id.value, "exec-out", "screenrecord", "--output-format=h264", "--size", "${width}x$height", "--bit-rate", "$bitRate", "-"),
+    )
+  }
+
   suspend fun screenshot(adb: String, device: MobileDevice): LemonadeCodeResult<String, MobileError> = when (val shot = capture(adb, device)) {
     is Capture.Picture -> files.save(device.name, shot.png.bytes)
     is Capture.Unavailable -> LemonadeCodeResult.failure(MobileError.CommandFailed(shot.message))
@@ -401,6 +413,10 @@ internal class AdbDevices(
       DeviceCapability.Screenshot,
       DeviceCapability.Logs,
     )
+
+    /** Bits a second for a recording of the screen: less over Wi‑Fi, which has less to spare. */
+    const val UsbBitRate = 8_000_000
+    const val WifiBitRate = 4_000_000
 
     val PollInterval = 2.seconds
     val DevicesTimeout = 10.seconds

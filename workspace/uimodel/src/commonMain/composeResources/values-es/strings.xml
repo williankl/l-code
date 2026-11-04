@@ -290,7 +290,7 @@
   <string name="devices_separate">Abrir en una ventana aparte</string>
   <string name="devices_dock">Volver a la ventana principal</string>
   <string name="devices_layout_tabs">Mostrar pantalla y registros en pestañas</string>
-  <string name="devices_layout_split">Mostrar pantalla y registros lado a lado</string>
+  <string name="devices_layout_split">Mostrar pantalla y registros juntos</string>
   <string name="devices_disconnect">Desconectar %1$s</string>
   <string name="devices_disconnected">%1$s desconectado</string>
   <string name="device_usb">USB</string>

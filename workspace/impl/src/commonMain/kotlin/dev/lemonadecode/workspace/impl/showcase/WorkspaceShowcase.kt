@@ -88,6 +88,8 @@ public enum class WorkspaceShowcase(
   SettingsUpdates("8d", "Updates, 1.9.0 available", "What's new, then Update now. It downloads, then a restart finishes it."),
   DeviceList("8e", "Devices · list", "Connected devices, Android and iOS apart. Pairing starts at the bottom.", widthDp = 420, heightDp = 800, part = ShowcasePart.Devices),
   DeviceSideBySide("8f", "Device · side by side", "The screen and its logs side by side, the default.", widthDp = 760, heightDp = 800, part = ShowcasePart.Devices),
+  DeviceLandscape("8f·wide", "Device · landscape", "A screen on its side goes above its logs, as wide as the panel.", widthDp = 760, heightDp = 800, part = ShowcasePart.Devices),
+  DeviceStacked("8f·narrow", "Device · together, narrow", "Without room beside the logs, a portrait screen goes above them.", widthDp = 420, heightDp = 800, part = ShowcasePart.Devices),
   DeviceTabs("8g", "Device · tabs, Logs selected", "Switched to tabs from the header. iOS logs over USB; errors can go to the agent.", widthDp = 420, heightDp = 800, part = ShowcasePart.Devices),
   PairPlatform("8h", "Pair · 1 platform", "Pairing asks one thing at a time: first, what are you pairing?", widthDp = 420, heightDp = 800, part = ShowcasePart.Devices),
   PairMethod("8i", "Pair · 2 method", "Then how: a QR code, a pairing code or a device found on this network.", widthDp = 420, heightDp = 800, part = ShowcasePart.Devices),
@@ -335,6 +337,8 @@ private fun sceneFor(showcase: WorkspaceShowcase): Scene = when (showcase) {
   WorkspaceShowcase.SettingsUpdates -> settingsScene(SettingsPage.Updates)
   WorkspaceShowcase.DeviceList -> devicesScene(DevicesViewState())
   WorkspaceShowcase.DeviceSideBySide -> devicesScene(DevicesViewState(step = DevicesStep.Device, deviceId = ShowcaseDevices.pixel.id))
+  WorkspaceShowcase.DeviceLandscape -> devicesScene(DevicesViewState(step = DevicesStep.Device, deviceId = ShowcaseDevices.pixel.id), screen = ShowcaseDevices.screen(2400, 1080))
+  WorkspaceShowcase.DeviceStacked -> devicesScene(DevicesViewState(step = DevicesStep.Device, deviceId = ShowcaseDevices.pixel.id))
   WorkspaceShowcase.DeviceTabs -> devicesScene(
     DevicesViewState(step = DevicesStep.Device, deviceId = ShowcaseDevices.iphone.id, tab = DeviceTab.Logs),
     layout = DevicesLayout.Tabs,

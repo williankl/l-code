@@ -208,7 +208,8 @@ Lemonade Code finds them on your `PATH`, in the Android SDK and in Homebrew's fo
 <img src="images/devices.png" width="100%" alt="A Pixel 8's screen beside its logs, with two errors ready to send to claude">
 
 - **One step at a time.** The panel opens on the list of devices, Android and iOS apart. Pick one to
-  see its screen beside its logs, or switch to tabs from the header.
+  see its screen beside its logs, or above them when the screen is on its side or the panel is narrow,
+  or switch to tabs from the header.
 - **Use the phone from here.** On Android, clicks and drags on the screen reach the phone, and so do
   Back, Home, turning it sideways and, with the keyboard button on, your typing. iPhones and iPads
   show their screen over a cable only, to look at.

@@ -290,7 +290,7 @@
   <string name="devices_separate">Ouvrir dans une fenêtre séparée</string>
   <string name="devices_dock">Revenir à la fenêtre principale</string>
   <string name="devices_layout_tabs">Afficher l’écran et les journaux en onglets</string>
-  <string name="devices_layout_split">Afficher l’écran et les journaux côte à côte</string>
+  <string name="devices_layout_split">Afficher l’écran et les journaux ensemble</string>
   <string name="devices_disconnect">Déconnecter %1$s</string>
   <string name="devices_disconnected">%1$s déconnecté</string>
   <string name="device_usb">USB</string>

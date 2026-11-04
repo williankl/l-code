@@ -529,6 +529,22 @@ class WorkspacePresenterTest {
   }
 
   @Test
+  fun `closing a session from its menu closes the menu with it`() = runTest {
+    withFamily()
+    presenter.test {
+      awaitItem().eventSink(WorkspaceEvent.OpenSessionMenu("cf"))
+      awaitItemWhere { it.sessions.menu?.sessionId == "cf" }.eventSink(WorkspaceEvent.CloseSession("cf"))
+      awaitItemWhere { it.sessions.tiles.none { tile -> tile.id == "cf" } && it.sessions.menu == null }
+      assertEquals(listOf(SessionId("cf")), sessions.closed)
+
+      // Not just hidden while the session is gone: one back under the same id finds no menu open.
+      sessions.setSessions(sessions.sessions.value + ShowcaseFixtures.session("cf", "checkout-flake"))
+      val back = awaitItemWhere { it.sessions.tiles.any { tile -> tile.id == "cf" } }
+      assertEquals(null, back.sessions.menu)
+    }
+  }
+
+  @Test
   fun `the session menu names the session and offers what fits it`() = runTest {
     withFamily()
     presenter.test {

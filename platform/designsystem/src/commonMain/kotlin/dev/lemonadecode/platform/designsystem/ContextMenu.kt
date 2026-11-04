@@ -116,7 +116,11 @@ public fun ContextMenuHeader(
   ContextMenuDivider()
 }
 
-/** One row of a [ContextMenuPopover]: an icon, the label and an optional second line under it. */
+/**
+ * One row of a [ContextMenuPopover]: an icon, the label and an optional second line under it. A
+ * [critical] row, for an action that can't be undone, draws its icon and label in Lemonade's critical
+ * content colour.
+ */
 @Composable
 public fun ContextMenuItem(
   label: String,
@@ -125,12 +129,24 @@ public fun ContextMenuItem(
   icon: LemonadeIcons? = null,
   detail: String? = null,
   enabled: Boolean = true,
+  critical: Boolean = false,
 ) {
   val interactionSource = remember { MutableInteractionSource() }
   val hovered by interactionSource.collectIsHoveredAsState()
   val focused by interactionSource.collectIsFocusedAsState()
   val colors = LemonadeTheme.colors
   val spaces = LemonadeTheme.spaces
+  val content = colors.content
+  val iconTint = when {
+    !enabled -> content.contentTertiary
+    critical -> content.contentCritical
+    else -> content.contentSecondary
+  }
+  val labelColor = when {
+    !enabled -> content.contentTertiary
+    critical -> content.contentCritical
+    else -> content.contentPrimary
+  }
   Row(
     verticalAlignment = Alignment.Top,
     horizontalArrangement = Arrangement.spacedBy(spaces.spacing300),
@@ -147,7 +163,7 @@ public fun ContextMenuItem(
         icon = icon,
         contentDescription = null,
         size = LemonadeAssetSize.Small,
-        tint = if (enabled) colors.content.contentSecondary else colors.content.contentTertiary,
+        tint = iconTint,
         modifier = Modifier.padding(top = 2.dp),
       )
     }
@@ -155,7 +171,7 @@ public fun ContextMenuItem(
       LemonadeUi.Text(
         text = label,
         textStyle = LemonadeTheme.typography.bodySmallMedium,
-        color = if (enabled) colors.content.contentPrimary else colors.content.contentTertiary,
+        color = labelColor,
       )
       if (detail != null) {
         LemonadeUi.Text(

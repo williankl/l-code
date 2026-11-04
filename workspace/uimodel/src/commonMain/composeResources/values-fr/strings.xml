@@ -158,6 +158,29 @@
   <string name="session_path_copied">Copié : %1$s</string>
   <string name="session_close">Fermer la session</string>
 
+  <!-- Closing a session that leaves worktrees no other session uses -->
+  <string name="close_session_title">Fermer %1$s ?</string>
+  <string name="close_session_sub_session">Sa sous-session se ferme avec elle.</string>
+  <string name="close_session_sub_sessions">Ses sous-sessions se ferment avec elle.</string>
+  <string name="close_session_worktree">Aucune autre session n’utilise ce worktree. Le supprimer aussi ?</string>
+  <string name="close_session_worktrees">Aucune autre session n’utilise ces worktrees. Les supprimer aussi ?</string>
+  <string name="close_session_detached">HEAD détachée</string>
+  <string name="close_session_changes">Contient des modifications non validées qui seront perdues</string>
+  <string name="close_session_branch_stays">Seul le dossier est supprimé. La branche %1$s reste.</string>
+  <string name="close_session_folder_goes">Seul le dossier est supprimé.</string>
+  <string name="close_session_branches_stay">Seuls les dossiers sont supprimés. Leurs branches restent.</string>
+  <string name="close_session_delete_worktree">Fermer et supprimer le worktree</string>
+  <string name="close_session_delete_worktrees">Fermer et supprimer les worktrees</string>
+  <string name="close_session_keep_worktree">Fermer, garder le worktree</string>
+  <string name="close_session_keep_worktrees">Fermer, garder les worktrees</string>
+  <string name="worktree_deleted">Worktree %1$s supprimé</string>
+  <plurals name="worktrees_deleted">
+    <item quantity="one">%1$d worktree supprimé</item>
+    <item quantity="many">%1$d worktrees supprimés</item>
+    <item quantity="other">%1$d worktrees supprimés</item>
+  </plurals>
+  <string name="error_worktree_delete">Impossible de supprimer le worktree %1$s : %2$s</string>
+
   <!-- New session -->
   <string name="action_new_terminal">Nouveau terminal</string>
   <string name="no_sessions_title">Aucune session pour l’instant</string>

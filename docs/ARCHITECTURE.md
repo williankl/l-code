@@ -73,9 +73,9 @@ An `impl` never depends on another `impl`. Bindings are contributed with
 | `platform/syntax-core` | Lightweight code colouring for the diff. |
 | `platform/sound-core` / `-test` | `SoundPlayer` and its two chimes, a ding and a double ding, drawn in code and played through Java Sound on a background thread; a fake that records what played. |
 | `platform/power-core` | Keep-awake for the system and the screen: `caffeinate` on macOS, `systemd-inhibit` plus GNOME's `gnome-session-inhibit` on Linux, PowerShell calling `SetThreadExecutionState` on Windows. |
-| `platform/designsystem` | `LemonadeCodeTheme` over Lemonade, plus tooltips, popovers, a context menu and a slot segmented control. See [Design](DESIGN.md#what-lemonade-code-adds). |
+| `platform/designsystem` | `LemonadeCodeTheme` over Lemonade, plus tooltips, popovers, a modal dialog, a context menu and a slot segmented control. See [Design](DESIGN.md#what-lemonade-code-adds). |
 | `domainEntities` | Sessions, reviews, diffs, settings, updates. No dependencies. |
-| `data/git/{api,impl,fake}` | `GitDataSource` over the `git` command: merge-base diffs with whole-file context, untracked files, worktrees. |
+| `data/git/{api,impl,fake}` | `GitDataSource` over the `git` command: merge-base diffs with whole-file context, untracked files, worktrees (adding, telling a linked one from a main checkout, removing). |
 | `sessions/{api,impl,fake}` | `SessionService`: opens login shells in PTYs, follows each shell's folder and branch, infers working / needs input / idle / exited, plans and starts sub-sessions. `SessionTerminals` exposes the terminals to the UI. |
 | `review/{api,impl,fake}` | `ReviewService`: the diff and comments per checkout, the review text, pasting it into the session or into a review sub-session. |
 | `settings/{api,impl,fake}` | `SettingsService` (persisted), the keep-awake coordinator, and the status sounds coordinator that dings when an agent finishes or needs input. |

@@ -6,10 +6,12 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.DesktopComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.MouseButton
+import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.onAllNodesWithText
@@ -28,7 +30,9 @@ import dev.lemonadecode.domain.mobile.LogPackages
 import dev.lemonadecode.domain.review.CommentStatus
 import dev.lemonadecode.domain.review.DiffState
 import dev.lemonadecode.domain.review.Review
+import dev.lemonadecode.domain.session.LinkedWorktree
 import dev.lemonadecode.domain.session.SessionId
+import dev.lemonadecode.domain.session.SessionPlacement
 import dev.lemonadecode.domain.session.SessionStatus
 import dev.lemonadecode.domain.session.SubSessionLocation
 import dev.lemonadecode.domain.settings.ThemePreference
@@ -245,6 +249,82 @@ class WorkspaceFlowUiTest {
       waitFor(hasText("api-ratelimit"))
       waitUntil(timeoutMillis = 5_000) { onAllNodes(hasText("flaky checkout")).fetchSemanticsNodes().isEmpty() }
       assertEquals(listOf(SessionId("cf")), sessions.closed)
+    }
+  }
+
+  private val worktree = LinkedWorktree("${ShowcaseFixtures.Repo}.worktrees/sub-2", "feat/rate-limit-sub-2", ShowcaseFixtures.Repo, hasChanges = true)
+
+  /** api-ratelimit in the main checkout, and sub-2, a sub-session of it in a worktree with changes. */
+  private fun withWorktree() {
+    sessions.setSessions(
+      listOf(
+        ShowcaseFixtures.session("ar", "api-ratelimit"),
+        ShowcaseFixtures.session("s2", "sub-2", parent = "ar", branch = worktree.branch, placement = SessionPlacement.Worktree, folder = worktree.path),
+      ),
+    )
+    sessions.worktrees = listOf(worktree)
+  }
+
+  @Test
+  fun `closing a session in a worktree from its menu asks first, then closes it and deletes the worktree`() {
+    withWorktree()
+    flow {
+      onNodeWithText("sub-2").performMouseInput { rightClick(center) }
+      waitFor(hasText("Close session"))
+      onNodeWithText("Close session").performClick()
+      waitFor(hasText("Close sub-2?"))
+      onNodeWithText("Has uncommitted changes that will be lost").assertExists()
+      assertTrue(sessions.closed.isEmpty(), "nothing closes before the answer")
+
+      onNodeWithText("Close and delete worktree").performClick()
+      waitFor(hasText("Deleted the worktree ~/code/storefront.worktrees/sub-2"))
+      onNode(isDialog()).assertDoesNotExist()
+      assertEquals(listOf(SessionId("s2")), sessions.closed)
+      assertEquals(listOf(FakeSessionService.RemoveWorktreeCall(worktree, force = true, stillOpen = emptyList())), sessions.removedWorktrees)
+    }
+  }
+
+  @Test
+  fun `command W in a worktree asks, and Escape keeps the session open`() {
+    withWorktree()
+    flow {
+      onNodeWithText("sub-2").performClick()
+      waitFor(hasText("sub-session · worktree"))
+      onAllNodes(isRoot())[0].performKeyInput { withKeyDown(Key.MetaLeft) { pressKey(Key.W) } }
+      waitFor(isDialog())
+      onNode(isDialog()).performKeyInput { pressKey(Key.Escape) }
+      waitUntil(timeoutMillis = 5_000) { onAllNodes(isDialog()).fetchSemanticsNodes().isEmpty() }
+      onNodeWithText("sub-session · worktree").assertExists()
+      assertTrue(sessions.closed.isEmpty())
+      assertTrue(sessions.removedWorktrees.isEmpty())
+    }
+  }
+
+  @Test
+  fun `a new worktree's sub-session, closed with a middle click, can keep its worktree`() {
+    withRepository()
+    flow {
+      onNodeWithContentDescription("New sub-session").performClick()
+      waitFor(hasText("New worktree"))
+      onNodeWithText("New worktree").performClick()
+      waitFor(hasSetTextAction() and hasText("worktree/testing-things"))
+      onNode(hasSetTextAction()).performKeyInput { pressKey(Key.Enter) }
+      waitFor(hasText("sub-session · worktree"))
+
+      // The row in the sidebar, not the header naming the selected session.
+      onNode(hasText("sub-1") and hasAnyAncestor(hasContentDescription("Sessions"))).performMouseInput {
+        moveTo(center)
+        press(MouseButton.Tertiary)
+        release(MouseButton.Tertiary)
+      }
+      waitFor(hasText("Close sub-1?"))
+      onNodeWithText("Has uncommitted changes that will be lost").assertDoesNotExist()
+      onNodeWithText("Only the folder is deleted. The branch worktree/testing-things stays.").assertExists()
+      onNodeWithText("Close, keep worktree").performClick()
+      waitUntil(timeoutMillis = 5_000) { onAllNodes(hasText("sub-1")).fetchSemanticsNodes().isEmpty() }
+      assertEquals(1, sessions.closed.size)
+      assertTrue(sessions.removedWorktrees.isEmpty())
+      assertEquals(1, sessions.worktrees.size, "the worktree stays")
     }
   }
 

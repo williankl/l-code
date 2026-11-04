@@ -118,6 +118,20 @@ running `git worktree add`, so a bad name leaves nothing half-made behind.
 Both share one git history, so the work can be merged back like any branch, but edits in one never
 touch the other.
 
+**Closing.** Before a session closes, Lemonade Code asks git about the folder of the session and of
+each sub-session closing with it. A folder is in a *linked* worktree when `git rev-parse --git-dir`
+and `--git-common-dir`, asked from its top-level folder, name different folders; in a repository's
+main checkout they're the same one. A worktree that a session staying open is still in is left out.
+If any are left, the dialog asks about them, with what `git status` says about uncommitted changes
+and untracked files.
+
+Deleting closes the sessions first and waits a moment for their shells, and whatever ran in them,
+to end, so nothing is left in the folder. Then it runs `git worktree remove` from the repository's
+main checkout, the first worktree `git worktree list` names, which deletes the folder and git's
+record of it and keeps the branch. `--force` is added only for a worktree the dialog warned had
+changes. If git still says no, for example because the worktree is locked or changed since, the
+session stays closed, the worktree stays where it was, and the error banner says why.
+
 ## Saving and restoring sessions
 
 When you quit, Lemonade Code saves every session to `sessions.json`, next to your settings: its name,

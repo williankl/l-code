@@ -9,6 +9,18 @@ public data class GitCheckout(
   val branch: String?,
 )
 
+/** A linked worktree: a checkout `git worktree add` made, not the repository's main one. */
+public data class GitWorktree(
+  /** Absolute path of the worktree's top-level folder. */
+  val root: String,
+  /** Its branch, or null on a detached HEAD. */
+  val branch: String?,
+  /** The repository's main checkout (or the bare repository) the worktree belongs to. */
+  val mainRoot: String,
+  /** It has uncommitted changes or untracked files that aren't ignored, which removing it loses. */
+  val hasChanges: Boolean,
+)
+
 /** The newest commit on a branch: when it was made and by whom. */
 public data class GitBranchTip(
   /** Milliseconds since the epoch. */
@@ -92,5 +104,22 @@ public interface GitDataSource {
     path: String,
     branch: String,
     startPoint: String,
+  ): LemonadeCodeResult<Unit, GitError>
+
+  /**
+   * The linked worktree [directory] is in. Null in a repository's main checkout, a submodule, or
+   * outside git.
+   */
+  public suspend fun linkedWorktree(directory: String): LemonadeCodeResult<GitWorktree?, GitError>
+
+  /**
+   * Removes the linked worktree at [path]: its folder and git's record of it. Its branch stays.
+   * Without [force], git refuses while it has uncommitted changes or untracked files; with it,
+   * they are lost. [repositoryRoot] is a checkout of the same repository, like its main one.
+   */
+  public suspend fun removeWorktree(
+    repositoryRoot: String,
+    path: String,
+    force: Boolean,
   ): LemonadeCodeResult<Unit, GitError>
 }

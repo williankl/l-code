@@ -2,6 +2,7 @@ package dev.lemonadecode.workspace.impl
 
 import dev.lemonadecode.platform.localization.LemonadeCodeString
 import dev.lemonadecode.platform.localization.asLemonadeCodeString
+import dev.lemonadecode.platform.process.abbreviateHome
 import dev.lemonadecode.review.api.ReviewError
 import dev.lemonadecode.sessions.api.SessionError
 import dev.lemonadecode.workspace.strings.Res
@@ -11,17 +12,20 @@ import dev.lemonadecode.workspace.strings.error_not_repo
 import dev.lemonadecode.workspace.strings.error_preview
 import dev.lemonadecode.workspace.strings.error_send
 import dev.lemonadecode.workspace.strings.error_worktree
+import dev.lemonadecode.workspace.strings.error_worktree_delete
 import dev.lemonadecode.workspace.strings.message_terminal_closed
 import dev.lemonadecode.workspace.strings.worktree_branch_invalid
 import dev.lemonadecode.workspace.strings.worktree_branch_taken
 
 /** What the user reads when a session or review action fails. */
 internal object ErrorMessages {
-  fun of(error: SessionError): LemonadeCodeString = when (error) {
+  /** [home] shortens the paths it names to `~`. */
+  fun of(error: SessionError, home: String = ""): LemonadeCodeString = when (error) {
     is SessionError.FolderNotFound -> Res.string.error_folder_missing.asLemonadeCodeString(error.path)
     SessionError.NotARepository -> Res.string.error_not_repo.asLemonadeCodeString()
     SessionError.UnknownSession -> Res.string.message_terminal_closed.asLemonadeCodeString()
     is SessionError.WorktreeFailed -> Res.string.error_worktree.asLemonadeCodeString(error.message)
+    is SessionError.WorktreeNotRemoved -> Res.string.error_worktree_delete.asLemonadeCodeString(abbreviateHome(error.path, home), error.message)
     is SessionError.BranchExists -> Res.string.worktree_branch_taken.asLemonadeCodeString(error.branch)
     is SessionError.InvalidBranch -> Res.string.worktree_branch_invalid.asLemonadeCodeString()
     is SessionError.LaunchFailed -> Res.string.error_launch.asLemonadeCodeString(error.message)

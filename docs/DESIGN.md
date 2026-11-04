@@ -106,6 +106,7 @@ fits right in.
 | `HoverTooltip` | Lemonade's tooltip host is a spotlight, coach-mark style overlay. A desktop app also wants small labels that show while the mouse rests on a button. |
 | `ContextMenuPopover` | Lemonade's list items are sized for touch. Right-click menus need tighter rows, so these are drawn here, styled like Lemonade's popovers. A destructive row, like *Close session*, takes Lemonade's critical content colour. |
 | `AnchoredPopover` | Panels that open under their button and close on a click outside or Escape: settings, updates, new sub-session. |
+| `ModalDialog` | A question to answer before anything else, like whether closing a session should delete its worktree: a popover-styled panel centred on the flat scrim, holding the keys until Escape or an answer. Its buttons sit in a row, or stack at full width when a language's labels don't fit. |
 | `StatusDot`, `DotLabel` | The dot-plus-word status pattern used everywhere (see [Principles](#principles)). |
 | `KeyHint` | The little `⌘↵` inside the *Paste into terminal* button. |
 | `Hairline` | A thin rule for toolbars; Lemonade's dividers only come in the low-contrast border colour. |

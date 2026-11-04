@@ -19,6 +19,12 @@ public sealed interface WorkspaceEvent {
   /** Closes any session, selected or not, and its sub-sessions. Middle click does this. */
   public data class CloseSession(val sessionId: String) : WorkspaceEvent
 
+  /** Answers the dialog a closing session's worktrees open: closes it, and deletes them when [deleteWorktrees]. */
+  public data class ConfirmCloseSession(val deleteWorktrees: Boolean) : WorkspaceEvent
+
+  /** Esc or Cancel in that dialog: nothing closes. */
+  public data object CancelCloseSession : WorkspaceEvent
+
   /** Right-clicked a session: opens its menu. */
   public data class OpenSessionMenu(val sessionId: String) : WorkspaceEvent
   public data object DismissSessionMenu : WorkspaceEvent

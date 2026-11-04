@@ -30,6 +30,7 @@ import dev.lemonadecode.domain.review.FileDiff
 import dev.lemonadecode.domain.review.FileVersion
 import dev.lemonadecode.domain.review.NewComment
 import dev.lemonadecode.domain.review.Review
+import dev.lemonadecode.domain.session.LinkedWorktree
 import dev.lemonadecode.domain.session.Session
 import dev.lemonadecode.domain.session.SessionId
 import dev.lemonadecode.domain.session.SessionStatus
@@ -43,6 +44,7 @@ import dev.lemonadecode.platform.localization.asLemonadeCodeString
 import dev.lemonadecode.platform.localization.systemLanguageTag
 import dev.lemonadecode.platform.presenter.LemonadeCodePresenter
 import dev.lemonadecode.platform.process.HomeDirectory
+import dev.lemonadecode.platform.process.abbreviateHome
 import dev.lemonadecode.platform.sound.Chime
 import dev.lemonadecode.platform.sound.SoundPlayer
 import dev.lemonadecode.review.api.ReviewService
@@ -61,6 +63,8 @@ import dev.lemonadecode.workspace.strings.logs_errors_sent
 import dev.lemonadecode.workspace.strings.screenshot_attached
 import dev.lemonadecode.workspace.strings.screenshot_failed
 import dev.lemonadecode.workspace.strings.session_path_copied
+import dev.lemonadecode.workspace.strings.worktree_deleted
+import dev.lemonadecode.workspace.strings.worktrees_deleted
 import dev.lemonadecode.workspace.uimodel.DeviceKeyModel
 import dev.lemonadecode.workspace.uimodel.DeviceTab
 import dev.lemonadecode.workspace.uimodel.DevicesLayoutOption
@@ -76,6 +80,7 @@ import dev.zacsweers.metro.Inject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
@@ -106,6 +111,8 @@ public class WorkspacePresenter internal constructor(
     var view by remember { mutableStateOf(WorkspaceViewState()) }
     val scope = rememberCoroutineScope()
     val toastTimer = remember { ToastTimer() }
+    // Sessions whose worktrees are being looked up before they close: a second ⌘W meanwhile asks nothing twice.
+    val lookingUp = remember { mutableSetOf<SessionId>() }
 
     val selected = WorkspaceModelMapper.selectedSession(sessions, view)
     val selectedId = selected?.id
@@ -167,15 +174,70 @@ public class WorkspacePresenter internal constructor(
         fun fileOf(path: String?): FileDiff? = (review?.diff as? DiffState.Ready)?.snapshot?.files?.firstOrNull { it.path == path }
         fun commented(path: String): Boolean = review?.comments.orEmpty().any { it.filePath == path }
         fun sessionOf(id: String): Session? = sessionService.sessions.value.firstOrNull { it.id.value == id }
+        fun closeMenusOf(closing: Set<SessionId>) = update { state ->
+          state.copy(
+            sessionMenu = state.sessionMenu?.takeUnless { it in closing },
+            renaming = state.renaming?.takeUnless { it in closing },
+            namingWorktree = state.namingWorktree?.takeUnless { it in closing },
+          )
+        }
         fun close(id: SessionId) {
           val closing = SessionsMapper.subtree(sessionService.sessions.value, id)
           sessionService.close(id)
-          update { state ->
-            state.copy(
-              sessionMenu = state.sessionMenu?.takeUnless { it in closing },
-              renaming = state.renaming?.takeUnless { it in closing },
-              namingWorktree = state.namingWorktree?.takeUnless { it in closing },
-            )
+          closeMenusOf(closing)
+        }
+
+        /**
+         * Closes [id] and its sub-sessions, but first asks whether to delete the worktrees that
+         * leaves with no session in them, if there are any. Outside git there are none to ask about.
+         */
+        fun requestClose(id: SessionId) {
+          val all = sessionService.sessions.value
+          val session = all.firstOrNull { it.id == id } ?: return
+          val closing = SessionsMapper.subtree(all, id)
+          val doomed = all.filter { it.id in closing }
+          if (doomed.none { it.repositoryRoot != null }) return close(id)
+          if (!lookingUp.add(id)) return
+          closeMenusOf(closing)
+          scope.launch {
+            val found = try {
+              doomed.map { async { sessionService.worktreeOf(it.id) } }.awaitAll()
+            } finally {
+              lookingUp.remove(id)
+            }
+            val now = sessionService.sessions.value
+            if (now.none { it.id == id }) return@launch
+            val unused = ClosingSessions.leftUnused(found, staying = now.filterNot { it.id in closing })
+            if (unused.isEmpty()) {
+              close(id)
+            } else {
+              update { it.closingPopovers().copy(closing = ClosingSession(id, session.displayName, closing.size - 1, unused)) }
+            }
+          }
+        }
+
+        /**
+         * Deletes [worktrees], once the sessions in them have closed. Only those the dialog said had
+         * changes are forced; any that changed since stay, and say why.
+         */
+        fun deleteWorktrees(worktrees: List<LinkedWorktree>) {
+          // Again: a session may have moved into one while the dialog was open.
+          val unused = ClosingSessions.leftUnused(worktrees, staying = sessionService.sessions.value)
+          if (unused.isEmpty()) return
+          scope.launch {
+            val deleted = unused.filter { worktree ->
+              when (val removed = sessionService.removeWorktree(worktree, force = worktree.hasChanges)) {
+                is LemonadeCodeResult.Success -> true
+                is LemonadeCodeResult.Failure -> {
+                  fail(ErrorMessages.of(removed.error, homeDirectory.path))
+                  false
+                }
+              }
+            }
+            when {
+              deleted.size == 1 -> showToast(Res.string.worktree_deleted.asLemonadeCodeString(abbreviateHome(deleted.single().path, homeDirectory.path)))
+              deleted.size > 1 -> showToast(Res.plurals.worktrees_deleted.asLemonadeCodeString(deleted.size, deleted.size))
+            }
           }
         }
 
@@ -224,8 +286,15 @@ public class WorkspacePresenter internal constructor(
             val id = SessionId(event.sessionId)
             it.copy(folded = if (id in it.folded) it.folded - id else it.folded + id)
           }
-          WorkspaceEvent.CloseSelectedSession -> current?.let { close(it.id) }
-          is WorkspaceEvent.CloseSession -> close(SessionId(event.sessionId))
+          WorkspaceEvent.CloseSelectedSession -> current?.let { requestClose(it.id) }
+          is WorkspaceEvent.CloseSession -> requestClose(SessionId(event.sessionId))
+          is WorkspaceEvent.ConfirmCloseSession -> view.closing?.let { closing ->
+            update { it.copy(closing = null) }
+            // The sessions go first, so no shell is left in a folder about to be deleted.
+            close(closing.sessionId)
+            if (event.deleteWorktrees) deleteWorktrees(closing.worktrees)
+          }
+          WorkspaceEvent.CancelCloseSession -> update { it.copy(closing = null) }
 
           is WorkspaceEvent.OpenSessionMenu -> sessionOf(event.sessionId)?.let { session ->
             update { it.closingPopovers().copy(sessionMenu = session.id) }

@@ -14,7 +14,9 @@ import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration
 
@@ -162,6 +164,68 @@ class GitCliDataSourceTest {
     val path = File(repo.parentFile, "${repo.name}.worktrees/sub-1").path
     assertTrue(dataSource.addWorktree(repo.path, path, "feature-sub-1", "feature").isSuccess)
     assertEquals("feature-sub-1", dataSource.checkout(path).getOrNull()?.branch)
+  }
+
+  @Test
+  fun `tells a linked worktree from the main checkout`() = runTest {
+    val repo = newRepository()
+    val worktree = newWorktree(repo, "sub-1")
+    File(worktree, "src/deep").mkdirs()
+    File(repo, "src").mkdirs()
+
+    assertEquals(null, dataSource.linkedWorktree(repo.path).getOrNull(), "the main checkout")
+    assertEquals(null, dataSource.linkedWorktree(File(repo, "src").path).getOrNull(), "a folder in the main checkout")
+    assertEquals(null, dataSource.linkedWorktree(Files.createTempDirectory("lemonade-code-plain").toString()).getOrNull(), "a folder outside git")
+
+    val linked = assertNotNull(dataSource.linkedWorktree(File(worktree, "src/deep").path).getOrNull(), "a folder deep in the worktree")
+    assertEquals(worktree.canonicalPath, File(linked.root).canonicalPath)
+    assertEquals(repo.canonicalPath, File(linked.mainRoot).canonicalPath)
+    assertEquals("feature-sub-1", linked.branch)
+    assertEquals(false, linked.hasChanges)
+  }
+
+  @Test
+  fun `removes a clean worktree and keeps its branch`() = runTest {
+    val repo = newRepository()
+    val worktree = newWorktree(repo, "sub-1")
+    val linked = assertNotNull(dataSource.linkedWorktree(worktree.path).getOrNull())
+
+    assertTrue(dataSource.removeWorktree(linked.mainRoot, linked.root, force = false).isSuccess)
+    assertFalse(worktree.exists(), "the folder goes")
+    assertTrue("feature-sub-1" in dataSource.branches(repo.path).getOrNull().orEmpty(), "the branch stays")
+    assertFalse(worktree.name in git(repo, "worktree", "list"), "git forgets it")
+  }
+
+  @Test
+  fun `refuses a worktree with changes unless forced`() = runTest {
+    val repo = newRepository()
+    val worktree = newWorktree(repo, "sub-1")
+    File(worktree, "app.ts").writeText("one\ntwo-changed\nthree\nfour\n")
+    File(worktree, "notes.md").writeText("# Not committed\n")
+    val linked = assertNotNull(dataSource.linkedWorktree(worktree.path).getOrNull())
+    assertTrue(linked.hasChanges)
+
+    assertIs<GitError.CommandFailed>((dataSource.removeWorktree(linked.mainRoot, linked.root, force = false) as LemonadeCodeResult.Failure).error)
+    assertTrue(File(worktree, "notes.md").exists(), "nothing is lost without force")
+
+    assertTrue(dataSource.removeWorktree(linked.mainRoot, linked.root, force = true).isSuccess)
+    assertFalse(worktree.exists())
+    assertTrue("feature-sub-1" in dataSource.branches(repo.path).getOrNull().orEmpty(), "the branch stays")
+  }
+
+  @Test
+  fun `counts an untracked file as a change`() = runTest {
+    val repo = newRepository()
+    val worktree = newWorktree(repo, "sub-1")
+    File(worktree, "notes.md").writeText("# Not committed\n")
+    assertEquals(true, dataSource.linkedWorktree(worktree.path).getOrNull()?.hasChanges)
+  }
+
+  /** A linked worktree of [repo] on a new branch, `feature-<name>`, next to it. */
+  private suspend fun newWorktree(repo: File, name: String): File {
+    val path = File(repo.parentFile, "${repo.name}.worktrees/$name")
+    check(dataSource.addWorktree(repo.path, path.path, "feature-$name", "feature").isSuccess)
+    return path
   }
 
   /** The paths [diffAgainst][GitCliDataSource.diffAgainst] shows for [baseRef], by name. */

@@ -142,6 +142,7 @@ internal object WorkspaceModelMapper {
         updates = updates,
       ),
       newSubSession = newSubSession(selected, view.subSessionMenu ?: input.settings.subSessionLocation, view.subSessionMenu != null, input),
+      closeSession = view.closing?.let { ClosingSessions.dialog(it, input.homeDirectory) },
       devices = DevicesMapper.panel(
         input = input.mobile,
         view = view,

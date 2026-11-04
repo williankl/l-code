@@ -248,6 +248,7 @@ public fun WorkspaceContent(
         }
       }
     }
+    model.closeSession?.let { CloseSessionDialog(dialog = it, onEvent = onEvent) }
   }
 
   LaunchedEffect(Unit) { focusRequester.requestFocus() }

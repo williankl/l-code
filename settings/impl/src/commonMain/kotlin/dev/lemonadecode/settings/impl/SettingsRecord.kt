@@ -18,6 +18,8 @@ internal data class SettingsRecord(
   val language: String? = null,
   val mobilePlugin: Boolean? = null,
   val devicesLayout: String? = null,
+  val devicesPanelWidth: Int? = null,
+  val devicesPanelWideWidth: Int? = null,
 )
 
 internal fun SettingsRecord.toDomain(): AppSettings {
@@ -31,6 +33,8 @@ internal fun SettingsRecord.toDomain(): AppSettings {
     language = AppLanguage.entries.firstOrNull { it.name == language } ?: defaults.language,
     mobilePlugin = mobilePlugin ?: defaults.mobilePlugin,
     devicesLayout = DevicesLayout.entries.firstOrNull { it.name == devicesLayout } ?: defaults.devicesLayout,
+    devicesPanelWidth = devicesPanelWidth?.takeIf { it > 0 } ?: defaults.devicesPanelWidth,
+    devicesPanelWideWidth = devicesPanelWideWidth?.takeIf { it > 0 } ?: defaults.devicesPanelWideWidth,
   )
 }
 
@@ -43,4 +47,6 @@ internal fun AppSettings.toRecord(): SettingsRecord = SettingsRecord(
   language = language.name,
   mobilePlugin = mobilePlugin,
   devicesLayout = devicesLayout.name,
+  devicesPanelWidth = devicesPanelWidth,
+  devicesPanelWideWidth = devicesPanelWideWidth,
 )

@@ -49,6 +49,7 @@ import dev.lemonadecode.workspace.ui.TerminalTranscript
 import dev.lemonadecode.workspace.ui.WorkspaceContent
 import dev.lemonadecode.workspace.uimodel.DeviceTab
 import dev.lemonadecode.workspace.uimodel.DevicesLayoutOption
+import dev.lemonadecode.workspace.uimodel.DevicesPanelModel
 import dev.lemonadecode.workspace.uimodel.DevicesWindow
 import dev.lemonadecode.workspace.uimodel.LanguageOption
 import dev.lemonadecode.workspace.uimodel.LogFilter
@@ -158,6 +159,36 @@ class WorkspaceContentUiTest {
       }
     }
     sidebar.assertWidthIsEqualTo(SessionsPanelModel.MinSidebarWidth.dp)
+  }
+
+  @Test
+  fun `dragging the docked devices panel's edge towards the session widens it`() = show(WorkspaceShowcase.DisplayMain, edit = { model ->
+    model.copy(devices = model.devices?.copy(window = DevicesWindow.Docked, width = 500))
+  }) {
+    val handle = onNodeWithContentDescription("Resize devices")
+    events.clear()
+    handle.performMouseInput {
+      moveTo(center)
+      press()
+      moveBy(Offset(-40f, 0f))
+      moveBy(Offset(-40f, 0f))
+    }
+    waitForIdle()
+    assertTrue(events.none { it is WorkspaceEvent.ResizeDevicesPanel })
+    handle.performMouseInput { release() }
+    waitForIdle()
+    val widened = events.filterIsInstance<WorkspaceEvent.ResizeDevicesPanel>().single()
+    assertTrue(widened.width in 501..580, "width was ${widened.width}")
+
+    // Past the limit, the narrowest width is kept.
+    expect(WorkspaceEvent.ResizeDevicesPanel(DevicesPanelModel.MinWidth)) {
+      handle.performMouseInput {
+        moveTo(center)
+        press()
+        moveBy(Offset(1_000f, 0f))
+        release()
+      }
+    }
   }
 
   @Test

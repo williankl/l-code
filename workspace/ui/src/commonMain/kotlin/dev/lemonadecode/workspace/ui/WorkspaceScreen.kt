@@ -59,6 +59,7 @@ import dev.lemonadecode.platform.localization.resolve
 import dev.lemonadecode.workspace.strings.Res
 import dev.lemonadecode.workspace.strings.action_dismiss
 import dev.lemonadecode.workspace.strings.action_new_terminal
+import dev.lemonadecode.workspace.strings.devices_resize
 import dev.lemonadecode.workspace.strings.no_sessions_detail
 import dev.lemonadecode.workspace.strings.no_sessions_title
 import dev.lemonadecode.workspace.uimodel.DevicesPanelModel
@@ -132,6 +133,14 @@ public fun WorkspaceContent(
     // While dragging, and after until the saved width comes back, the edge follows the pointer.
     var draggedWidth by remember(panel.sidebarWidth) { mutableStateOf<Dp?>(null) }
     val sidebarWidth = (draggedWidth ?: panel.sidebarWidth.dp).coerceIn(minSidebarWidth, maxSidebarWidth)
+    val docked = model.devices?.takeIf { it.window == DevicesWindow.Docked }
+    // The Devices panel can't be dragged so wide that the main panel gets narrower than its least.
+    val besideDevices = if (panel.expanded) sidebarWidth else RailWidth
+    val minDevicesWidth = DevicesPanelModel.MinWidth.dp
+    val maxDevicesWidth = min(DevicesPanelModel.MaxWidth.dp, maxWidth - besideDevices - gap * 3 - MainPanelMinWidth)
+      .coerceAtLeast(minDevicesWidth)
+    var draggedDevicesWidth by remember(docked?.width) { mutableStateOf<Dp?>(null) }
+    val devicesWidth = (draggedDevicesWidth ?: (docked?.width ?: DevicesPanelModel.DefaultWidth).dp).coerceIn(minDevicesWidth, maxDevicesWidth)
 
     Column(modifier = Modifier.fillMaxSize()) {
       TopBar(
@@ -181,14 +190,22 @@ public fun WorkspaceContent(
             onEvent = onEvent,
             modifier = Modifier.weight(1f).fillMaxHeight(),
           )
-          val docked = model.devices?.takeIf { it.window == DevicesWindow.Docked }
           if (docked != null && !narrow) {
-            Spacer(modifier = Modifier.width(gap))
+            SidebarResizeHandle(
+              sidebarWidth = devicesWidth,
+              minWidth = minDevicesWidth,
+              maxWidth = maxDevicesWidth,
+              onResize = { draggedDevicesWidth = it },
+              onResizeFinished = { onEvent(WorkspaceEvent.ResizeDevicesPanel(it.value.roundToInt())) },
+              atEnd = true,
+              label = stringResource(Res.string.devices_resize),
+              modifier = Modifier.width(gap),
+            )
             DevicesPanel(
               panel = docked,
               onEvent = onEvent,
               modifier = Modifier
-                .width(devicesPanelWidth(docked))
+                .width(devicesWidth)
                 .fillMaxHeight()
                 .clip(LemonadeTheme.shapes.semantic.radiusContainerDefault),
             )
@@ -203,7 +220,7 @@ public fun WorkspaceContent(
             modifier = Modifier
               .align(Alignment.TopEnd)
               .padding(end = gap, bottom = gap)
-              .width(min(devicesPanelWidth(docked), windowWidth - gap * 2))
+              .width(min(docked.width.dp, windowWidth - gap * 2))
               .fillMaxHeight()
               .lemonadeShadow(shadow = LemonadeShadow.Xlarge, shape = shape)
               .clip(shape),

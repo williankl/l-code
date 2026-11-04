@@ -9,6 +9,9 @@ public sealed interface WorkspaceEvent {
   /** Dragged the sidebar's edge and let go: keeps [width] (dp) as the sidebar's width. */
   public data class ResizeSessionsSidebar(val width: Int) : WorkspaceEvent
 
+  /** Let go of the docked Devices panel's edge at [width] dp. */
+  public data class ResizeDevicesPanel(val width: Int) : WorkspaceEvent
+
   public data class SelectSession(val sessionId: String) : WorkspaceEvent
   public data class ToggleSessionFold(val sessionId: String) : WorkspaceEvent
   public data object CloseSelectedSession : WorkspaceEvent

@@ -30,4 +30,8 @@ public data class AppSettings(
   /** The Mobile plugin: mirrors Android and iOS screens, pairs devices and reads their logs. */
   val mobilePlugin: Boolean = false,
   val devicesLayout: DevicesLayout = DevicesLayout.SideBySide,
+  /** The docked Devices panel's width in dp, as last dragged, for the list, pairing and tabs. */
+  val devicesPanelWidth: Int = 420,
+  /** The same for a device's screen and logs together, which want more room. */
+  val devicesPanelWideWidth: Int = 760,
 )

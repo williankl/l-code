@@ -101,7 +101,21 @@ internal data class MobileInput(
   val cable: CablePairing? = null,
 )
 
+/** The docked Devices panel's widths in dp: for the list, pairing and tabs, and for a device's screen and logs together. */
+internal data class DevicesPanelWidths(
+  val narrow: Int = DevicesPanelModel.DefaultWidth,
+  val wide: Int = DevicesPanelModel.DefaultWideWidth,
+)
+
 internal object DevicesMapper {
+  /** Whether the panel shows a device's screen and logs together, which takes the wide width. */
+  fun isWide(view: WorkspaceViewState, devices: List<MobileDevice>, layout: DevicesLayout): Boolean {
+    val state = view.devices ?: return false
+    return state.step == DevicesStep.Device && layout == DevicesLayout.SideBySide && devices.any { it.id == state.deviceId }
+  }
+
+  fun clampPanelWidth(width: Int): Int = width.coerceIn(DevicesPanelModel.MinWidth, DevicesPanelModel.MaxWidth)
+
   fun button(input: MobileInput, view: WorkspaceViewState): DevicesButtonModel? {
     if (!input.enabled) return null
     val open = view.devices != null
@@ -112,12 +126,22 @@ internal object DevicesMapper {
     )
   }
 
-  /** The panel for [view]'s step; null while it's closed. [agent] is who errors are sent to; null without a session. */
-  fun panel(input: MobileInput, view: WorkspaceViewState, layout: DevicesLayout, agent: String?): DevicesPanelModel? {
+  /**
+   * The panel for [view]'s step; null while it's closed. [agent] is who errors are sent to; null
+   * without a session. [widths] are the docked widths last dragged to.
+   */
+  fun panel(
+    input: MobileInput,
+    view: WorkspaceViewState,
+    layout: DevicesLayout,
+    agent: String?,
+    widths: DevicesPanelWidths = DevicesPanelWidths(),
+  ): DevicesPanelModel? {
     if (!input.enabled) return null
     val state = view.devices ?: return null
     val device = state.deviceId?.let { id -> input.devices.firstOrNull { it.id == id } }
     val pairStep = Res.string.pair_title.asLemonadeCodeString()
+    val width = clampPanelWidth(if (isWide(view, input.devices, layout)) widths.wide else widths.narrow)
     fun panel(title: LemonadeCodeString, subtitle: LemonadeCodeString?, back: Boolean, content: DevicesContentModel) = DevicesPanelModel(
       window = view.devicesWindow,
       title = title,
@@ -125,6 +149,7 @@ internal object DevicesMapper {
       canGoBack = back,
       content = content,
       focusRequest = view.devicesFocusRequest,
+      width = width,
     )
     val platformName = (if (state.pairPlatform == MobilePlatform.Android) Res.string.devices_android else Res.string.devices_ios).asLemonadeCodeString()
     return when (state.step) {

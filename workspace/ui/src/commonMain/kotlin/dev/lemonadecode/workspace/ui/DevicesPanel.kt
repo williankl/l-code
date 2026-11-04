@@ -70,7 +70,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.min
 import com.teya.lemonade.Button
@@ -194,10 +193,6 @@ import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.skia.Image as SkiaImage
 
-/** The panel's width beside the session: the list and pairing, or a device's screen beside its logs. */
-public val DevicesPanelWidth: Dp = 420.dp
-public val DevicesPanelWideWidth: Dp = 760.dp
-
 private val ScreenPaneWidth = 320.dp
 
 /** Below this a portrait screen goes above its logs rather than beside them. */
@@ -208,12 +203,6 @@ private const val StackedScreenShare = 0.55f
 
 /** Room around the picture in its pane, for the controls under it and the line under them. */
 private val ScreenPaneChrome = 112.dp
-
-/** How wide the docked panel is for [panel]: a device's screen beside its logs takes more room. */
-public fun devicesPanelWidth(panel: DevicesPanelModel): Dp {
-  val device = panel.content as? DevicesContentModel.Device
-  return if (device?.layout == DevicesLayoutOption.SideBySide) DevicesPanelWideWidth else DevicesPanelWidth
-}
 
 /**
  * The Devices panel: connected devices, one device's screen and logs, or a step of pairing. The

@@ -205,6 +205,11 @@ public class WorkspacePresenter internal constructor(
             val width = WorkspaceModelMapper.clampSidebarWidth(event.width)
             scope.launch { settingsService.update { it.copy(sidebarWidth = width) } }
           }
+          is WorkspaceEvent.ResizeDevicesPanel -> {
+            val width = DevicesMapper.clampPanelWidth(event.width)
+            val wide = DevicesMapper.isWide(view, mobileDevices, settings.devicesLayout)
+            scope.launch { settingsService.update { if (wide) it.copy(devicesPanelWideWidth = width) else it.copy(devicesPanelWidth = width) } }
+          }
           is WorkspaceEvent.SelectSession -> update { it.selecting(SessionId(event.sessionId)) }
           is WorkspaceEvent.ToggleSessionFold -> update {
             val id = SessionId(event.sessionId)

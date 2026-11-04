@@ -117,6 +117,7 @@
   <!-- Sessions -->
   <string name="sessions_title">Sessões</string>
   <string name="sessions_resize">Redimensionar sessões</string>
+  <string name="devices_resize">Redimensionar dispositivos</string>
   <string name="action_new_session">Nova sessão</string>
   <string name="status_working">a trabalhar</string>
   <string name="status_needs_input">precisa de ti</string>

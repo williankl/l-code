@@ -21,6 +21,8 @@ public enum class DevicesLayout { SideBySide, Tabs }
 public data class AppSettings(
   val theme: ThemePreference = ThemePreference.Dark,
   val keepAwake: Boolean = false,
+  /** A ding when a session's agent finishes working, and a double ding when it needs input. */
+  val statusSounds: Boolean = true,
   /** The location the new sub-session panel opened with last time. */
   val subSessionLocation: SubSessionLocation = SubSessionLocation.SameFolder,
   val sidebarExpanded: Boolean = true,

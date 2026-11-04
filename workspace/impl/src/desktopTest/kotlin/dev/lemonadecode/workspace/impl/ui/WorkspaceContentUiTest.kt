@@ -17,6 +17,7 @@ import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.MouseButton
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertIsNotEnabled
@@ -30,6 +31,7 @@ import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
@@ -71,6 +73,7 @@ import dev.lemonadecode.workspace.uimodel.ScreenPictureModel
 import dev.lemonadecode.workspace.uimodel.SessionMenuModel
 import dev.lemonadecode.workspace.uimodel.SessionsPanelModel
 import dev.lemonadecode.workspace.uimodel.SettingsPage
+import dev.lemonadecode.workspace.uimodel.StatusSound
 import dev.lemonadecode.workspace.uimodel.SubSessionLocation
 import dev.lemonadecode.workspace.uimodel.ThemeOption
 import dev.lemonadecode.workspace.uimodel.UpdatePhase
@@ -333,6 +336,7 @@ class WorkspaceContentUiTest {
     expect(WorkspaceEvent.OpenSettingsPage(SettingsPage.Appearance)) { onNodeWithText("Appearance").performClick() }
     expect(WorkspaceEvent.OpenSettingsPage(SettingsPage.Language)) { onNodeWithText("Language").performClick() }
     expect(WorkspaceEvent.OpenSettingsPage(SettingsPage.KeepAwake)) { onNodeWithText("Keep awake while sessions work").performClick() }
+    expect(WorkspaceEvent.OpenSettingsPage(SettingsPage.Sounds)) { onNodeWithText("Sounds").performClick() }
     expect(WorkspaceEvent.OpenSettingsPage(SettingsPage.Plugins)) { onNodeWithText("Plugins").performClick() }
     expect(WorkspaceEvent.OpenSettingsPage(SettingsPage.Updates)) { onNodeWithText("Updates").performClick() }
   }
@@ -350,6 +354,24 @@ class WorkspaceContentUiTest {
   @Test
   fun `the keep awake page turns it off`() = show(WorkspaceShowcase.SettingsOpen, edit = { it.copy(settings = it.settings.copy(page = SettingsPage.KeepAwake)) }) {
     expect(WorkspaceEvent.SetKeepAwake(false)) { onNode(isToggleable()).performClick() }
+  }
+
+  @Test
+  fun `the sounds row says whether they're on`() {
+    show(WorkspaceShowcase.SettingsList) { onNode(hasText("Sounds") and hasText("On")).assertExists() }
+    show(WorkspaceShowcase.SettingsList, edit = { it.copy(settings = it.settings.copy(statusSounds = false)) }) {
+      onNode(hasText("Sounds") and hasText("Off")).assertExists()
+    }
+  }
+
+  @Test
+  fun `the sounds page turns them off and plays each one`() = show(WorkspaceShowcase.SettingsSounds) {
+    onNodeWithText("Plays a ding when an agent in any session finishes", substring = true).assertExists()
+    expect(WorkspaceEvent.SetStatusSounds(false)) { onNode(isToggleable()).performClick() }
+    val play = onAllNodesWithText("Play")
+    play.assertCountEquals(2)
+    expect(WorkspaceEvent.PlayStatusSound(StatusSound.Finished)) { play[0].performClick() }
+    expect(WorkspaceEvent.PlayStatusSound(StatusSound.NeedsInput)) { play[1].performClick() }
   }
 
   @Test

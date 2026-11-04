@@ -43,6 +43,8 @@ import dev.lemonadecode.platform.localization.asLemonadeCodeString
 import dev.lemonadecode.platform.localization.systemLanguageTag
 import dev.lemonadecode.platform.presenter.LemonadeCodePresenter
 import dev.lemonadecode.platform.process.HomeDirectory
+import dev.lemonadecode.platform.sound.Chime
+import dev.lemonadecode.platform.sound.SoundPlayer
 import dev.lemonadecode.review.api.ReviewService
 import dev.lemonadecode.sessions.api.SessionError
 import dev.lemonadecode.sessions.api.SessionService
@@ -66,6 +68,7 @@ import dev.lemonadecode.workspace.uimodel.DevicesWindow
 import dev.lemonadecode.workspace.uimodel.PairingMethod
 import dev.lemonadecode.workspace.uimodel.PreviewAssetLoader
 import dev.lemonadecode.workspace.uimodel.SettingsPage
+import dev.lemonadecode.workspace.uimodel.StatusSound
 import dev.lemonadecode.workspace.uimodel.WorkspaceEvent
 import dev.lemonadecode.workspace.uimodel.WorkspaceModel
 import dev.lemonadecode.workspace.uimodel.WorkspaceView
@@ -89,6 +92,7 @@ public class WorkspacePresenter internal constructor(
   private val homeDirectory: HomeDirectory,
   private val updateService: UpdateService,
   private val mobileService: MobileService,
+  private val soundPlayer: SoundPlayer,
   private val clock: WallClock,
 ) : LemonadeCodePresenter<WorkspaceModel>() {
   @Composable
@@ -276,6 +280,13 @@ public class WorkspacePresenter internal constructor(
           is WorkspaceEvent.SetTheme -> scope.launch { settingsService.update { it.copy(theme = event.theme.toPreference()) } }
           is WorkspaceEvent.SetLanguage -> scope.launch { settingsService.update { it.copy(language = event.language.toDomain()) } }
           is WorkspaceEvent.SetKeepAwake -> scope.launch { settingsService.update { it.copy(keepAwake = event.enabled) } }
+          is WorkspaceEvent.SetStatusSounds -> scope.launch { settingsService.update { it.copy(statusSounds = event.enabled) } }
+          is WorkspaceEvent.PlayStatusSound -> soundPlayer.play(
+            when (event.sound) {
+              StatusSound.Finished -> Chime.Ding
+              StatusSound.NeedsInput -> Chime.DoubleDing
+            },
+          )
           is WorkspaceEvent.SetMobilePlugin -> {
             if (!event.enabled) update { it.copy(devices = null) }
             scope.launch { settingsService.update { it.copy(mobilePlugin = event.enabled) } }

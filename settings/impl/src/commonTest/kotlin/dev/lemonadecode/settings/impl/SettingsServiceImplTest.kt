@@ -8,8 +8,11 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonObject
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class SettingsServiceImplTest {
   @Test
@@ -42,5 +45,27 @@ class SettingsServiceImplTest {
     val settings = SettingsServiceImpl(store, backgroundScope).settings.first { it.keepAwake }
     assertEquals(AppSettings().theme, settings.theme)
     assertEquals(AppSettings().sidebarWidth, settings.sidebarWidth)
+  }
+
+  @Test
+  fun `status sounds are on until turned off, and stay off once they are`() = runTest {
+    // Settings saved before status sounds existed have no value for them.
+    val store = FakePreferenceStore(mapOf("settings" to buildJsonObject { put("keepAwake", JsonPrimitive(true)) }))
+    val service = SettingsServiceImpl(store, backgroundScope)
+    assertTrue(service.settings.first { it.keepAwake }.statusSounds)
+    assertTrue(SettingsServiceImpl(FakePreferenceStore(), backgroundScope).settings.value.statusSounds)
+
+    service.update { it.copy(statusSounds = false) }
+
+    assertEquals(JsonPrimitive(false), store.snapshot().getValue("settings").jsonObject["statusSounds"])
+    val reloaded = SettingsServiceImpl(store, backgroundScope)
+    assertFalse(reloaded.settings.first { it.keepAwake }.statusSounds)
+  }
+
+  @Test
+  fun `a record keeps every setting as it was`() {
+    val settings = AppSettings(keepAwake = true, statusSounds = false, theme = ThemePreference.System, mobilePlugin = true)
+    assertEquals(settings, settings.toRecord().toDomain())
+    assertEquals(AppSettings(), SettingsRecord().toDomain())
   }
 }

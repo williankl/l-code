@@ -20,6 +20,8 @@ import dev.lemonadecode.platform.presenter.testing.awaitItemWhere
 import dev.lemonadecode.platform.presenter.testing.test
 import dev.lemonadecode.platform.presenter.testing.yieldUntil
 import dev.lemonadecode.platform.process.HomeDirectory
+import dev.lemonadecode.platform.sound.Chime
+import dev.lemonadecode.platform.sound.testing.FakeSoundPlayer
 import dev.lemonadecode.review.fake.FakeReviewService
 import dev.lemonadecode.sessions.fake.FakeSessionService
 import dev.lemonadecode.settings.fake.FakeSettingsService
@@ -50,6 +52,7 @@ import dev.lemonadecode.workspace.uimodel.SessionMenuModel
 import dev.lemonadecode.workspace.uimodel.SessionRenameModel
 import dev.lemonadecode.workspace.uimodel.SessionsPanelModel
 import dev.lemonadecode.workspace.uimodel.SettingsPage
+import dev.lemonadecode.workspace.uimodel.StatusSound
 import dev.lemonadecode.workspace.uimodel.ThemeOption
 import dev.lemonadecode.workspace.uimodel.UpdatePhase
 import dev.lemonadecode.workspace.uimodel.WorkspaceContentModel
@@ -72,6 +75,7 @@ class WorkspacePresenterTest {
   private val settings = FakeSettingsService()
   private val updates = FakeUpdateService()
   private val mobile = FakeMobileService()
+  private val sounds = FakeSoundPlayer()
   private val presenter = WorkspacePresenter(
     sessions,
     reviews,
@@ -81,6 +85,7 @@ class WorkspacePresenterTest {
     },
     updates,
     mobile,
+    sounds,
   ) { Now }
 
   private fun withSession() {
@@ -185,6 +190,22 @@ class WorkspacePresenterTest {
       val updated = awaitItemWhere { it.settings.theme == ThemeOption.Light && it.settings.keepAwake }
       assertTrue(updated.settings.keepAwake)
       assertEquals(ThemePreference.Light, settings.settings.value.theme)
+    }
+  }
+
+  @Test
+  fun `status sounds are saved as a setting, and either sound plays on Play, on or off`() = runTest {
+    withSession()
+    presenter.test {
+      val model = awaitItem()
+      assertTrue(model.settings.statusSounds)
+      model.eventSink(WorkspaceEvent.SetStatusSounds(false))
+      awaitItemWhere { !it.settings.statusSounds }
+      assertEquals(false, settings.settings.value.statusSounds)
+
+      model.eventSink(WorkspaceEvent.PlayStatusSound(StatusSound.Finished))
+      model.eventSink(WorkspaceEvent.PlayStatusSound(StatusSound.NeedsInput))
+      assertEquals(listOf(Chime.Ding, Chime.DoubleDing), sounds.played)
     }
   }
 

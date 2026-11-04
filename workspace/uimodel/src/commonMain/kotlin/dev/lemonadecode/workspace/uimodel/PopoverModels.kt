@@ -6,7 +6,10 @@ import dev.lemonadecode.platform.localization.LemonadeCodeString
 public enum class ThemeOption { Dark, Light, System }
 
 /** The settings popover shows its list, or one item's own page. */
-public enum class SettingsPage { List, Appearance, Language, KeepAwake, Plugins, Updates }
+public enum class SettingsPage { List, Appearance, Language, KeepAwake, Sounds, Plugins, Updates }
+
+/** The sounds Settings › Sounds lets you hear: one ding when an agent finishes, two when it needs input. */
+public enum class StatusSound { Finished, NeedsInput }
 
 /** The interface language; [System] follows the computer's. [tag] is the language's BCP 47 tag. */
 public enum class LanguageOption(public val tag: String?) {
@@ -25,6 +28,8 @@ public data class SettingsModel(
   val theme: ThemeOption,
   val keepAwake: Boolean,
   val keepAwakeStatus: KeepAwakeStatusModel,
+  /** A ding when an agent finishes, two when it needs input. */
+  val statusSounds: Boolean,
   val page: SettingsPage = SettingsPage.List,
   val language: LanguageOption = LanguageOption.System,
   /** The language Match system stands for on this computer. */

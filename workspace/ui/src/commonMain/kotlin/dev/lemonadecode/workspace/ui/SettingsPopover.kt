@@ -73,12 +73,17 @@ import dev.lemonadecode.workspace.strings.plugins_mobile_description
 import dev.lemonadecode.workspace.strings.plugins_open_devices
 import dev.lemonadecode.workspace.strings.plugins_value_mobile
 import dev.lemonadecode.workspace.strings.plugins_value_none
+import dev.lemonadecode.workspace.strings.preview_play
 import dev.lemonadecode.workspace.strings.settings_appearance
 import dev.lemonadecode.workspace.strings.settings_back
 import dev.lemonadecode.workspace.strings.settings_language
 import dev.lemonadecode.workspace.strings.settings_plugins
+import dev.lemonadecode.workspace.strings.settings_sounds
 import dev.lemonadecode.workspace.strings.settings_title
 import dev.lemonadecode.workspace.strings.settings_updates
+import dev.lemonadecode.workspace.strings.sounds_description
+import dev.lemonadecode.workspace.strings.sounds_finished
+import dev.lemonadecode.workspace.strings.sounds_needs_input
 import dev.lemonadecode.workspace.strings.theme_dark
 import dev.lemonadecode.workspace.strings.theme_light
 import dev.lemonadecode.workspace.strings.theme_system
@@ -94,8 +99,10 @@ import dev.lemonadecode.workspace.strings.updates_whats_new
 import dev.lemonadecode.workspace.strings.value_off
 import dev.lemonadecode.workspace.strings.value_on
 import dev.lemonadecode.workspace.uimodel.LanguageOption
+import dev.lemonadecode.workspace.uimodel.SessionStatus
 import dev.lemonadecode.workspace.uimodel.SettingsModel
 import dev.lemonadecode.workspace.uimodel.SettingsPage
+import dev.lemonadecode.workspace.uimodel.StatusSound
 import dev.lemonadecode.workspace.uimodel.ThemeOption
 import dev.lemonadecode.workspace.uimodel.UpdatePhase
 import dev.lemonadecode.workspace.uimodel.UpdatesModel
@@ -141,6 +148,7 @@ internal fun SettingsPopover(
           SettingsPage.Appearance -> AppearancePage(settings = settings, onEvent = onEvent)
           SettingsPage.Language -> LanguagePage(settings = settings, onEvent = onEvent)
           SettingsPage.KeepAwake -> KeepAwakePage(settings = settings, onEvent = onEvent)
+          SettingsPage.Sounds -> SoundsPage(settings = settings, onEvent = onEvent)
           SettingsPage.Plugins -> PluginsPage(settings = settings, onEvent = onEvent)
           SettingsPage.Updates -> UpdatesPage(updates = settings.updates, onEvent = onEvent)
         }
@@ -178,6 +186,12 @@ private fun ColumnScope.SettingsList(
       label = stringResource(Res.string.keep_awake_title),
       value = stringResource(if (settings.keepAwake) Res.string.value_on else Res.string.value_off),
       onClick = { onEvent(WorkspaceEvent.OpenSettingsPage(SettingsPage.KeepAwake)) },
+    )
+    SettingsRow(
+      icon = LemonadeIcons.Bell,
+      label = stringResource(Res.string.settings_sounds),
+      value = stringResource(if (settings.statusSounds) Res.string.value_on else Res.string.value_off),
+      onClick = { onEvent(WorkspaceEvent.OpenSettingsPage(SettingsPage.Sounds)) },
     )
     SettingsRow(
       icon = LemonadeIcons.Puzzle,
@@ -240,6 +254,7 @@ private fun SettingsPageHeader(
     SettingsPage.List, SettingsPage.Appearance -> Res.string.settings_appearance
     SettingsPage.Language -> Res.string.settings_language
     SettingsPage.KeepAwake -> Res.string.keep_awake_title
+    SettingsPage.Sounds -> Res.string.settings_sounds
     SettingsPage.Plugins -> Res.string.settings_plugins
     SettingsPage.Updates -> Res.string.settings_updates
   }
@@ -341,6 +356,55 @@ private fun KeepAwakePage(
     dotColor = if (active) colors.background.bgBrand else colors.background.bgNeutral,
     textColor = if (active) colors.content.contentBrand else colors.content.contentSecondary,
   )
+}
+
+@Composable
+private fun SoundsPage(
+  settings: SettingsModel,
+  onEvent: (WorkspaceEvent) -> Unit,
+) {
+  val colors = LemonadeTheme.colors
+  Row(
+    horizontalArrangement = Arrangement.spacedBy(LemonadeTheme.spaces.spacing300),
+    modifier = Modifier.toggleable(value = settings.statusSounds, role = Role.Switch, onValueChange = { onEvent(WorkspaceEvent.SetStatusSounds(it)) }),
+  ) {
+    LemonadeUi.Text(
+      text = stringResource(Res.string.sounds_description),
+      textStyle = LemonadeTheme.typography.bodySmallRegular,
+      color = colors.content.contentSecondary,
+      modifier = Modifier.weight(1f),
+    )
+    LemonadeUi.Switch(
+      checked = settings.statusSounds,
+      onCheckedChange = { onEvent(WorkspaceEvent.SetStatusSounds(it)) },
+      modifier = Modifier.padding(top = 2.dp),
+    )
+  }
+  Column(verticalArrangement = Arrangement.spacedBy(LemonadeTheme.spaces.spacing200)) {
+    SoundPreview(status = SessionStatus.Idle, label = Res.string.sounds_finished, onPlay = { onEvent(WorkspaceEvent.PlayStatusSound(StatusSound.Finished)) })
+    SoundPreview(status = SessionStatus.NeedsInput, label = Res.string.sounds_needs_input, onPlay = { onEvent(WorkspaceEvent.PlayStatusSound(StatusSound.NeedsInput)) })
+  }
+}
+
+/** One of the sounds, by the status it rings for, with a button to hear it. */
+@Composable
+private fun SoundPreview(
+  status: SessionStatus,
+  label: StringResource,
+  onPlay: () -> Unit,
+) {
+  Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(LemonadeTheme.spaces.spacing200)) {
+    status.style()?.let { StatusDot(color = it.dot) }
+    LemonadeUi.Text(text = stringResource(label), textStyle = LemonadeTheme.typography.bodySmallMedium, modifier = Modifier.weight(1f))
+    LemonadeUi.Button(
+      label = stringResource(Res.string.preview_play),
+      onClick = onPlay,
+      leadingIcon = LemonadeIcons.VoiceWaveHigh,
+      variant = LemonadeButtonVariant.Neutral,
+      type = LemonadeButtonType.Subtle,
+      size = LemonadeButtonSize.XSmall,
+    )
+  }
 }
 
 @Composable

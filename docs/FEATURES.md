@@ -40,6 +40,10 @@ the program instead, so when Claude Code moves into a worktree, the session move
 A plain shell shows no status. Under each name you'll see what's running and where, for example
 `claude · feat/rate-limit`, or the folder when you're outside a git repository.
 
+**Hear it, too.** When an agent finishes, Lemonade Code plays a soft ding, and when one needs your
+input, a double ding, whichever session it's in. You can turn this off in
+[Settings › Sounds](#settings).
+
 **Make room.** Drag the sidebar's edge to resize it; the width is remembered. Collapse it to a slim
 rail of initials with the button at the top left. On a narrow window the sessions slide in as a
 drawer, and a dot on the toggle tells you when one of them needs input.
@@ -258,6 +262,8 @@ change it on its own page; the back arrow or Esc returns to the list.
 - **Keep awake while sessions work:** while any session is working, your computer won't go to
   sleep and the screen won't dim or lock. Once nothing is working, both behave as usual again. While
   it's holding the computer awake, a tag in the top bar says so.
+- **Sounds:** a ding when an agent in any session finishes, and a double ding when one needs your
+  input. On from the start. **Play** lets you hear each one, even while they're off.
 - **Plugins:** turns on [Devices](#devices).
 - **Updates:** the version you have, and the newer one when it's out.
 

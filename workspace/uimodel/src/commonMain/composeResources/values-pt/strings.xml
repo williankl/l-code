@@ -36,6 +36,12 @@
   <string name="language_portuguese">Português</string>
   <string name="language_slovak">Eslovaco</string>
 
+  <!-- Settings › Sounds. Play uses preview_play. -->
+  <string name="settings_sounds">Sons</string>
+  <string name="sounds_description">Toca um sinal quando o agente de uma sessão termina, e um sinal duplo quando precisa de ti.</string>
+  <string name="sounds_finished">O agente terminou</string>
+  <string name="sounds_needs_input">O agente precisa de ti</string>
+
   <!-- Settings › Plugins -->
   <string name="plugins_mobile">Móvel</string>
   <string name="plugins_mobile_description">Espelhar ecrãs Android e iOS, emparelhar dispositivos por Wi‑Fi e ler os registos.</string>

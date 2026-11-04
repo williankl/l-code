@@ -37,6 +37,12 @@
   <string name="language_portuguese">Portugalčina</string>
   <string name="language_slovak">Slovenčina</string>
 
+  <!-- Settings › Sounds. Play uses preview_play. -->
+  <string name="settings_sounds">Zvuky</string>
+  <string name="sounds_description">Zazvoní raz, keď agent v niektorej relácii dokončí prácu, a dvakrát, keď na vás čaká.</string>
+  <string name="sounds_finished">Agent dokončil prácu</string>
+  <string name="sounds_needs_input">Agent na vás čaká</string>
+
   <!-- Settings › Plugins -->
   <string name="plugins_mobile">Mobilné zariadenia</string>
   <string name="plugins_mobile_description">Zrkadlí obrazovky Androidu a iOS, páruje zariadenia cez Wi‑Fi a číta ich logy.</string>

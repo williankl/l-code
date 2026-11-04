@@ -134,6 +134,7 @@ internal object WorkspaceModelMapper {
           working > 0 -> KeepAwakeStatusModel(Res.plurals.keep_awake_active.asLemonadeCodeString(working), active = true)
           else -> KeepAwakeStatusModel(Res.string.keep_awake_idle.asLemonadeCodeString(), active = false)
         },
+        statusSounds = input.settings.statusSounds,
         page = view.settingsPage,
         language = input.settings.language.toModel(),
         systemLanguage = input.systemLanguage,

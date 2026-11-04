@@ -19,6 +19,7 @@ kotlin {
       implementation(projects.platform.preferencesCore)
       implementation(projects.platform.processCore)
       implementation(projects.platform.powerCore)
+      implementation(projects.platform.soundCore)
     }
     getByName("desktopMain").dependencies {
       implementation(compose.desktop.currentOs)

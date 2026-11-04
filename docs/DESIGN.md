@@ -74,7 +74,7 @@ along with it.
 
 | Lemonade component | In Lemonade Code |
 |---|---|
-| `Button` | *Add comment*, *Paste into terminal*, *Create sub-session*, *Update and restart* |
+| `Button` | *Add comment*, *Paste into terminal*, *Create sub-session*, *Update and restart*, *Play* in Settings › Sounds |
 | `IconButton` | Settings, refresh, the sidebar toggle, 3D zoom controls |
 | `Icon` and `LemonadeIcons` | Every icon in the app |
 | `Text` | Every piece of interface text |
@@ -84,7 +84,7 @@ along with it.
 | `Card` | Comments and the comment box |
 | `SymbolContainer` | Comment avatars and the comment counter in the send bar |
 | `SegmentedControl` | *Dark / Light / System*, *Same folder / New worktree*, *Before / After / Side by side* |
-| `Switch` | *Keep awake while sessions work* |
+| `Switch` | *Keep awake while sessions work*, *Sounds* |
 | `TextField` | Renaming a session |
 | `TextArea` | Writing a comment |
 | `Spinner` | Running tools, loading previews, downloading updates |

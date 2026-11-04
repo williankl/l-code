@@ -36,6 +36,12 @@
   <string name="language_portuguese">Portugais</string>
   <string name="language_slovak">Slovaque</string>
 
+  <!-- Settings › Sounds. Play uses preview_play. -->
+  <string name="settings_sounds">Sons</string>
+  <string name="sounds_description">Joue un tintement quand l’agent d’une session a terminé, et un double tintement quand il vous attend.</string>
+  <string name="sounds_finished">Agent terminé</string>
+  <string name="sounds_needs_input">L’agent vous attend</string>
+
   <!-- Settings › Plugins -->
   <string name="plugins_mobile">Mobile</string>
   <string name="plugins_mobile_description">Recopier les écrans Android et iOS, associer des appareils en Wi‑Fi et lire leurs journaux.</string>

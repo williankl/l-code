@@ -35,6 +35,12 @@
   <string name="language_portuguese">Portuguese</string>
   <string name="language_slovak">Slovak</string>
 
+  <!-- Settings › Sounds. Play uses preview_play. -->
+  <string name="settings_sounds">Sounds</string>
+  <string name="sounds_description">Plays a ding when an agent in any session finishes, and a double ding when one needs your input.</string>
+  <string name="sounds_finished">Agent finished</string>
+  <string name="sounds_needs_input">Agent needs input</string>
+
   <!-- Settings › Plugins -->
   <string name="plugins_mobile">Mobile</string>
   <string name="plugins_mobile_description">Mirror Android and iOS screens, pair devices over Wi‑Fi and read their logs.</string>

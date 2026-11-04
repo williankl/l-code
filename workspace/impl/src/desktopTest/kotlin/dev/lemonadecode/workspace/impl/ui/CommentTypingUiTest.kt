@@ -26,6 +26,7 @@ import dev.lemonadecode.domain.session.SessionId
 import dev.lemonadecode.mobile.fake.FakeMobileService
 import dev.lemonadecode.platform.designsystem.LemonadeCodeTheme
 import dev.lemonadecode.platform.process.HomeDirectory
+import dev.lemonadecode.platform.sound.testing.FakeSoundPlayer
 import dev.lemonadecode.review.fake.FakeReviewService
 import dev.lemonadecode.sessions.fake.FakeSessionService
 import dev.lemonadecode.settings.fake.FakeSettingsService
@@ -50,6 +51,7 @@ class CommentTypingUiTest {
     },
     updateService = FakeUpdateService(),
     mobileService = FakeMobileService(),
+    soundPlayer = FakeSoundPlayer(),
     clock = { 0L },
   )
   private val ar = SessionId("ar")

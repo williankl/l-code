@@ -21,6 +21,7 @@ flowchart LR
 - [Worktrees](#worktrees)
 - [Saving and restoring sessions](#saving-and-restoring-sessions)
 - [Keep awake](#keep-awake)
+- [Sounds](#sounds)
 - [Updates](#updates)
 - [What goes over the network](#what-goes-over-the-network)
 
@@ -146,6 +147,21 @@ sleep, dim or lock the screen while any session is working, and lets go as soon 
 
 Each helper watches the app's process, so if the app is ever killed, the computer can sleep again
 within seconds.
+
+## Sounds
+
+With **Sounds** on, as they are from the start, Lemonade Code listens to every session's
+[status](#status), the one on screen or not:
+
+- **working → idle** plays one ding: the agent finished.
+- **→ needs input**, from anything else, plays a double ding, the second a little higher.
+
+A session that just opened, or came back at launch, plays nothing until its status changes. A plain
+shell, an agent quitting and a session that exited play nothing either. When several sessions change
+within a third of a second, they play one sound, the double ding if any of them needs you.
+
+The dings are drawn in code, a soft bell tone that fades away, and play through Java Sound on a
+thread of their own. On a computer with no sound output, nothing plays.
 
 ## Updates
 

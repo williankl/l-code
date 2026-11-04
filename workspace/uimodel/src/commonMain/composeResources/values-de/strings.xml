@@ -35,6 +35,12 @@
   <string name="language_portuguese">Portugiesisch</string>
   <string name="language_slovak">Slowakisch</string>
 
+  <!-- Settings › Sounds. Play uses preview_play. -->
+  <string name="settings_sounds">Töne</string>
+  <string name="sounds_description">Spielt einen Ton, wenn ein Agent in einer Sitzung fertig ist, und einen Doppelton, wenn er auf dich wartet.</string>
+  <string name="sounds_finished">Agent ist fertig</string>
+  <string name="sounds_needs_input">Agent wartet auf dich</string>
+
   <!-- Settings › Plugins -->
   <string name="plugins_mobile">Mobil</string>
   <string name="plugins_mobile_description">Android- und iOS-Bildschirme spiegeln, Geräte über WLAN koppeln und ihre Logs lesen.</string>

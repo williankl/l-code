@@ -12,6 +12,7 @@ import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.isToggleable
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -34,6 +35,8 @@ import dev.lemonadecode.domain.settings.ThemePreference
 import dev.lemonadecode.mobile.fake.FakeMobileService
 import dev.lemonadecode.platform.designsystem.LemonadeCodeTheme
 import dev.lemonadecode.platform.process.HomeDirectory
+import dev.lemonadecode.platform.sound.Chime
+import dev.lemonadecode.platform.sound.testing.FakeSoundPlayer
 import dev.lemonadecode.review.fake.FakeReviewService
 import dev.lemonadecode.sessions.fake.FakeSessionService
 import dev.lemonadecode.settings.fake.FakeSettingsService
@@ -58,6 +61,7 @@ class WorkspaceFlowUiTest {
   private val settings = FakeSettingsService()
   private val updates = FakeUpdateService()
   private val mobile = FakeMobileService()
+  private val sounds = FakeSoundPlayer()
   private val presenter = WorkspacePresenter(
     sessionService = sessions,
     reviewService = reviews,
@@ -67,6 +71,7 @@ class WorkspaceFlowUiTest {
     },
     updateService = updates,
     mobileService = mobile,
+    soundPlayer = sounds,
     clock = { 0L },
   )
   private val ar = SessionId("ar")
@@ -152,6 +157,24 @@ class WorkspaceFlowUiTest {
       onNode(isToggleable()).performClick()
       waitUntil(timeoutMillis = 5_000) { settings.settings.value.keepAwake }
       assertEquals(ThemePreference.Light, settings.settings.value.theme)
+    }
+  }
+
+  @Test
+  fun `settings play each status sound, and turn them off`() {
+    withRepository()
+    flow {
+      onNodeWithContentDescription("Settings").performClick()
+      waitFor(hasText("Sounds") and hasText("On"))
+      onNodeWithText("Sounds").performClick()
+      waitFor(hasText("Agent needs input"))
+      onAllNodesWithText("Play")[1].performClick()
+      waitUntil(timeoutMillis = 5_000) { sounds.played == listOf(Chime.DoubleDing) }
+
+      onNode(isToggleable()).performClick()
+      waitUntil(timeoutMillis = 5_000) { !settings.settings.value.statusSounds }
+      onNodeWithContentDescription("Back").performClick()
+      waitFor(hasText("Sounds") and hasText("Off"))
     }
   }
 

@@ -16,6 +16,7 @@ kotlin {
       implementation(projects.platform.syntaxCore)
       implementation(projects.platform.processCore)
       implementation(projects.platform.localizationCore)
+      implementation(projects.platform.soundCore)
       implementation(libs.compose.components.resources)
     }
     commonTest.dependencies {
@@ -26,6 +27,7 @@ kotlin {
       implementation(projects.mobile.fake)
       implementation(projects.platform.presenterTest)
       implementation(projects.platform.architectureTest)
+      implementation(projects.platform.soundTest)
     }
   }
 }

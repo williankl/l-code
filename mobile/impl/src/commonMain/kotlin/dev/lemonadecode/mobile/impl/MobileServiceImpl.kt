@@ -3,6 +3,7 @@ package dev.lemonadecode.mobile.impl
 import dev.lemonadecode.domain.mobile.CablePairing
 import dev.lemonadecode.domain.mobile.DeviceAvailability
 import dev.lemonadecode.domain.mobile.DeviceButton
+import dev.lemonadecode.domain.mobile.DeviceConnection
 import dev.lemonadecode.domain.mobile.DeviceId
 import dev.lemonadecode.domain.mobile.DeviceKey
 import dev.lemonadecode.domain.mobile.DeviceLogs
@@ -20,6 +21,7 @@ import dev.lemonadecode.mobile.api.MobileService
 import dev.lemonadecode.platform.architecture.LemonadeCodeCoroutineDispatchers
 import dev.lemonadecode.platform.core.LemonadeCodeResult
 import dev.lemonadecode.platform.core.getOrElse
+import dev.lemonadecode.platform.core.onSuccess
 import dev.lemonadecode.platform.core.safeSuspendRunCatching
 import dev.lemonadecode.platform.di.AppScope
 import dev.lemonadecode.settings.api.SettingsService
@@ -28,16 +30,21 @@ import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
@@ -83,6 +90,9 @@ internal class MobileServiceImpl(
   private val android = AdbDevices(commands, files, qr, random, mutableDevices)
   private val ios = IosDevices(commands, finder, files, mutableDevices)
   private val logBook = DeviceLogBook(scope, isConnected = { device(it) != null }, read = ::readLogs)
+
+  /** Devices just turned from here, for their mirrored screen to look at its size again. */
+  private val turns = MutableSharedFlow<DeviceId>(extraBufferCapacity = 8)
 
   /** The latest frame's size per device, to know which way to turn it. */
   private val frameSizes = MutableStateFlow<Map<DeviceId, Pair<Int, Int>>>(emptyMap())
@@ -165,12 +175,14 @@ internal class MobileServiceImpl(
     }
   }
 
+  // Handed over one at a time, so pictures don't pile up here; the recording keeps only its newest meanwhile.
   override fun screen(id: DeviceId): Flow<DeviceScreen> = mirrorScreens(
     timeSource = timeSource,
     size = { recordableSize(id) },
     stream = { width, height -> recording(id, width, height) },
     capture = { capture(id) },
-  )
+    turned = turns.filter { it == id }.map { },
+  ).buffer(Channel.RENDEZVOUS)
 
   /** The screen's size now when [id] is an Android device ready to be recorded; null otherwise. */
   private suspend fun recordableSize(id: DeviceId): Pair<Int, Int>? {
@@ -186,8 +198,12 @@ internal class MobileServiceImpl(
     val device = device(id) ?: return@flow
     val adb = currentTools()?.adb ?: return@flow
     val (recordedWidth, recordedHeight) = recordingSize(width, height)
-    emitAll(decodeVideo(android.recordScreen(adb, device, recordedWidth, recordedHeight), decoders))
-  }.flowOn(dispatchers.default)
+    val quiet = if (device.connection == DeviceConnection.Wifi) WifiQuietFlush else QuietFlush
+    emitAll(decodeVideo(android.recordScreen(adb, device, recordedWidth, recordedHeight), decoders, quiet))
+  }
+    .flowOn(dispatchers.default)
+    // Each picture is a few megabytes; when they come faster than they're shown, only the newest waits.
+    .buffer(1, BufferOverflow.DROP_OLDEST)
 
   private suspend fun capture(id: DeviceId): Capture {
     val device = device(id)?.takeIf { it.availability == DeviceAvailability.Ready }
@@ -219,6 +235,7 @@ internal class MobileServiceImpl(
   override suspend fun key(id: DeviceId, key: DeviceKey): LemonadeCodeResult<Unit, MobileError> = onDevice(id, { adb, device -> android.key(adb, device, key) })
 
   override suspend fun rotate(id: DeviceId): LemonadeCodeResult<Unit, MobileError> = onDevice(id, { adb, device -> android.rotate(adb, device, frameSizes.value[id]) })
+    .onSuccess { val _ = turns.tryEmit(id) }
 
   override suspend fun screenshot(id: DeviceId): LemonadeCodeResult<String, MobileError> = onDevice(id, android::screenshot, ios::screenshot)
 

@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.test.runTest
+import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -18,12 +19,22 @@ class ScreenStreamTest {
   private fun bgra(): ScreenPicture.Bgra = ScreenPicture.Bgra(ByteArray(4), 1, 1, 4)
 
   @Test
-  fun `a screen is recorded smaller, in multiples of 8, its longer side at most 1280`() {
+  fun `a screen is recorded smaller, in multiples of 8, its longer side at most 1280, keeping its shape`() {
     assertEquals(576 to 1280, recordingSize(1080, 2400))
     assertEquals(1280 to 576, recordingSize(2400, 1080))
     assertEquals(1280 to 800, recordingSize(2560, 1600))
     assertEquals(720 to 1280, recordingSize(720, 1280))
-    assertEquals(472 to 1000, recordingSize(475, 1000))
+    // screenrecord keeps the screen's shape and pads the rest with black: within a pixel, no bars show.
+    for ((width, height) in listOf(1080 to 2340, 1440 to 3088, 1344 to 2992, 475 to 1000, 3088 to 1440)) {
+      val (recordedWidth, recordedHeight) = recordingSize(width, height)
+      assertEquals(0, recordedWidth % 8)
+      assertEquals(0, recordedHeight % 8)
+      assertTrue(maxOf(recordedWidth, recordedHeight) <= 1280)
+      assertEquals(width > height, recordedWidth > recordedHeight)
+      val shortSide = minOf(recordedWidth, recordedHeight)
+      val exact = maxOf(recordedWidth, recordedHeight) * minOf(width, height).toDouble() / maxOf(width, height)
+      assertTrue(abs(shortSide - exact) < 1.0, "$width×$height recorded at $recordedWidth×$recordedHeight")
+    }
   }
 
   @Test
@@ -45,6 +56,22 @@ class ScreenStreamTest {
       chunks.close()
       awaitComplete()
     }
+    assertEquals(1, decoders.closed)
+  }
+
+  @Test
+  fun `a picture cut short by a pause ends the video, for a new recording to start whole`() = runTest {
+    val chunks = Channel<ByteArray>(Channel.UNLIMITED)
+    val decoders = FakeScreenDecoders()
+    val idr = picture(idr = true)
+    decodeVideo(chunks.receiveAsFlow(), decoders).test {
+      chunks.send(idr.copyOfRange(0, 6))
+      // The pause gives the decoder the first part of the picture.
+      assertEquals(1, awaitItem().pixels[0].toInt())
+      chunks.send(idr.copyOfRange(6, idr.size) + picture())
+      awaitComplete()
+    }
+    assertEquals(1, decoders.units.size)
     assertEquals(1, decoders.closed)
   }
 
@@ -121,6 +148,55 @@ class ScreenStreamTest {
       cancelAndIgnoreRemainingEvents()
     }
     assertTrue(recordings >= 5)
+  }
+
+  @Test
+  fun `turning the screen from here is noticed at once, and a recording stopped by a turn isn't a failure`() = runTest {
+    var size = 1080 to 2400
+    val turned = Channel<Unit>(Channel.UNLIMITED)
+    val recordings = mutableListOf<Pair<Int, Int>>()
+    mirrorScreens(
+      timeSource = testScheduler.timeSource,
+      size = { size },
+      stream = { width, height ->
+        recordings += width to height
+        // The portrait one never shows a picture: only the turn ends it.
+        if (width < height) Channel<ScreenPicture.Bgra>().receiveAsFlow() else Channel<ScreenPicture.Bgra>(1).apply { trySend(bgra()) }.receiveAsFlow()
+      },
+      capture = { error("no screenshots while recording works") },
+      turned = turned.receiveAsFlow(),
+    ).test {
+      assertEquals(DeviceScreen.Loading, awaitItem())
+      testScheduler.advanceTimeBy(300)
+      size = 2400 to 1080
+      turned.send(Unit)
+      testScheduler.advanceTimeBy(250)
+      assertEquals(listOf(1080 to 2400, 2400 to 1080), recordings)
+      assertEquals(2400 to 1080, assertIs<DeviceScreen.Frame>(awaitItem()).let { it.width to it.height })
+      cancelAndIgnoreRemainingEvents()
+    }
+  }
+
+  @Test
+  fun `a recording that shows nothing for five seconds fails, and after three, recording is tried again later`() = runTest {
+    var recordings = 0
+    mirrorScreens(
+      timeSource = testScheduler.timeSource,
+      size = { 1080 to 2400 },
+      stream = { _, _ ->
+        recordings++
+        Channel<ScreenPicture.Bgra>().receiveAsFlow()
+      },
+      capture = { Capture.Picture(PngPicture(png(1080, 2400), 1080, 2400)) },
+    ).test {
+      assertEquals(DeviceScreen.Loading, awaitItem())
+      // Three silent recordings, then screenshots.
+      assertIs<ScreenPicture.Encoded>(assertIs<DeviceScreen.Frame>(awaitItem()).picture)
+      assertEquals(3, recordings)
+      testScheduler.advanceTimeBy(RecordingAgainAfter.inWholeMilliseconds + 1_000)
+      assertEquals(4, recordings)
+      cancelAndIgnoreRemainingEvents()
+    }
   }
 
   @Test

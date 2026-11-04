@@ -3,7 +3,9 @@ package dev.lemonadecode.mobile.impl
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class H264Test {
   private val sps = nal(7, 0x42, 0xC0, 0x29)
@@ -45,6 +47,25 @@ class H264Test {
     val splitter = AccessUnitSplitter()
     val units = splitter.feed(byteArrayOf(0x12, 0x34) + short + short)
     assertContentEquals(short, units.single())
+  }
+
+  @Test
+  fun `bytes that carry on after a flush show it came in the middle of a picture`() {
+    val splitter = AccessUnitSplitter()
+    splitter.feed(idr.copyOfRange(0, 7))
+    splitter.flush()
+    splitter.feed(idr.copyOfRange(7, idr.size))
+    assertTrue(splitter.cutShort)
+  }
+
+  @Test
+  fun `a flush followed by the next picture's start code is whole`() {
+    val splitter = AccessUnitSplitter()
+    splitter.feed(idr)
+    splitter.flush()
+    // The next start code can come a byte at a time.
+    next.forEach { splitter.feed(byteArrayOf(it)) }
+    assertFalse(splitter.cutShort)
   }
 
   @Test

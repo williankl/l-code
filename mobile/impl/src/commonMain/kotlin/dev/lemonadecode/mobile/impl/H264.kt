@@ -7,7 +7,8 @@ package dev.lemonadecode.mobile.impl
  *
  * Nothing in the stream says where a picture ends, only where the next one starts. So the last
  * picture before the screen stops changing would wait for it to change again; [flush] hands it
- * over once the stream has gone quiet.
+ * over once the stream has gone quiet. When the quiet was only a pause in the middle of the
+ * picture, the bytes after it don't start a new unit, and [cutShort] says so.
  */
 internal class AccessUnitSplitter {
   private var buffer = ByteArray(InitialCapacity)
@@ -22,9 +23,20 @@ internal class AccessUnitSplitter {
   /** The unit being gathered holds a slice of its picture already. */
   private var hasSlice = false
 
+  /** A [flush] happened and nothing has come since. */
+  private var flushed = false
+
+  /**
+   * The last [flush] handed over a picture that wasn't whole: what came after it carried on in
+   * the middle of a unit. A decoder given it has a damaged picture, and every one built on it.
+   */
+  var cutShort: Boolean = false
+    private set
+
   /** Adds [length] bytes of [bytes] to the stream; returns the access units they complete, oldest first. */
   fun feed(bytes: ByteArray, length: Int = bytes.size): List<ByteArray> {
     append(bytes, length)
+    if (flushed) checkAfterFlush()
     val units = mutableListOf<ByteArray>()
     var at = scanned
     while (at + StartCodeLength < size) {
@@ -64,8 +76,28 @@ internal class AccessUnitSplitter {
       scanned = 0
       unitStart = -1
       hasSlice = false
+      flushed = true
     }
     return unit
+  }
+
+  /** After a flush the stream must go on with a start code, `00 00 01` or `00 00 00 01`; anything else carries on the picture. */
+  private fun checkAfterFlush() {
+    for (at in 0 until minOf(size, StartCodeLength + 1)) {
+      val byte = buffer[at]
+      val fits = when (at) {
+        0, 1 -> byte == ZeroByte
+        2 -> byte == ZeroByte || byte == OneByte
+        else -> buffer[2] == OneByte || byte == OneByte
+      }
+      if (!fits) {
+        cutShort = true
+        flushed = false
+        return
+      }
+      if (at == 2 && byte == OneByte) break
+    }
+    if (size > StartCodeLength) flushed = false
   }
 
   private fun isStartCode(at: Int): Boolean = buffer[at] == ZeroByte && buffer[at + 1] == ZeroByte && buffer[at + 2] == OneByte

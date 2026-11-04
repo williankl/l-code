@@ -5,7 +5,9 @@ import dev.lemonadecode.platform.di.AppScope
 import dev.zacsweers.metro.ContributesBinding
 import dev.zacsweers.metro.Inject
 import org.bytedeco.ffmpeg.avcodec.AVCodecContext
+import org.bytedeco.ffmpeg.avcodec.AVPacket
 import org.bytedeco.ffmpeg.avutil.AVDictionary
+import org.bytedeco.ffmpeg.avutil.AVFrame
 import org.bytedeco.ffmpeg.global.avcodec
 import org.bytedeco.ffmpeg.global.avutil
 import org.bytedeco.ffmpeg.global.swscale
@@ -39,17 +41,28 @@ internal class FfmpegScreenDecoders : ScreenDecoders {
 
 private class FfmpegH264Decoder : ScreenDecoder {
   private val context: AVCodecContext
-  private val packet = avcodec.av_packet_alloc()
-  private val frame = avutil.av_frame_alloc()
+  private val packet: AVPacket
+  private val frame: AVFrame
   private var scaler: SwsContext? = null
+
+  /** The colour space [scaler] was told the frames are in: their matrix and whether they're full range. */
+  private var scalerColours: Pair<Int, Int>? = null
   private var converted: BytePointer? = null
-  private val planes = PointerPointer<BytePointer>(1L)
-  private val strides = IntPointer(1L)
+
+  // swscale reads four planes and strides for any format; BGRA only fills the first.
+  private val planes = PointerPointer<BytePointer>(MaxPlanes.toLong())
+  private val strides = IntPointer(MaxPlanes.toLong())
   private var closed = false
 
   init {
     val codec = avcodec.avcodec_find_decoder(avcodec.AV_CODEC_ID_H264) ?: error("FFmpeg has no H.264 decoder")
-    context = avcodec.avcodec_alloc_context3(codec)
+    context = avcodec.avcodec_alloc_context3(codec) ?: error("FFmpeg couldn't make an H.264 decoder")
+    packet = avcodec.av_packet_alloc()
+    frame = avutil.av_frame_alloc()
+    for (plane in 0 until MaxPlanes) {
+      planes.put(plane.toLong(), null)
+      strides.put(plane.toLong(), 0)
+    }
     // One thread and no reordering, so each picture comes out as soon as its unit goes in.
     context.thread_count(1)
     context.flags(context.flags() or avcodec.AV_CODEC_FLAG_LOW_DELAY)
@@ -82,18 +95,41 @@ private class FfmpegH264Decoder : ScreenDecoder {
     if (width <= 0 || height <= 0) return null
     val rowBytes = width * BytesPerPixel
     val length = rowBytes * height
-    scaler = swscale.sws_getCachedContext(scaler, width, height, frame.format(), width, height, avutil.AV_PIX_FMT_BGRA, swscale.SWS_BILINEAR, null, null, null as DoublePointer?)
-      ?: return null
+    // A changed size frees the old context first, so it's kept even when the new one can't be made.
+    val next = swscale.sws_getCachedContext(scaler, width, height, frame.format(), width, height, avutil.AV_PIX_FMT_BGRA, swscale.SWS_BILINEAR, null, null, null as DoublePointer?)
+    if (next != scaler) scalerColours = null
+    scaler = next
+    if (next == null) return null
+    matchColours(next)
     val target = converted?.takeIf { it.capacity() == length.toLong() } ?: BytePointer(length.toLong()).also {
       converted?.close()
       converted = it
     }
     planes.put(0L, target)
     strides.put(0L, rowBytes)
-    if (swscale.sws_scale(scaler, frame.data(), frame.linesize(), 0, height, planes, strides) != height) return null
+    if (swscale.sws_scale(next, frame.data(), frame.linesize(), 0, height, planes, strides) != height) return null
     val pixels = ByteArray(length)
     target.position(0L).get(pixels)
     return ScreenPicture.Bgra(pixels, width, height, rowBytes)
+  }
+
+  /** Tells [scaler] which colour matrix and range the frames use: phones mark theirs BT.709, which swscale doesn't assume. */
+  private fun matchColours(scaler: SwsContext) {
+    val matrix = if (frame.colorspace() == avutil.AVCOL_SPC_BT709) swscale.SWS_CS_ITU709 else swscale.SWS_CS_ITU601
+    val fullRange = if (frame.color_range() == avutil.AVCOL_RANGE_JPEG) 1 else 0
+    val colours = matrix to fullRange
+    if (colours == scalerColours) return
+    scalerColours = colours
+    val _ = swscale.sws_setColorspaceDetails(
+      scaler,
+      swscale.sws_getCoefficients(matrix),
+      fullRange,
+      swscale.sws_getCoefficients(swscale.SWS_CS_DEFAULT),
+      1,
+      0,
+      1 shl 16,
+      1 shl 16,
+    )
   }
 
   override fun close() {
@@ -103,6 +139,7 @@ private class FfmpegH264Decoder : ScreenDecoder {
     avcodec.av_packet_free(packet)
     avutil.av_frame_free(frame)
     scaler?.let(swscale::sws_freeContext)
+    scaler = null
     converted?.close()
     planes.close()
     strides.close()
@@ -110,5 +147,6 @@ private class FfmpegH264Decoder : ScreenDecoder {
 
   private companion object {
     const val BytesPerPixel = 4
+    const val MaxPlanes = 4
   }
 }

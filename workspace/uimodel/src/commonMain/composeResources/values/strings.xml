@@ -208,6 +208,8 @@
   <string name="file_show_full">Show full file</string>
   <string name="file_show_full_link">show full file</string>
   <string name="file_binary">Binary file, not shown</string>
+  <string name="file_copy_path">Copy path</string>
+  <string name="file_path_copied">Copied %1$s</string>
   <plurals name="file_comment_count">
     <item quantity="one">%1$d comment</item>
     <item quantity="other">%1$d comments</item>

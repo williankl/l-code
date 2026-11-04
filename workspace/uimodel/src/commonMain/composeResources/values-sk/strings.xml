@@ -232,6 +232,8 @@
   <string name="file_show_full">Zobraziť celý súbor</string>
   <string name="file_show_full_link">zobraziť celý súbor</string>
   <string name="file_binary">Binárny súbor, nezobrazuje sa</string>
+  <string name="file_copy_path">Kopírovať cestu</string>
+  <string name="file_path_copied">Skopírované: %1$s</string>
   <plurals name="file_comment_count">
     <item quantity="one">%1$d komentár</item>
     <item quantity="few">%1$d komentáre</item>

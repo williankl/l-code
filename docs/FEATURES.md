@@ -100,6 +100,8 @@ Switch a session to the **Diff** tab to see what changed in its folder.
 - **Everything included.** Uncommitted changes and new files that git doesn't track yet show up too.
 - **Readable.** Code is coloured by language, with three lines of context around each change.
 - **The whole file.** Press **Full file** to read a changed file top to bottom.
+- **A file's path, to copy.** Select the path in a file's header and copy it with ⌘C (Ctrl+C on
+  Windows and Linux), or press the copy button beside it.
 - **Always fresh.** The diff reloads when you open it, when you press refresh, and when the agent in
   the terminal finishes working.
 

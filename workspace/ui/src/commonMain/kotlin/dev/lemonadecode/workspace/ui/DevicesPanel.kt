@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -32,7 +33,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -72,6 +72,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.min
 import com.teya.lemonade.Button
 import com.teya.lemonade.Chip
 import com.teya.lemonade.ExperimentalLemonadeComponent
@@ -91,11 +92,9 @@ import com.teya.lemonade.core.LemonadeButtonType
 import com.teya.lemonade.core.LemonadeButtonVariant
 import com.teya.lemonade.core.LemonadeIcons
 import com.teya.lemonade.core.LemonadeSegmentedControlSize
-import com.teya.lemonade.core.LemonadeShadow
 import com.teya.lemonade.core.SymbolContainerSize
 import com.teya.lemonade.core.SymbolContainerVoice
 import com.teya.lemonade.core.TabButtonProperties
-import com.teya.lemonade.lemonadeShadow
 import dev.lemonadecode.platform.designsystem.HoverTooltip
 import dev.lemonadecode.platform.designsystem.LemonadeCodeTheme
 import dev.lemonadecode.platform.designsystem.StatusDot
@@ -201,9 +200,14 @@ public val DevicesPanelWideWidth: Dp = 760.dp
 
 private val ScreenPaneWidth = 320.dp
 
-/** Below this the screen and its logs take turns in tabs. */
+/** Below this a portrait screen goes above its logs rather than beside them. */
 private val SideBySideMinWidth = 600.dp
-private val PhoneBezel = Color(0xFF151513)
+
+/** The most of the page a screen above its logs takes, so the logs keep room. */
+private const val StackedScreenShare = 0.55f
+
+/** Room around the picture in its pane, for the controls under it and the line under them. */
+private val ScreenPaneChrome = 112.dp
 
 /** How wide the docked panel is for [panel]: a device's screen beside its logs takes more room. */
 public fun devicesPanelWidth(panel: DevicesPanelModel): Dp {
@@ -221,22 +225,8 @@ public fun DevicesPanel(
   onEvent: (WorkspaceEvent) -> Unit,
   modifier: Modifier = Modifier,
 ) {
-  BoxWithConstraints(modifier = modifier.background(LemonadeTheme.colors.background.bgDefault)) {
-    // Too narrow for the screen beside its logs, e.g. a small window of its own: tabs, whatever the choice.
-    val roomy = maxWidth >= SideBySideMinWidth
-    val shown = (panel.content as? DevicesContentModel.Device)?.takeIf { !roomy }?.let { panel.copy(content = it.copy(layout = DevicesLayoutOption.Tabs)) } ?: panel
-    DevicesColumn(panel = shown, canChangeLayout = roomy, onEvent = onEvent)
-  }
-}
-
-@Composable
-private fun DevicesColumn(
-  panel: DevicesPanelModel,
-  canChangeLayout: Boolean,
-  onEvent: (WorkspaceEvent) -> Unit,
-) {
-  Column(modifier = Modifier.fillMaxSize()) {
-    DevicesHeader(panel = panel, canChangeLayout = canChangeLayout, onEvent = onEvent)
+  Column(modifier = modifier.background(LemonadeTheme.colors.background.bgDefault)) {
+    DevicesHeader(panel = panel, onEvent = onEvent)
     val fill = Modifier.weight(1f).fillMaxWidth()
     when (val content = panel.content) {
       is DevicesContentModel.Devices -> DeviceList(content = content, onEvent = onEvent, modifier = fill)
@@ -255,7 +245,6 @@ private fun DevicesColumn(
 @Composable
 private fun DevicesHeader(
   panel: DevicesPanelModel,
-  canChangeLayout: Boolean,
   onEvent: (WorkspaceEvent) -> Unit,
 ) {
   val spaces = LemonadeTheme.spaces
@@ -289,13 +278,12 @@ private fun DevicesHeader(
       if (device.canDisconnect) {
         HeaderButton(LemonadeIcons.Unlink, device.disconnectLabel.resolve()) { onEvent(WorkspaceEvent.DisconnectDevice(device.id)) }
       }
-      if (canChangeLayout) {
-        val split = device.layout == DevicesLayoutOption.SideBySide
-        HeaderButton(
-          icon = if (split) LemonadeIcons.StackThree else LemonadeIcons.Board,
-          label = stringResource(if (split) Res.string.devices_layout_tabs else Res.string.devices_layout_split),
-        ) { onEvent(WorkspaceEvent.SetDevicesLayout(if (split) DevicesLayoutOption.Tabs else DevicesLayoutOption.SideBySide)) }
-      }
+      // Always offered: where there's no room beside the logs, the screen goes above them instead.
+      val split = device.layout == DevicesLayoutOption.SideBySide
+      HeaderButton(
+        icon = if (split) LemonadeIcons.StackThree else LemonadeIcons.Board,
+        label = stringResource(if (split) Res.string.devices_layout_tabs else Res.string.devices_layout_split),
+      ) { onEvent(WorkspaceEvent.SetDevicesLayout(if (split) DevicesLayoutOption.Tabs else DevicesLayoutOption.SideBySide)) }
     }
     val separate = panel.window == DevicesWindow.Separate
     HeaderButton(
@@ -423,6 +411,10 @@ private fun DeviceRow(
   }
 }
 
+/**
+ * A device's screen and logs, as tabs or together. Together, a portrait screen sits beside its logs
+ * when there's room; a landscape one, or one without room beside them, goes above them.
+ */
 @Composable
 private fun DevicePage(
   device: DevicesContentModel.Device,
@@ -430,9 +422,9 @@ private fun DevicePage(
   modifier: Modifier = Modifier,
 ) {
   val spaces = LemonadeTheme.spaces
-  val split = device.layout == DevicesLayoutOption.SideBySide
-  Column(modifier = modifier) {
-    if (!split) {
+  val hairline = LemonadeTheme.colors.border.borderNeutralLow
+  if (device.layout == DevicesLayoutOption.Tabs) {
+    Column(modifier = modifier) {
       val tabs = listOf(DeviceTab.Screen to Res.string.device_tab_screen, DeviceTab.Logs to Res.string.device_tab_logs)
       LemonadeUi.SegmentedControl(
         properties = tabs.map { (tab, label) ->
@@ -443,20 +435,40 @@ private fun DevicePage(
         size = LemonadeSegmentedControlSize.Medium,
         modifier = Modifier.fillMaxWidth().padding(start = spaces.spacing400, end = spaces.spacing400, top = spaces.spacing300),
       )
-    }
-    Row(modifier = Modifier.weight(1f).fillMaxWidth()) {
-      if (split || device.tab == DeviceTab.Screen) {
-        val pane = if (split) {
-          Modifier.width(ScreenPaneWidth).fillMaxHeight().drawRightHairline(LemonadeTheme.colors.border.borderNeutralLow)
-        } else {
-          Modifier.weight(1f).fillMaxHeight()
-        }
-        ScreenPane(device = device, onEvent = onEvent, modifier = pane)
+      val fill = Modifier.weight(1f).fillMaxWidth()
+      when (device.tab) {
+        DeviceTab.Screen -> ScreenPane(device = device, onEvent = onEvent, modifier = fill)
+        DeviceTab.Logs -> LogsPane(logs = device.logs, onEvent = onEvent, modifier = fill)
       }
-      if (split || device.tab == DeviceTab.Logs) {
+    }
+    return
+  }
+  BoxWithConstraints(modifier = modifier) {
+    val ratio = screenRatio(device)
+    if (ratio < 1f && maxWidth >= SideBySideMinWidth) {
+      Row(modifier = Modifier.fillMaxSize()) {
+        ScreenPane(device = device, onEvent = onEvent, modifier = Modifier.width(ScreenPaneWidth).fillMaxHeight().drawRightHairline(hairline))
         LogsPane(logs = device.logs, onEvent = onEvent, modifier = Modifier.weight(1f).fillMaxHeight())
       }
+    } else {
+      // As tall as the picture needs at this width, up to a share of the page.
+      val pictureHeight = (maxWidth - spaces.spacing400 * 2) / ratio
+      val screenHeight = min(pictureHeight + ScreenPaneChrome, maxHeight * StackedScreenShare)
+      Column(modifier = Modifier.fillMaxSize()) {
+        ScreenPane(device = device, onEvent = onEvent, modifier = Modifier.fillMaxWidth().height(screenHeight).bottomHairline(hairline))
+        LogsPane(logs = device.logs, onEvent = onEvent, modifier = Modifier.weight(1f).fillMaxWidth())
+      }
     }
+  }
+}
+
+/** Width over height of the device's screen: of the latest frame, else a phone's, turned the way the device is. */
+private fun screenRatio(device: DevicesContentModel.Device): Float {
+  val frame = device.screen as? DeviceScreenModel.Frame
+  return when {
+    frame != null && frame.width > 0 && frame.height > 0 -> frame.width.toFloat() / frame.height
+    device.controls.landscape -> 19.5f / 9f
+    else -> 9f / 19.5f
   }
 }
 
@@ -499,15 +511,9 @@ private fun ScreenPane(
     ) {
       BoxWithConstraints(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
         val frame = screen as? DeviceScreenModel.Frame
-        val ratio = if (frame != null && frame.width > 0 && frame.height > 0) {
-          frame.width.toFloat() / frame.height
-        } else if (device.controls.landscape) {
-          19.5f / 9f
-        } else {
-          9f / 19.5f
-        }
+        val ratio = screenRatio(device)
         val fits = maxWidth / maxHeight.coerceAtLeast(1.dp) > ratio
-        Phone(
+        MirroredScreen(
           frame = frame,
           controls = device.controls,
           onEvent = onEvent,
@@ -527,29 +533,25 @@ private fun ScreenPane(
   }
 }
 
-/** The mirrored screen in a phone's dark bezel; clicks, drags and, when on, typing go to the device. */
+/** The mirrored screen, edge to edge; clicks, drags and, when on, typing go to the device. */
 @Composable
-private fun Phone(
+private fun MirroredScreen(
   frame: DeviceScreenModel.Frame?,
   controls: MirrorControlsModel,
   onEvent: (WorkspaceEvent) -> Unit,
   modifier: Modifier = Modifier,
 ) {
   val colors = LemonadeTheme.colors
-  val outer = RoundedCornerShape(30.dp)
-  val inner = RoundedCornerShape(24.dp)
+  val shape = LemonadeTheme.shapes.radius300
   val image = remember(frame) { frame?.let { decodePng(it.png) } }
   val currentFrame by rememberUpdatedState(frame)
   val slop = LocalViewConfiguration.current.touchSlop
   val keys = remember { FocusRequester() }
   Box(
     modifier = modifier
-      .lemonadeShadow(shadow = LemonadeShadow.Large, shape = outer)
-      .background(PhoneBezel, outer)
-      .border(1.dp, colors.border.borderNeutralMedium, outer)
-      .padding(7.dp)
-      .clip(inner)
-      .background(colors.background.bgSubtle),
+      .clip(shape)
+      .background(colors.background.bgSubtle)
+      .border(1.dp, colors.border.borderNeutralLow, shape),
     contentAlignment = Alignment.Center,
   ) {
     if (image == null) {

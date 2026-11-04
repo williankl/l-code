@@ -308,7 +308,7 @@
   <string name="devices_separate">Otvoriť v samostatnom okne</string>
   <string name="devices_dock">Vrátiť do hlavného okna</string>
   <string name="devices_layout_tabs">Zobraziť obrazovku a logy na kartách</string>
-  <string name="devices_layout_split">Zobraziť obrazovku a logy vedľa seba</string>
+  <string name="devices_layout_split">Zobraziť obrazovku a logy spolu</string>
   <string name="devices_disconnect">Odpojiť %1$s</string>
   <string name="devices_disconnected">Odpojené: %1$s</string>
   <string name="device_usb">USB</string>

@@ -290,7 +290,7 @@
   <string name="devices_separate">Abrir numa janela separada</string>
   <string name="devices_dock">Voltar à janela principal</string>
   <string name="devices_layout_tabs">Mostrar ecrã e registos em separadores</string>
-  <string name="devices_layout_split">Mostrar ecrã e registos lado a lado</string>
+  <string name="devices_layout_split">Mostrar ecrã e registos em conjunto</string>
   <string name="devices_disconnect">Desligar %1$s</string>
   <string name="devices_disconnected">%1$s desligado</string>
   <string name="device_usb">USB</string>

@@ -344,6 +344,34 @@ class WorkspaceContentUiTest {
   }
 
   @Test
+  fun `a narrow panel in tabs still offers the screen and logs together`() = show(WorkspaceShowcase.DeviceTabs) {
+    expect(WorkspaceEvent.SetDevicesLayout(DevicesLayoutOption.SideBySide)) {
+      onNodeWithContentDescription("Show screen and logs together").performClick()
+    }
+  }
+
+  @Test
+  fun `a portrait screen sits beside its logs when there's room`() = show(WorkspaceShowcase.DeviceSideBySide) {
+    val screen = onNodeWithContentDescription("Home").getUnclippedBoundsInRoot()
+    val logs = onNodeWithText("Live").getUnclippedBoundsInRoot()
+    assertTrue(screen.right < logs.left, "the screen's controls are left of the logs")
+  }
+
+  @Test
+  fun `a landscape screen goes above its logs`() = show(WorkspaceShowcase.DeviceLandscape) {
+    val screen = onNodeWithContentDescription("Home").getUnclippedBoundsInRoot()
+    val logs = onNodeWithText("Live").getUnclippedBoundsInRoot()
+    assertTrue(screen.bottom < logs.top, "the screen's controls are above the logs")
+  }
+
+  @Test
+  fun `without room beside its logs, a portrait screen goes above them`() = show(WorkspaceShowcase.DeviceStacked) {
+    val screen = onNodeWithContentDescription("Home").getUnclippedBoundsInRoot()
+    val logs = onNodeWithText("Live").getUnclippedBoundsInRoot()
+    assertTrue(screen.bottom < logs.top, "the screen's controls are above the logs")
+  }
+
+  @Test
   fun `pairing asks one thing at a time`() {
     show(WorkspaceShowcase.PairPlatform) {
       onNodeWithText("Step 1 of 3").assertExists()

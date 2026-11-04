@@ -272,7 +272,7 @@
   <string name="devices_separate">Open in a separate window</string>
   <string name="devices_dock">Return to the main window</string>
   <string name="devices_layout_tabs">Show screen and logs as tabs</string>
-  <string name="devices_layout_split">Show screen and logs side by side</string>
+  <string name="devices_layout_split">Show screen and logs together</string>
   <string name="devices_disconnect">Disconnect %1$s</string>
   <string name="devices_disconnected">%1$s disconnected</string>
   <string name="device_usb">USB</string>

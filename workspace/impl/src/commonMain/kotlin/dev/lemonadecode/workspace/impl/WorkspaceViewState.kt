@@ -1,6 +1,7 @@
 package dev.lemonadecode.workspace.impl
 
 import dev.lemonadecode.domain.mobile.DeviceId
+import dev.lemonadecode.domain.mobile.LogPackages
 import dev.lemonadecode.domain.mobile.MobileError
 import dev.lemonadecode.domain.mobile.MobilePlatform
 import dev.lemonadecode.domain.review.FileContent
@@ -108,6 +109,10 @@ internal data class DevicesViewState(
   val pausedAt: Long? = null,
   /** The logs were cleared by hand, so an empty list says so instead of "waiting". */
   val logsCleared: Boolean = false,
+  /** Whose lines the log shows; the app in front until another choice is made. */
+  val logPackages: LogPackages = LogPackages.AppInFront,
+  /** The choice of whose lines the log shows is open. */
+  val logAppsOpen: Boolean = false,
   val pairPlatform: MobilePlatform = MobilePlatform.Android,
   val pairAddress: String = "",
   val pairCode: String = "",

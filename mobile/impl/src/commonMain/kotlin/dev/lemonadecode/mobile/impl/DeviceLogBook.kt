@@ -3,6 +3,7 @@ package dev.lemonadecode.mobile.impl
 import dev.lemonadecode.domain.mobile.DeviceId
 import dev.lemonadecode.domain.mobile.DeviceLogLine
 import dev.lemonadecode.domain.mobile.DeviceLogs
+import dev.lemonadecode.domain.mobile.LogPackages
 import dev.lemonadecode.domain.mobile.MobileError
 import dev.lemonadecode.platform.core.getOrElse
 import dev.lemonadecode.platform.core.safeSuspendRunCatching
@@ -20,6 +21,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlin.concurrent.Volatile
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
@@ -36,13 +38,17 @@ internal interface LogSink {
  * The last [capacity] lines of each device's log. One reader per device is shared by everyone
  * following it, and keeps going for [linger] after the last one leaves, so coming back to a device
  * shows the earlier lines. A reader stops when its device goes away and starts again if it comes
- * back while followed.
+ * back while followed. A device's log keeps one set of packages' lines; following it for others
+ * forgets the lines and reads again for those.
  */
 internal class DeviceLogBook(
   private val scope: CoroutineScope,
   private val isConnected: (DeviceId) -> Boolean,
-  /** Reads a device's log into the sink until the stream ends; returns why it stopped, or null if it just ended. */
-  private val read: suspend (DeviceId, LogSink) -> MobileError?,
+  /**
+   * Reads a device's log into the sink, keeping the packages' lines, until the stream ends; returns
+   * why it stopped, or null if it just ended.
+   */
+  private val read: suspend (DeviceId, LogPackages, LogSink) -> MobileError?,
   private val capacity: Int = LogCapacity,
   private val linger: Duration = LogLinger,
 ) {
@@ -51,8 +57,8 @@ internal class DeviceLogBook(
   /** Written under [lock]; read without it by [clear]. */
   private val streams = MutableStateFlow<Map<DeviceId, Stream>>(emptyMap())
 
-  fun follow(id: DeviceId): Flow<DeviceLogs> = flow {
-    val stream = acquire(id)
+  fun follow(id: DeviceId, packages: LogPackages = LogPackages.AppInFront): Flow<DeviceLogs> = flow {
+    val stream = acquire(id, packages)
     try {
       emitAll(stream.state)
     } finally {
@@ -82,12 +88,18 @@ internal class DeviceLogBook(
     }
   }
 
-  private suspend fun acquire(id: DeviceId): Stream = lock.withLock {
-    val stream = streams.value[id] ?: Stream(id).also { streams.value += id to it }
+  private suspend fun acquire(id: DeviceId, packages: LogPackages): Stream = lock.withLock {
+    val stream = streams.value[id] ?: Stream(id, packages).also { streams.value += id to it }
     stream.collectors++
     stream.ending?.cancel()
     stream.ending = null
-    if (!stream.isReading) start(stream)
+    if (stream.packages != packages) {
+      stream.packages = packages
+      start(stream)
+      stream.restart()
+    } else if (!stream.isReading) {
+      start(stream)
+    }
     stream
   }
 
@@ -108,6 +120,9 @@ internal class DeviceLogBook(
 
   private fun start(stream: Stream) {
     val previous = stream.reader
+    // A reader replaced while it reads may still hand over a last batch; only the newest is heard.
+    val sink = stream.newReader()
+    val packages = stream.packages
     stream.reader = scope.launch {
       previous?.cancelAndJoin()
       var failures = 0
@@ -117,7 +132,7 @@ internal class DeviceLogBook(
           break
         }
         val before = stream.sequence
-        val error = safeSuspendRunCatching { read(stream.id, stream) }
+        val error = safeSuspendRunCatching { read(stream.id, packages, sink) }
           .getOrElse { MobileError.CommandFailed(it.message ?: "The log stopped") }
         failures = if (stream.sequence > before) 1 else failures + 1
         if (error != null) stream.fail(error)
@@ -128,8 +143,11 @@ internal class DeviceLogBook(
 
   private fun retryDelay(failures: Int): Duration = (1.seconds * (1 shl (failures - 1).coerceIn(0, 5))).coerceAtMost(30.seconds)
 
-  private inner class Stream(val id: DeviceId) : LogSink {
+  private inner class Stream(val id: DeviceId, packages: LogPackages) {
     val state = MutableStateFlow(DeviceLogs(source = "", lines = emptyList()))
+
+    /** Whose lines are read; changed under [lock]. */
+    var packages: LogPackages = packages
 
     /** Guarded by [lock]. */
     var collectors = 0
@@ -142,15 +160,30 @@ internal class DeviceLogBook(
 
     val isReading: Boolean get() = reader?.isActive == true
 
-    override fun setSource(source: String) = state.update { it.copy(source = source) }
+    /** Counts the readers started; only the latest one's lines are kept. */
+    @Volatile
+    private var readers = 0
 
-    override fun append(entries: List<LogEntry>) {
-      if (entries.isEmpty()) return
-      val lines = entries.map { DeviceLogLine(++sequence, it.time, it.level, it.tag, it.message) }
-      state.update { it.copy(lines = (it.lines + lines).takeLast(capacity), error = null) }
+    /** Where the reader started now writes; what one started before it writes is dropped. Called under [lock]. */
+    fun newReader(): LogSink {
+      val number = ++readers
+      return object : LogSink {
+        override fun setSource(source: String) {
+          if (number == readers) state.update { it.copy(source = source) }
+        }
+
+        override fun append(entries: List<LogEntry>) {
+          if (entries.isEmpty() || number != readers) return
+          val lines = entries.map { DeviceLogLine(++sequence, it.time, it.level, it.tag, it.message) }
+          state.update { it.copy(lines = (it.lines + lines).takeLast(capacity), error = null) }
+        }
+      }
     }
 
     fun clear() = state.update { it.copy(lines = emptyList()) }
+
+    /** Forgets what was read, before reading again for other packages. */
+    fun restart() = state.update { DeviceLogs(source = "", lines = emptyList()) }
 
     fun fail(error: MobileError) = state.update { it.copy(error = error) }
 

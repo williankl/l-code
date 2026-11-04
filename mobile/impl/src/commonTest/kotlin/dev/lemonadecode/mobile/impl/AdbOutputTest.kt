@@ -152,6 +152,81 @@ class AdbOutputTest {
   }
 
   @Test
+  fun `logcat lines with user ids, as an Android 13 emulator prints them`() {
+    val parser = LogcatParser()
+    assertEquals(
+      LogcatLine(12163, LogEntry("11:57:19.320", LogLevel.Info, "tem.dust.sample", "Late-enabling -Xcheck:jni"), uid = 10174),
+      parser.parse("11-04 11:57:19.320 10174 12163 12163 I tem.dust.sample: Late-enabling -Xcheck:jni"),
+    )
+    assertEquals(
+      LogcatLine(12163, LogEntry("11:57:20.620", LogLevel.Warning, "Parcel", "Expecting binder but got null!"), uid = 10174),
+      parser.parse("11-04 11:57:20.620 10174 12163 12183 W Parcel  : Expecting binder but got null!"),
+    )
+    assertEquals(
+      LogcatLine(509, LogEntry("11:52:10.405", LogLevel.Info, "ActivityManager", "Killing 6029:com.android.settings/1000 (adj 985): empty for 3129s"), uid = 1000),
+      parser.parse("11-04 11:52:10.405  1000   509   978 I ActivityManager: Killing 6029:com.android.settings/1000 (adj 985): empty for 3129s"),
+    )
+    // System users can show by name, which gives no user id.
+    assertEquals(
+      LogcatLine(298, LogEntry("11:40:36.885", LogLevel.Debug, "Zygote", "Forked child process 9816"), uid = null),
+      parser.parse("11-04 11:40:36.885  root   298   298 D Zygote  : Forked child process 9816"),
+    )
+    assertEquals(
+      LogcatLine(152, LogEntry("11:35:44.774", LogLevel.Info, "logd", "logdr: UID=2000 GID=2000 PID=9303 n tail=15 logMask=99 pid=0 start=0ns deadline=0ns")),
+      parser.parse("11-04 11:35:44.774  logd   152   152 I logd    : logdr: UID=2000 GID=2000 PID=9303 n tail=15 logMask=99 pid=0 start=0ns deadline=0ns"),
+    )
+    // A line in another format belongs to the one before, user id and all.
+    parser.parse("11-04 11:57:21.002 10174 12163 12163 E AndroidRuntime: FATAL EXCEPTION: main")
+    assertEquals(
+      LogcatLine(12163, LogEntry("11:57:21.002", LogLevel.Info, "AndroidRuntime", "\tat com.teya.Pay.run(Pay.kt:12)"), uid = 10174),
+      parser.parse("\tat com.teya.Pay.run(Pay.kt:12)"),
+    )
+  }
+
+  @Test
+  fun `package user ids from pm, as an Android 13 emulator lists them`() {
+    val output = """
+      package:com.teya.designsystem.test uid:10175
+      package:com.teya.designsystem.dust.sample uid:10174
+      package:com.teya.terminal.cds.sample uid:10176
+      package:com.google.android.gms uid:10111,1010111
+    """.trimIndent()
+    assertEquals(
+      mapOf(
+        "com.teya.designsystem.test" to setOf(10175),
+        "com.teya.designsystem.dust.sample" to setOf(10174),
+        "com.teya.terminal.cds.sample" to setOf(10176),
+        "com.google.android.gms" to setOf(10111, 1010111),
+      ),
+      parsePackageUids(output),
+    )
+    assertEquals(listOf("com.teya.designsystem.test", "com.teya.designsystem.dust.sample", "com.teya.terminal.cds.sample", "com.google.android.gms"), parsePackages(output))
+    // An older Android lists packages without user ids.
+    assertEquals(emptyMap(), parsePackageUids("package:com.teya.storefront\npackage:com.teya.pos\n"))
+    assertEquals(listOf("com.teya.storefront", "com.teya.pos"), parsePackages("package:com.teya.storefront\npackage:com.teya.pos\n"))
+    assertEquals(emptyMap(), parsePackageUids("Error: Unknown option: -U"))
+    assertEquals(emptyList(), parsePackages(""))
+  }
+
+  @Test
+  fun `running processes from ps, as an Android 13 emulator lists them`() {
+    val output = """
+      10157 com.android.systemui
+      10171 com.google.android.ext.services
+      10153 com.google.android.apps.nexuslauncher
+      10120 com.google.android.googlequicksearchbox:interactor
+          0 init
+    """.trimIndent()
+    val running = parseRunningProcesses(output)
+    assertEquals(setOf(10157, 10171, 10153, 10120, 0), running.uids)
+    assertEquals(
+      setOf("com.android.systemui", "com.google.android.ext.services", "com.google.android.apps.nexuslauncher", "com.google.android.googlequicksearchbox", "init"),
+      running.packages,
+    )
+    assertEquals(RunningProcesses(emptySet(), emptySet()), parseRunningProcesses(""))
+  }
+
+  @Test
   fun `typed text is one quoted argument with spaces as percent-s`() {
     assertEquals("'hello%sworld'", inputTextArgument("hello world"))
     assertEquals("'it'\\''s'", inputTextArgument("it's"))

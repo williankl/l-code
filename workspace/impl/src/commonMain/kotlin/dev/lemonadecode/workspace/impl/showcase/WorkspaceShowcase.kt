@@ -1,5 +1,6 @@
 package dev.lemonadecode.workspace.impl.showcase
 
+import dev.lemonadecode.domain.mobile.DeviceApp
 import dev.lemonadecode.domain.mobile.DeviceLogs
 import dev.lemonadecode.domain.mobile.DeviceScreen
 import dev.lemonadecode.domain.mobile.MobileDevice
@@ -96,6 +97,14 @@ public enum class WorkspaceShowcase(
   DeviceSideBySide("8f", "Device · side by side", "The screen and its logs side by side, the default.", widthDp = 760, heightDp = 800, part = ShowcasePart.Devices),
   DeviceLandscape("8f·wide", "Device · landscape", "A screen on its side goes above its logs, as wide as the panel.", widthDp = 760, heightDp = 800, part = ShowcasePart.Devices),
   DeviceStacked("8f·narrow", "Device · together, narrow", "Without room beside the logs, a portrait screen goes above them.", widthDp = 420, heightDp = 800, part = ShowcasePart.Devices),
+  DeviceLogApps(
+    "8f·apps",
+    "Device · logs from the apps picked",
+    "The log's source opens whose lines it shows: the app in front, every app, or the apps ticked. Two are ticked here.",
+    widthDp = 760,
+    heightDp = 800,
+    part = ShowcasePart.Devices,
+  ),
   DeviceTabs("8g", "Device · tabs, Logs selected", "Switched to tabs from the header. iOS logs over USB; errors can go to the agent.", widthDp = 420, heightDp = 800, part = ShowcasePart.Devices),
   PairPlatform("8h", "Pair · 1 platform", "Pairing asks one thing at a time: first, what are you pairing?", widthDp = 420, heightDp = 800, part = ShowcasePart.Devices),
   PairMethod("8i", "Pair · 2 method", "Then how: a QR code, a pairing code or a device found on this network.", widthDp = 420, heightDp = 800, part = ShowcasePart.Devices),
@@ -352,6 +361,11 @@ private fun sceneFor(showcase: WorkspaceShowcase): Scene = when (showcase) {
   WorkspaceShowcase.DeviceSideBySide -> devicesScene(DevicesViewState(step = DevicesStep.Device, deviceId = ShowcaseDevices.pixel.id))
   WorkspaceShowcase.DeviceLandscape -> devicesScene(DevicesViewState(step = DevicesStep.Device, deviceId = ShowcaseDevices.pixel.id), screen = ShowcaseDevices.screen(2400, 1080))
   WorkspaceShowcase.DeviceStacked -> devicesScene(DevicesViewState(step = DevicesStep.Device, deviceId = ShowcaseDevices.pixel.id))
+  WorkspaceShowcase.DeviceLogApps -> devicesScene(
+    DevicesViewState(step = DevicesStep.Device, deviceId = ShowcaseDevices.pixel.id, logPackages = ShowcaseDevices.pickedApps, logAppsOpen = true),
+    logs = ShowcaseDevices.androidLogs.copy(source = "logcat · 2 apps"),
+    apps = ShowcaseDevices.apps,
+  )
   WorkspaceShowcase.DeviceTabs -> devicesScene(
     DevicesViewState(step = DevicesStep.Device, deviceId = ShowcaseDevices.iphone.id, tab = DeviceTab.Logs),
     layout = DevicesLayout.Tabs,
@@ -446,6 +460,7 @@ private fun devicesScene(
   logs: DeviceLogs = ShowcaseDevices.androidLogs,
   screen: DeviceScreen = ShowcaseDevices.screen(),
   nearby: List<NearbyDevice> = emptyList(),
+  apps: List<DeviceApp>? = null,
 ) = scene(
   settings = AppSettings(mobilePlugin = true, devicesLayout = layout),
   view = { copy(devices = panel, devicesWindow = window) },
@@ -455,6 +470,7 @@ private fun devicesScene(
     logs = logs.takeIf { panel.step == DevicesStep.Device },
     screen = screen.takeIf { panel.step == DevicesStep.Device },
     nearby = nearby,
+    apps = apps,
   ),
 )
 

@@ -117,6 +117,19 @@ public sealed interface WorkspaceEvent {
   /** Hands the error lines shown to the selected session's agent. */
   public data object SendLogErrors : WorkspaceEvent
 
+  /** Opens or closes the choice of whose lines the device's log shows. */
+  public data object ToggleLogApps : WorkspaceEvent
+  public data object DismissLogApps : WorkspaceEvent
+
+  /** The log follows whichever app is in front, as it does until another choice is made. */
+  public data object FollowAppInFront : WorkspaceEvent
+
+  /** The log shows every line, from every app and the system. */
+  public data object ShowAllApps : WorkspaceEvent
+
+  /** Adds the app's lines to the log, or takes them out; with no app left, every line shows. */
+  public data class ToggleLogApp(val packageName: String) : WorkspaceEvent
+
   public data object StartPairing : WorkspaceEvent
   public data class ChoosePairingPlatform(val platform: MobilePlatformModel) : WorkspaceEvent
   public data class ChoosePairingMethod(val method: PairingMethod) : WorkspaceEvent

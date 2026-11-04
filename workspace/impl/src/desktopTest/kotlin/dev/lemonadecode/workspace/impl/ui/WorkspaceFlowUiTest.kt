@@ -6,6 +6,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.DesktopComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.MouseButton
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
@@ -22,6 +23,7 @@ import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.rightClick
 import androidx.compose.ui.test.runDesktopComposeUiTest
 import androidx.compose.ui.test.withKeyDown
+import dev.lemonadecode.domain.mobile.LogPackages
 import dev.lemonadecode.domain.review.CommentStatus
 import dev.lemonadecode.domain.review.DiffState
 import dev.lemonadecode.domain.review.Review
@@ -37,8 +39,10 @@ import dev.lemonadecode.sessions.fake.FakeSessionService
 import dev.lemonadecode.settings.fake.FakeSettingsService
 import dev.lemonadecode.updates.fake.FakeUpdateService
 import dev.lemonadecode.workspace.impl.WorkspacePresenter
+import dev.lemonadecode.workspace.impl.showcase.ShowcaseDevices
 import dev.lemonadecode.workspace.impl.showcase.ShowcaseFixtures
 import dev.lemonadecode.workspace.ui.WorkspaceContent
+import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -53,6 +57,7 @@ class WorkspaceFlowUiTest {
   private val reviews = FakeReviewService()
   private val settings = FakeSettingsService()
   private val updates = FakeUpdateService()
+  private val mobile = FakeMobileService()
   private val presenter = WorkspacePresenter(
     sessionService = sessions,
     reviewService = reviews,
@@ -61,7 +66,7 @@ class WorkspaceFlowUiTest {
       override val path: String = ShowcaseFixtures.Home
     },
     updateService = updates,
-    mobileService = FakeMobileService(),
+    mobileService = mobile,
     clock = { 0L },
   )
   private val ar = SessionId("ar")
@@ -232,6 +237,39 @@ class WorkspaceFlowUiTest {
       onNodeWithText("Close session").assertDoesNotExist()
       waitFor(hasText("api-ratelimit"))
       assertEquals(listOf(SessionId("cf")), sessions.closed)
+    }
+  }
+
+  @Test
+  fun `a device's log narrows to the apps ticked, and goes back to the app in front`() {
+    withRepository()
+    runBlocking { settings.update { it.copy(mobilePlugin = true) } }
+    mobile.setDevices(ShowcaseDevices.connected)
+    mobile.logs.value = mapOf(ShowcaseDevices.pixel.id to ShowcaseDevices.androidLogs)
+    mobile.apps.value = mapOf(ShowcaseDevices.pixel.id to ShowcaseDevices.apps)
+    flow {
+      waitFor(hasContentDescription("Devices"))
+      onNodeWithContentDescription("Devices").performClick()
+      waitFor(hasText("Pixel 8"))
+      onNodeWithText("Pixel 8").performClick()
+      waitFor(hasContentDescription("Choose whose logs to show"))
+      assertEquals(LogPackages.AppInFront, mobile.logPackages.value[ShowcaseDevices.pixel.id])
+
+      onNodeWithContentDescription("Choose whose logs to show").performClick()
+      waitFor(hasText("com.teya.pos"))
+      onNodeWithText("com.teya.pos").performClick()
+      waitUntil(timeoutMillis = 5_000) { mobile.logPackages.value[ShowcaseDevices.pixel.id] == LogPackages.Only(setOf("com.teya.pos")) }
+      onNodeWithText("Show logs from").assertExists()
+
+      // Its button closes it again, rather than closing and opening it at once.
+      onNodeWithContentDescription("Choose whose logs to show").performClick()
+      waitUntil(timeoutMillis = 5_000) { onAllNodes(hasText("Show logs from")).fetchSemanticsNodes().isEmpty() }
+
+      onNodeWithContentDescription("Choose whose logs to show").performClick()
+      waitFor(hasText("App in front"))
+      onNodeWithText("App in front").performClick()
+      waitUntil(timeoutMillis = 5_000) { mobile.logPackages.value[ShowcaseDevices.pixel.id] == LogPackages.AppInFront }
+      waitUntil(timeoutMillis = 5_000) { onAllNodes(hasText("Show logs from")).fetchSemanticsNodes().isEmpty() }
     }
   }
 }

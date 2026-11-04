@@ -25,7 +25,8 @@ import com.teya.lemonade.Text
 import com.teya.lemonade.core.LemonadeShadow
 import com.teya.lemonade.lemonadeShadow
 
-public enum class TooltipPlacement { BelowStart, BelowEnd, End }
+/** Where a tooltip or popover sits by what it's anchored to. [AboveStart] suits anchors near the bottom of a window. */
+public enum class TooltipPlacement { BelowStart, BelowEnd, AboveStart, End }
 
 /**
  * Small inverse label shown while the pointer rests on [content]. Lemonade's TooltipHost is a
@@ -91,6 +92,7 @@ internal class AnchorPositionProvider(
         anchorBounds.right - popupContentSize.width + inset,
         anchorBounds.bottom + gap - inset,
       )
+      TooltipPlacement.AboveStart -> IntOffset(anchorBounds.left - inset, anchorBounds.top - gap - popupContentSize.height + inset)
       TooltipPlacement.End -> IntOffset(
         anchorBounds.right + gap - inset,
         anchorBounds.top + (anchorBounds.height - popupContentSize.height) / 2,

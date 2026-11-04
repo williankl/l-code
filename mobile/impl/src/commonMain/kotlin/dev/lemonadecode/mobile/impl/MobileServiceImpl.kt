@@ -1,13 +1,16 @@
 package dev.lemonadecode.mobile.impl
 
 import dev.lemonadecode.domain.mobile.CablePairing
+import dev.lemonadecode.domain.mobile.DeviceApp
 import dev.lemonadecode.domain.mobile.DeviceAvailability
 import dev.lemonadecode.domain.mobile.DeviceButton
+import dev.lemonadecode.domain.mobile.DeviceCapability
 import dev.lemonadecode.domain.mobile.DeviceConnection
 import dev.lemonadecode.domain.mobile.DeviceId
 import dev.lemonadecode.domain.mobile.DeviceKey
 import dev.lemonadecode.domain.mobile.DeviceLogs
 import dev.lemonadecode.domain.mobile.DeviceScreen
+import dev.lemonadecode.domain.mobile.LogPackages
 import dev.lemonadecode.domain.mobile.MobileDevice
 import dev.lemonadecode.domain.mobile.MobileError
 import dev.lemonadecode.domain.mobile.MobilePlatform
@@ -156,23 +159,29 @@ internal class MobileServiceImpl(
     }
   }
 
-  override fun logs(id: DeviceId): Flow<DeviceLogs> = logBook.follow(id)
+  override fun logs(id: DeviceId, packages: LogPackages): Flow<DeviceLogs> = logBook.follow(id, packages)
 
   override fun clearLogs(id: DeviceId) = logBook.clear(id)
 
-  private suspend fun readLogs(id: DeviceId, sink: LogSink): MobileError? {
+  private suspend fun readLogs(id: DeviceId, packages: LogPackages, sink: LogSink): MobileError? {
     val device = device(id) ?: return MobileError.DeviceGone
     val tools = currentTools()
     return when (device.platform) {
       MobilePlatform.Android -> {
         val adb = tools?.adb ?: return MobileError.ToolMissing(MobileTool.Adb)
-        android.readLogs(adb, device, sink)
+        android.readLogs(adb, device, packages, sink)
       }
       MobilePlatform.Ios -> {
         val folder = tools?.libimobiledevice ?: return MobileError.ToolMissing(MobileTool.Libimobiledevice)
         ios.readLogs(folder, device, sink)
       }
     }
+  }
+
+  override fun apps(id: DeviceId): Flow<List<DeviceApp>> = flow {
+    val device = device(id)?.takeIf { DeviceCapability.LogsByApp in it.capabilities } ?: return@flow emit(emptyList())
+    val adb = currentTools()?.adb ?: return@flow emit(emptyList())
+    emitAll(android.apps(adb, device))
   }
 
   // Handed over one at a time, so pictures don't pile up here; the recording keeps only its newest meanwhile.

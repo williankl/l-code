@@ -25,15 +25,18 @@ public fun LemonadeCodeTheme(
   mode: LemonadeCodeThemeMode = LemonadeCodeThemeMode.Dark,
   content: @Composable () -> Unit,
 ) {
-  val dark = when (mode) {
-    LemonadeCodeThemeMode.Dark -> true
-    LemonadeCodeThemeMode.Light -> false
-    LemonadeCodeThemeMode.System -> isSystemInDarkTheme()
-  }
   LemonadeTheme(
-    colors = if (dark) LemonadeDarkTheme else LemonadeLightTheme,
+    colors = if (mode.isDark()) LemonadeDarkTheme else LemonadeLightTheme,
     content = content,
   )
+}
+
+/** Whether [LemonadeCodeTheme] draws this mode dark, following the system for [LemonadeCodeThemeMode.System]. */
+@Composable
+public fun LemonadeCodeThemeMode.isDark(): Boolean = when (this) {
+  LemonadeCodeThemeMode.Dark -> true
+  LemonadeCodeThemeMode.Light -> false
+  LemonadeCodeThemeMode.System -> isSystemInDarkTheme()
 }
 
 public object LemonadeCodeTheme {

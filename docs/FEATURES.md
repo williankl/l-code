@@ -234,7 +234,7 @@ change it on its own page; the back arrow or Esc returns to the list.
 
 <img src="images/settings.png" width="100%" alt="The settings list: Appearance, Language, Keep awake, Plugins and Updates">
 
-- **Appearance:** Dark, Light, or follow the System.
+- **Appearance:** Dark, Light, or follow the System. The window's title bar follows it on macOS and Windows.
 - **Language:** English, Deutsch, Español, Français, Português or Slovenčina, or match the computer's
   own. The whole app changes at once.
 - **Keep awake while sessions work:** while any session is working, your computer won't go to

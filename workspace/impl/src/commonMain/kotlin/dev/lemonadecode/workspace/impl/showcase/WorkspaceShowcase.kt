@@ -6,7 +6,11 @@ import dev.lemonadecode.domain.mobile.MobileDevice
 import dev.lemonadecode.domain.mobile.NearbyDevice
 import dev.lemonadecode.domain.review.BranchTip
 import dev.lemonadecode.domain.review.CommentStatus
+import dev.lemonadecode.domain.review.DiffSnapshot
 import dev.lemonadecode.domain.review.DiffState
+import dev.lemonadecode.domain.review.FileChange
+import dev.lemonadecode.domain.review.FileContent
+import dev.lemonadecode.domain.review.FileDiff
 import dev.lemonadecode.domain.review.Review
 import dev.lemonadecode.domain.review.ReviewComment
 import dev.lemonadecode.domain.session.Session
@@ -26,12 +30,14 @@ import dev.lemonadecode.domain.update.AppVersion
 import dev.lemonadecode.domain.update.UpdateChannel
 import dev.lemonadecode.domain.update.UpdateChecks
 import dev.lemonadecode.domain.update.UpdateState
+import dev.lemonadecode.platform.syntax.SyntaxHighlighter
 import dev.lemonadecode.workspace.impl.Composer
 import dev.lemonadecode.workspace.impl.DevicesStep
 import dev.lemonadecode.workspace.impl.DevicesViewState
 import dev.lemonadecode.workspace.impl.LineRange
 import dev.lemonadecode.workspace.impl.MobileInput
 import dev.lemonadecode.workspace.impl.NavigationStyle
+import dev.lemonadecode.workspace.impl.PreviewLoad
 import dev.lemonadecode.workspace.impl.WorkspaceInput
 import dev.lemonadecode.workspace.impl.WorkspaceModelMapper
 import dev.lemonadecode.workspace.impl.WorkspaceViewState
@@ -99,6 +105,11 @@ public enum class WorkspaceShowcase(
   DisplayDevices("8m", "Display 2 · Devices window", "The Devices panel in its own window, on another display.", widthDp = 520, heightDp = 900, part = ShowcasePart.Devices),
   DiffFileList("8n", "Changed files beside the diff", "The file list follows the scroll. Picking a file jumps to it and opens it if it was folded."),
   DiffBasePicker("8o", "Picking the base branch", "The base branch is a picker: find a branch by name, or HEAD for only the uncommitted changes."),
+  DiffSounds(
+    "8p",
+    "Comparing sound files",
+    "A changed sound before and after, each with a player and its waveform, on one time scale; a new sound has one side.",
+  ),
   ;
 
   public fun model(eventSink: (WorkspaceEvent) -> Unit = {}): WorkspaceModel = WorkspaceModelMapper.map(scene.input, eventSink)
@@ -164,6 +175,7 @@ private fun scene(
   mobile: MobileInput = MobileInput(),
   update: UpdateState = UpdateState.None,
   review: Review? = null,
+  previews: Map<String, PreviewLoad> = emptyMap(),
 ): Scene {
   val collapsed = listOf("cfg", "thr", "test", "readme").associate { path(it) to false }
   val state = WorkspaceViewState(
@@ -191,6 +203,7 @@ private fun scene(
       subSessionPlan = plan,
       pendingMessage = null,
       homeDirectory = ShowcaseFixtures.Home,
+      previews = previews,
       menuWorktreePlan = menuPlan,
       update = update,
       installation = AppInstallation(AppVersion(1, 8, 2), UpdateChannel.SelfUpdate),
@@ -378,6 +391,30 @@ private fun sceneFor(showcase: WorkspaceShowcase): Scene = when (showcase) {
         "release/2.4" to BranchTip(Now - 4 * Day, "Release bot"),
         "feat/auth-tokens" to BranchTip(Now - 1 * Hour, "Maria"),
       ),
+    ),
+  )
+  WorkspaceShowcase.DiffSounds -> soundsScene()
+}
+
+/** A notification sound that changed and an error sound that's new, both previewing. */
+private fun soundsScene(): Scene {
+  // Labelled the way the real diff labels them, from the path.
+  fun sound(path: String, change: FileChange) = FileDiff(path, null, change, SyntaxHighlighter.languageOf(path).displayName, emptyList(), isBinary = true)
+  val notify = sound("assets/sounds/notify.wav", FileChange.Modified)
+  val error = sound("assets/sounds/error.wav", FileChange.Added)
+  return scene(
+    settings = AppSettings(sidebarExpanded = false),
+    view = { copy(view = WorkspaceView.Diff) },
+    review = Review(
+      DiffState.Ready(DiffSnapshot(baseRef = "main", files = listOf(notify, error), hasUncommittedChanges = true, mergeBase = "4f2a9c1")),
+      emptyList(),
+      base = "main",
+      bases = listOf("main", ShowcaseFixtures.Branch),
+      defaultBranch = "main",
+    ),
+    previews = mapOf(
+      notify.path to PreviewLoad(before = FileContent.Bytes(ShowcaseSounds.notifyBefore), after = FileContent.Bytes(ShowcaseSounds.notifyAfter)),
+      error.path to PreviewLoad(before = FileContent.Missing, after = FileContent.Bytes(ShowcaseSounds.error)),
     ),
   )
 }

@@ -13,6 +13,21 @@ class PreviewKindTest {
   }
 
   @Test
+  fun `sound files are told apart by their extension, in any case`() {
+    listOf(
+      "sounds/ding.wav", "a.WAVE", "b.mp3", "c.M4A", "d.aac", "e.ogg", "f.oga", "g.opus", "h.flac",
+      "i.aif", "j.aiff", "k.aifc", "l.caf", "m.wma", "n.mka", "o.weba", "p.amr", "q.ac3",
+    ).forEach { path ->
+      assertEquals(PreviewKind.Audio, PreviewKind.of(path), path)
+    }
+  }
+
+  @Test
+  fun `an Ogg video stays a video`() {
+    assertEquals(PreviewKind.Video, PreviewKind.of("clips/intro.ogv"))
+  }
+
+  @Test
   fun `a ts file is TypeScript, not a video`() {
     assertNull(PreviewKind.of("src/app.ts"))
   }

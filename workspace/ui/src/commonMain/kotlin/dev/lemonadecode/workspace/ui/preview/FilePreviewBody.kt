@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -77,9 +78,12 @@ internal fun FilePreviewBody(
           null -> if (content.after != null) PreviewSide(content.after, preview.kind, after) else PreviewSide(content.before, preview.kind, before)
           PreviewLayout.Before -> PreviewSide(content.before, preview.kind, before)
           PreviewLayout.After -> PreviewSide(content.after, preview.kind, after)
-          PreviewLayout.SideBySide -> Row(horizontalArrangement = Arrangement.spacedBy(spaces.spacing400)) {
-            LabelledSide(stringResource(Res.string.preview_before), content.before, preview.kind, before, Modifier.weight(1f))
-            LabelledSide(stringResource(Res.string.preview_after), content.after, preview.kind, after, Modifier.weight(1f))
+          // Sounds side by side share a time scale, so a change in length shows in their waveforms.
+          PreviewLayout.SideBySide -> CompositionLocalProvider(LocalAudioTimeline provides remember(file.id) { AudioTimeline() }) {
+            Row(horizontalArrangement = Arrangement.spacedBy(spaces.spacing400)) {
+              LabelledSide(stringResource(Res.string.preview_before), content.before, preview.kind, before, Modifier.weight(1f))
+              LabelledSide(stringResource(Res.string.preview_after), content.after, preview.kind, after, Modifier.weight(1f))
+            }
           }
         }
       }
@@ -149,6 +153,7 @@ private fun PreviewSide(
         )
         PreviewKindModel.Table -> TablePreview(side.bytes, side.extension)
         PreviewKindModel.Video -> VideoPreview(side.bytes)
+        PreviewKindModel.Audio -> AudioPreview(side.bytes)
       }
     }
   }

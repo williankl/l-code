@@ -113,3 +113,7 @@ private fun DiffFileListPreview() = ShowcasePreview(WorkspaceShowcase.DiffFileLi
 @Preview
 @Composable
 private fun DiffBasePickerPreview() = ShowcasePreview(WorkspaceShowcase.DiffBasePicker)
+
+@Preview
+@Composable
+private fun DiffSoundsPreview() = ShowcasePreview(WorkspaceShowcase.DiffSounds)

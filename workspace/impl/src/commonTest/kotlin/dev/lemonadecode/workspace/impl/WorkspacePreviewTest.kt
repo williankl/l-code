@@ -12,6 +12,7 @@ import dev.lemonadecode.domain.review.FileDiff
 import dev.lemonadecode.domain.review.FileVersion
 import dev.lemonadecode.domain.review.LineAnchor
 import dev.lemonadecode.domain.review.LineSide
+import dev.lemonadecode.domain.review.PreviewKind
 import dev.lemonadecode.domain.review.Review
 import dev.lemonadecode.domain.review.ReviewComment
 import dev.lemonadecode.domain.session.SessionId
@@ -204,6 +205,61 @@ class WorkspacePreviewTest {
       assertEquals(PreviewLayout.SideBySide, preview.layout)
       assertEquals("mp4", assertIs<PreviewSideModel.Content>(assertIs<FilePreviewContentModel.Ready>(preview.content).after).extension)
     }
+  }
+
+  @Test
+  fun `a changed sound opens on its preview, before and after side by side`() = runTest {
+    val ding = FileDiff("assets/sounds/ding.wav", null, FileChange.Modified, "Text", emptyList(), isBinary = true)
+    sessions.setSessions(listOf(ShowcaseFixtures.session("ar", "api-ratelimit")))
+    val snapshot = DiffSnapshot(baseRef = "main", files = listOf(ding), hasUncommittedChanges = true, mergeBase = "abc123")
+    reviews.setReview(ar, Review(DiffState.Ready(snapshot), emptyList()))
+    reviews.fileContents = mapOf(
+      (ding.path to FileVersion.Base) to bytes(1, 2),
+      (ding.path to FileVersion.WorkingTree) to bytes(3),
+    )
+    presenter.test {
+      awaitItem().eventSink(WorkspaceEvent.SelectView(WorkspaceView.Diff))
+      val file = awaitItemWhere { it.file(ding.path)?.preview?.content is FilePreviewContentModel.Ready }.file(ding.path)!!
+      val preview = file.preview!!
+      assertEquals(PreviewKindModel.Audio, preview.kind)
+      assertTrue(file.expanded && preview.showing)
+      assertEquals(PreviewLayout.SideBySide, preview.layout)
+      val ready = assertIs<FilePreviewContentModel.Ready>(preview.content)
+      assertContentEquals(byteArrayOf(1, 2), assertIs<PreviewSideModel.Content>(ready.before).bytes)
+      assertEquals("wav", assertIs<PreviewSideModel.Content>(ready.after).extension)
+      assertEquals(listOf(FileVersion.Base, FileVersion.WorkingTree), reviews.fileContentCalls.filter { it.first == ding.path }.map { it.second }.sorted())
+    }
+  }
+
+  @Test
+  fun `an added sound has one side, and switches to its diff and back`() = runTest {
+    val chime = FileDiff("assets/sounds/chime.MP3", null, FileChange.Added, "Text", emptyList(), isBinary = true)
+    sessions.setSessions(listOf(ShowcaseFixtures.session("ar", "api-ratelimit")))
+    val snapshot = DiffSnapshot(baseRef = "main", files = listOf(chime), hasUncommittedChanges = true, mergeBase = "abc123")
+    reviews.setReview(ar, Review(DiffState.Ready(snapshot), emptyList()))
+    reviews.fileContents = mapOf((chime.path to FileVersion.WorkingTree) to bytes(7))
+    presenter.test {
+      awaitItem().eventSink(WorkspaceEvent.SelectView(WorkspaceView.Diff))
+      val model = awaitItemWhere { it.file(chime.path)?.preview?.content is FilePreviewContentModel.Ready }
+      val preview = model.file(chime.path)!!.preview!!
+      assertEquals(PreviewKindModel.Audio, preview.kind)
+      assertNull(preview.layout)
+      val ready = assertIs<FilePreviewContentModel.Ready>(preview.content)
+      assertNull(ready.before)
+      assertEquals("mp3", assertIs<PreviewSideModel.Content>(ready.after).extension)
+
+      // A sound has no text to show, so turning its preview off folds it away.
+      model.eventSink(WorkspaceEvent.ToggleFilePreview(chime.path))
+      val off = awaitItemWhere { it.file(chime.path)?.preview?.showing == false }.file(chime.path)!!
+      assertTrue(!off.expanded)
+      model.eventSink(WorkspaceEvent.ToggleFilePreview(chime.path))
+      awaitItemWhere { it.file(chime.path)?.preview?.showing == true }
+    }
+  }
+
+  @Test
+  fun `sounds compare side by side by default, like pictures and videos`() {
+    assertEquals(PreviewLayout.SideBySide, DiffMapper.defaultLayout(PreviewKind.Audio))
   }
 
   private fun WorkspaceModel.file(path: String): DiffFileModel? = (content as? WorkspaceContentModel.Diff)?.review?.files?.firstOrNull { it.path == path }

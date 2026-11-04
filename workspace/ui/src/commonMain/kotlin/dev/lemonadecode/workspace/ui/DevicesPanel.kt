@@ -82,7 +82,10 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -93,6 +96,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.min
 import com.teya.lemonade.Button
+import com.teya.lemonade.Checkbox
 import com.teya.lemonade.Chip
 import com.teya.lemonade.ExperimentalLemonadeComponent
 import com.teya.lemonade.Icon
@@ -105,6 +109,7 @@ import com.teya.lemonade.Spinner
 import com.teya.lemonade.SymbolContainer
 import com.teya.lemonade.Text
 import com.teya.lemonade.TextField
+import com.teya.lemonade.core.CheckboxStatus
 import com.teya.lemonade.core.LemonadeAssetSize
 import com.teya.lemonade.core.LemonadeButtonSize
 import com.teya.lemonade.core.LemonadeButtonType
@@ -114,6 +119,7 @@ import com.teya.lemonade.core.LemonadeSegmentedControlSize
 import com.teya.lemonade.core.SymbolContainerSize
 import com.teya.lemonade.core.SymbolContainerVoice
 import com.teya.lemonade.core.TabButtonProperties
+import dev.lemonadecode.platform.designsystem.AnchoredPopover
 import dev.lemonadecode.platform.designsystem.HoverTooltip
 import dev.lemonadecode.platform.designsystem.LemonadeCodeTheme
 import dev.lemonadecode.platform.designsystem.StatusDot
@@ -136,6 +142,14 @@ import dev.lemonadecode.workspace.strings.devices_none
 import dev.lemonadecode.workspace.strings.devices_pair
 import dev.lemonadecode.workspace.strings.devices_separate
 import dev.lemonadecode.workspace.strings.logs_all
+import dev.lemonadecode.workspace.strings.logs_apps_all
+import dev.lemonadecode.workspace.strings.logs_apps_all_note
+import dev.lemonadecode.workspace.strings.logs_apps_choose
+import dev.lemonadecode.workspace.strings.logs_apps_find
+import dev.lemonadecode.workspace.strings.logs_apps_front
+import dev.lemonadecode.workspace.strings.logs_apps_front_note
+import dev.lemonadecode.workspace.strings.logs_apps_no_match
+import dev.lemonadecode.workspace.strings.logs_apps_title
 import dev.lemonadecode.workspace.strings.logs_clear
 import dev.lemonadecode.workspace.strings.logs_copied
 import dev.lemonadecode.workspace.strings.logs_copy
@@ -203,6 +217,8 @@ import dev.lemonadecode.workspace.uimodel.DevicesContentModel
 import dev.lemonadecode.workspace.uimodel.DevicesLayoutOption
 import dev.lemonadecode.workspace.uimodel.DevicesPanelModel
 import dev.lemonadecode.workspace.uimodel.DevicesWindow
+import dev.lemonadecode.workspace.uimodel.LogAppModel
+import dev.lemonadecode.workspace.uimodel.LogAppsModel
 import dev.lemonadecode.workspace.uimodel.LogFilter
 import dev.lemonadecode.workspace.uimodel.LogLevelModel
 import dev.lemonadecode.workspace.uimodel.LogLineModel
@@ -781,13 +797,20 @@ private fun LogsPane(
         .padding(horizontal = spaces.spacing400, vertical = spaces.spacing200),
     ) {
       LiveToggle(paused = logs.paused, onClick = { onEvent(WorkspaceEvent.ToggleLogsPaused) })
-      LemonadeUi.Text(
-        text = logs.source,
-        textStyle = LemonadeCodeTheme.typography.codeSmall.copy(color = colors.content.contentSecondary),
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-        modifier = Modifier.weight(1f),
-      )
+      val apps = logs.apps
+      if (apps == null) {
+        LemonadeUi.Text(
+          text = logs.source,
+          textStyle = LemonadeCodeTheme.typography.codeSmall.copy(color = colors.content.contentSecondary),
+          maxLines = 1,
+          overflow = TextOverflow.Ellipsis,
+          modifier = Modifier.weight(1f),
+        )
+      } else {
+        Box(modifier = Modifier.weight(1f)) {
+          LogAppsPicker(source = logs.source, apps = apps, onEvent = onEvent)
+        }
+      }
       logs.sendErrorsLabel?.let { label ->
         LemonadeUi.Button(
           label = label.resolve(),
@@ -1057,6 +1080,170 @@ private fun LiveToggle(
     )
   }
 }
+
+/**
+ * Whose lines the log shows, as its source says (`logcat · com.teya.storefront`, `logcat · 2 apps`),
+ * and, pressed, the choice of them above it: the app in front, every app, or the apps ticked.
+ */
+@Composable
+private fun LogAppsPicker(
+  source: String,
+  apps: LogAppsModel,
+  onEvent: (WorkspaceEvent) -> Unit,
+) {
+  val colors = LemonadeTheme.colors
+  val spaces = LemonadeTheme.spaces
+  val interactionSource = remember { MutableInteractionSource() }
+  val hovered by interactionSource.collectIsHoveredAsState()
+  val label = stringResource(Res.string.logs_apps_choose)
+  Box {
+    // Beside the send button the source is often cut short; resting on it shows it whole.
+    HoverTooltip(text = source, placement = TooltipPlacement.AboveStart, enabled = !apps.open) {
+      Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(spaces.spacing100),
+        modifier = Modifier
+          .heightIn(min = 32.dp)
+          .clip(LemonadeTheme.shapes.radius200)
+          .background(if (hovered || apps.open) colors.background.bgElevated else Color.Transparent)
+          .hoverable(interactionSource)
+          .clickable(interactionSource = interactionSource, indication = null, role = Role.Button, onClick = { onEvent(WorkspaceEvent.ToggleLogApps) })
+          .semantics { contentDescription = label }
+          .padding(horizontal = spaces.spacing200),
+      ) {
+        LemonadeUi.Text(
+          text = source,
+          textStyle = LemonadeCodeTheme.typography.codeSmall.copy(color = colors.content.contentSecondary),
+          maxLines = 1,
+          overflow = TextOverflow.Ellipsis,
+          modifier = Modifier.weight(1f, fill = false),
+        )
+        LemonadeUi.Icon(icon = LemonadeIcons.ChevronUpDown, contentDescription = null, size = LemonadeAssetSize.XSmall, tint = colors.content.contentSecondary)
+      }
+    }
+    if (apps.open) LogAppsPopover(apps = apps, onEvent = onEvent)
+  }
+}
+
+/** The choice of whose lines the log shows: the app in front or every app, then the apps to tick, found by name. */
+@OptIn(ExperimentalLemonadeComponent::class)
+@Composable
+private fun LogAppsPopover(
+  apps: LogAppsModel,
+  onEvent: (WorkspaceEvent) -> Unit,
+) {
+  val colors = LemonadeTheme.colors
+  val spaces = LemonadeTheme.spaces
+  var query by remember { mutableStateOf("") }
+  val shown = apps.apps.filter { query.isBlank() || it.packageName.contains(query.trim(), ignoreCase = true) }
+  AnchoredPopover(
+    onDismissRequest = { onEvent(WorkspaceEvent.DismissLogApps) },
+    width = LogAppsWidth,
+    placement = TooltipPlacement.AboveStart,
+    padding = spaces.spacing300,
+    spacing = spaces.spacing200,
+    // Escape closes it even from the find field, which would take the key otherwise.
+    onEscape = { onEvent(WorkspaceEvent.DismissLogApps) },
+  ) {
+    LemonadeUi.Text(
+      text = stringResource(Res.string.logs_apps_title),
+      textStyle = LemonadeTheme.typography.bodySmallSemiBold,
+      modifier = Modifier.padding(start = spaces.spacing200, end = spaces.spacing200, top = spaces.spacing100),
+    )
+    Column {
+      LogAppsChoice(
+        title = stringResource(Res.string.logs_apps_front),
+        note = stringResource(Res.string.logs_apps_front_note),
+        chosen = apps.followsAppInFront,
+        onClick = { onEvent(WorkspaceEvent.FollowAppInFront) },
+      )
+      LogAppsChoice(
+        title = stringResource(Res.string.logs_apps_all),
+        note = stringResource(Res.string.logs_apps_all_note),
+        chosen = apps.showsAll,
+        onClick = { onEvent(WorkspaceEvent.ShowAllApps) },
+      )
+    }
+    Column(
+      verticalArrangement = Arrangement.spacedBy(spaces.spacing200),
+      modifier = Modifier.fillMaxWidth().topHairline(colors.border.borderNeutralLow).padding(top = spaces.spacing200),
+    ) {
+      if (apps.apps.size > LogAppsFindFrom) {
+        LemonadeUi.SearchField(
+          input = query,
+          onInputChanged = { query = it },
+          placeholder = stringResource(Res.string.logs_apps_find),
+          modifier = Modifier.fillMaxWidth(),
+        )
+      }
+      Column(modifier = Modifier.heightIn(max = LogAppsMaxHeight).verticalScroll(rememberScrollState())) {
+        shown.forEach { app -> LogAppRow(app = app, onClick = { onEvent(WorkspaceEvent.ToggleLogApp(app.packageName)) }) }
+        val empty = apps.emptyText?.resolve() ?: if (shown.isEmpty()) stringResource(Res.string.logs_apps_no_match) else null
+        if (empty != null) {
+          LemonadeUi.Text(
+            text = empty,
+            textStyle = LemonadeTheme.typography.bodySmallRegular,
+            color = colors.content.contentSecondary,
+            modifier = Modifier.padding(horizontal = spaces.spacing200, vertical = spaces.spacing300),
+          )
+        }
+      }
+    }
+  }
+}
+
+/** "App in front" or "All apps", with what it means, and a tick when it's the one chosen. */
+@Composable
+private fun LogAppsChoice(
+  title: String,
+  note: String,
+  chosen: Boolean,
+  onClick: () -> Unit,
+) {
+  val colors = LemonadeTheme.colors
+  HoverRow(onClick = onClick, role = Role.RadioButton, modifier = Modifier.semantics { selected = chosen }) {
+    Column(modifier = Modifier.weight(1f)) {
+      LemonadeUi.Text(text = title, textStyle = LemonadeTheme.typography.bodySmallMedium)
+      LemonadeUi.Text(text = note, textStyle = LemonadeTheme.typography.bodyXSmallRegular, color = colors.content.contentSecondary)
+    }
+    if (chosen) {
+      LemonadeUi.Icon(icon = LemonadeIcons.CircleCheck, contentDescription = null, size = LemonadeAssetSize.Small, tint = colors.content.contentBrand)
+    }
+  }
+}
+
+/** An app to tick: its package, and whether it's in front or running. */
+@Composable
+private fun LogAppRow(
+  app: LogAppModel,
+  onClick: () -> Unit,
+) {
+  val colors = LemonadeTheme.colors
+  HoverRow(
+    onClick = onClick,
+    role = Role.Checkbox,
+    modifier = Modifier.semantics { toggleableState = ToggleableState(app.ticked) },
+  ) {
+    LemonadeUi.Checkbox(if (app.ticked) CheckboxStatus.Checked else CheckboxStatus.Unchecked, onClick)
+    Column(modifier = Modifier.weight(1f)) {
+      LemonadeUi.Text(
+        text = app.packageName,
+        textStyle = LemonadeCodeTheme.typography.codeSmall.copy(color = colors.content.contentPrimary),
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+      )
+      app.detail?.let { detail ->
+        LemonadeUi.Text(text = detail.resolve(), textStyle = LemonadeTheme.typography.bodyXSmallRegular, color = colors.content.contentSecondary, maxLines = 1)
+      }
+    }
+  }
+}
+
+private val LogAppsWidth = 320.dp
+private val LogAppsMaxHeight = 280.dp
+
+/** With more apps than this, a field finds them by name. */
+private const val LogAppsFindFrom = 6
 
 /** A step's question and its answers, as big rows: what to pair, then how. */
 @Composable

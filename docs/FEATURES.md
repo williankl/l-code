@@ -225,7 +225,9 @@ Lemonade Code finds them on your `PATH`, in the Android SDK and in Homebrew's fo
 - **Use the phone from here.** On Android, clicks and drags on the screen reach the phone, and so do
   Back, Home, turning it sideways and, with the keyboard button on, your typing. iPhones and iPads
   show their screen over a cable only, to look at.
-- **Logs that matter.** Android shows the lines of the app in front; iOS shows the whole system log.
+- **Logs that matter.** Android shows the lines of the app in front at first. Press the log's source
+  under the lines to tick one or several of the phone's apps instead, or every app; an app's lines
+  stay when it restarts. iOS shows the whole system log.
   Show only warnings or only errors, filter by text, pause the stream while you read, or clear it.
   Select lines with the mouse and copy them with ⌘C, Ctrl+C or a right-click, or copy every line
   shown with the copy button. The list holds still while you select or scroll back.

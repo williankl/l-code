@@ -1,12 +1,14 @@
 package dev.lemonadecode.mobile.fake
 
 import dev.lemonadecode.domain.mobile.CablePairing
+import dev.lemonadecode.domain.mobile.DeviceApp
 import dev.lemonadecode.domain.mobile.DeviceButton
 import dev.lemonadecode.domain.mobile.DeviceConnection
 import dev.lemonadecode.domain.mobile.DeviceId
 import dev.lemonadecode.domain.mobile.DeviceKey
 import dev.lemonadecode.domain.mobile.DeviceLogs
 import dev.lemonadecode.domain.mobile.DeviceScreen
+import dev.lemonadecode.domain.mobile.LogPackages
 import dev.lemonadecode.domain.mobile.MobileDevice
 import dev.lemonadecode.domain.mobile.MobileError
 import dev.lemonadecode.domain.mobile.MobilePlatform
@@ -19,6 +21,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onStart
 
 /** A [MobileService] whose devices, logs and screens are set by the test; it records what it was asked to do. */
 public class FakeMobileService(
@@ -33,6 +36,12 @@ public class FakeMobileService(
 
   /** Logs by device; set them before or while the panel shows them. */
   public val logs: MutableStateFlow<Map<DeviceId, DeviceLogs>> = MutableStateFlow(emptyMap())
+
+  /** Whose lines each device's log was last followed for. */
+  public val logPackages: MutableStateFlow<Map<DeviceId, LogPackages>> = MutableStateFlow(emptyMap())
+
+  /** The apps each device lists for narrowing its log; a device left out has none. */
+  public val apps: MutableStateFlow<Map<DeviceId, List<DeviceApp>>> = MutableStateFlow(emptyMap())
   public val screens: MutableStateFlow<Map<DeviceId, DeviceScreen>> = MutableStateFlow(emptyMap())
   public val nearby: MutableStateFlow<Map<MobilePlatform, List<NearbyDevice>>> = MutableStateFlow(emptyMap())
   public val qrPairing: MutableStateFlow<QrPairing?> = MutableStateFlow(null)
@@ -54,7 +63,11 @@ public class FakeMobileService(
     mutableTools.value = tools
   }
 
-  override fun logs(id: DeviceId): Flow<DeviceLogs> = logs.map { it[id] ?: DeviceLogs(source = "", lines = emptyList()) }
+  override fun logs(id: DeviceId, packages: LogPackages): Flow<DeviceLogs> = logs
+    .map { it[id] ?: DeviceLogs(source = "", lines = emptyList()) }
+    .onStart { logPackages.value += id to packages }
+
+  override fun apps(id: DeviceId): Flow<List<DeviceApp>> = apps.map { it[id].orEmpty() }
 
   override fun clearLogs(id: DeviceId) {
     actions += "clear ${id.value}"

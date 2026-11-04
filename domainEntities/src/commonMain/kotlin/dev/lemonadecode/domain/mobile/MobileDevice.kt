@@ -36,6 +36,9 @@ public enum class DeviceCapability {
 
   Logs,
 
+  /** Its logs can be narrowed to the apps picked, or to the app in front: Android. */
+  LogsByApp,
+
   /** It can be disconnected from here: Android over Wi‑Fi. */
   Disconnect,
 }
@@ -119,9 +122,33 @@ public data class DeviceLogLine(
   val message: String,
 )
 
+/** Whose lines a device's log keeps, on a device with [DeviceCapability.LogsByApp]; others keep every line. */
+public sealed interface LogPackages {
+  /** The app in front, followed as it changes; every line while that can't be told. The default. */
+  public data object AppInFront : LogPackages
+
+  /** The lines of these packages' processes; with none, every line, the system's too. */
+  public data class Only(val packages: Set<String>) : LogPackages
+
+  public companion object {
+    /** Every line, from every app and the system. */
+    public val All: LogPackages = Only(emptySet())
+  }
+}
+
+/** An app on a device, whose lines its log can be narrowed to. */
+public data class DeviceApp(
+  /** e.g. `com.teya.storefront`. */
+  val packageName: String,
+  /** One of its processes is running. */
+  val running: Boolean = false,
+  /** It's the app in front. */
+  val inFront: Boolean = false,
+)
+
 /** The lines a device has logged since they started being read, oldest first. */
 public data class DeviceLogs(
-  /** What reads them and whose they are, e.g. `logcat · com.teya.storefront`. */
+  /** What reads them and whose they are, e.g. `logcat · com.teya.storefront`, `logcat · 2 apps`, `logcat · all`. */
   val source: String,
   val lines: List<DeviceLogLine>,
   /** Set when reading stopped, e.g. the device went away. */

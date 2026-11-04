@@ -1,11 +1,14 @@
 package dev.lemonadecode.mobile.api
 
 import dev.lemonadecode.domain.mobile.CablePairing
+import dev.lemonadecode.domain.mobile.DeviceApp
 import dev.lemonadecode.domain.mobile.DeviceButton
+import dev.lemonadecode.domain.mobile.DeviceCapability
 import dev.lemonadecode.domain.mobile.DeviceId
 import dev.lemonadecode.domain.mobile.DeviceKey
 import dev.lemonadecode.domain.mobile.DeviceLogs
 import dev.lemonadecode.domain.mobile.DeviceScreen
+import dev.lemonadecode.domain.mobile.LogPackages
 import dev.lemonadecode.domain.mobile.MobileDevice
 import dev.lemonadecode.domain.mobile.MobileError
 import dev.lemonadecode.domain.mobile.MobilePlatform
@@ -30,8 +33,20 @@ public interface MobileService {
   /**
    * What [id] logs, read while collected and for a while after, so leaving the device and coming
    * back keeps the lines. Emits the whole list each time a line arrives.
+   *
+   * On a device with [DeviceCapability.LogsByApp] only [packages]' lines are kept; others keep
+   * every line. A device has one log: following it for other packages than before starts it over
+   * with theirs, for everyone following it.
    */
-  public fun logs(id: DeviceId): Flow<DeviceLogs>
+  public fun logs(id: DeviceId, packages: LogPackages = LogPackages.AppInFront): Flow<DeviceLogs>
+
+  /**
+   * The apps on [id] whose lines its log can be narrowed to: the app in front first, then the ones
+   * running, then the rest, looked at again every few seconds while collected. Android lists the
+   * apps installed by its user, and the one in front whichever it is; a device without
+   * [DeviceCapability.LogsByApp] has none.
+   */
+  public fun apps(id: DeviceId): Flow<List<DeviceApp>>
 
   /** Forgets the lines kept for [id]; new ones keep coming. */
   public fun clearLogs(id: DeviceId)

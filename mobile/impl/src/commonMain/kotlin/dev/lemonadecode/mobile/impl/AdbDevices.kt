@@ -1,11 +1,13 @@
 package dev.lemonadecode.mobile.impl
 
+import dev.lemonadecode.domain.mobile.DeviceApp
 import dev.lemonadecode.domain.mobile.DeviceAvailability
 import dev.lemonadecode.domain.mobile.DeviceButton
 import dev.lemonadecode.domain.mobile.DeviceCapability
 import dev.lemonadecode.domain.mobile.DeviceConnection
 import dev.lemonadecode.domain.mobile.DeviceId
 import dev.lemonadecode.domain.mobile.DeviceKey
+import dev.lemonadecode.domain.mobile.LogPackages
 import dev.lemonadecode.domain.mobile.MobileDevice
 import dev.lemonadecode.domain.mobile.MobileError
 import dev.lemonadecode.domain.mobile.MobilePlatform
@@ -198,26 +200,43 @@ internal class AdbDevices(
   }
 
   /**
-   * Reads logcat (the last [LogBacklog] lines, then new ones) into [sink], keeping the lines of the
-   * app in front when they arrive. Which app that is is looked at again every few seconds.
+   * Reads logcat (the last [LogBacklog] lines, or [NarrowedLogBacklog] when only some apps' are
+   * kept, then new ones) into [sink], keeping [packages]' lines as they arrive. Where Android lists
+   * each package's user id (Android 8 and later), logcat prints each line's too, and an app's lines
+   * are told by it, so they're kept when the app restarts with new processes; elsewhere they're
+   * told by the app's processes. The app in front, the processes and new packages' user ids are
+   * looked at again every few seconds.
    */
-  suspend fun readLogs(adb: String, device: MobileDevice, sink: LogSink): MobileError? = coroutineScope {
+  suspend fun readLogs(adb: String, device: MobileDevice, packages: LogPackages, sink: LogSink): MobileError? = coroutineScope {
     val serial = device.id.value
-    sink.setSource(AppInFront.Unknown.source)
-    val front = MutableStateFlow(appInFront(adb, serial) ?: AppInFront.Unknown)
-    sink.setSource(front.value.source)
+    sink.setSource(logSource(packages, front = null))
+    val owners = LogOwners(adb, serial)
+    val byUser = owners.readUserIds()
+    var front: String? = null
+    suspend fun keep(): Keep? = when (packages) {
+      LogPackages.AppInFront -> {
+        appInFront(adb, serial)?.let { front = it.packageName }
+        // An app in front without processes to follow is told apart by nothing: every line, as when none is.
+        front?.let { owners.keep(setOf(it)) }?.takeIf { it.isNotEmpty() }
+      }
+      is LogPackages.Only -> if (packages.packages.isEmpty()) null else owners.keep(packages.packages)
+    }
+    val kept = MutableStateFlow(keep())
+    sink.setSource(logSource(packages, front.takeIf { kept.value != null }))
     val refresher = launch {
       while (true) {
         delay(ForegroundRefresh)
-        appInFront(adb, serial)?.let { front.value = it }
-        sink.setSource(front.value.source)
+        kept.value = keep()
+        sink.setSource(logSource(packages, front.takeIf { kept.value != null }))
       }
     }
     try {
       val parser = LogcatParser()
-      commands.lines(listOf(adb, "-s", serial, "logcat", "-v", "threadtime", "-T", "$LogBacklog")).batched().collect { batch ->
-        val app = front.value
-        sink.append(batch.mapNotNull(parser::parse).filter { app.pids == null || it.pid in app.pids }.map { it.entry })
+      val format = if (byUser) listOf("-v", "threadtime", "-v", "uid") else listOf("-v", "threadtime")
+      val backlog = if (kept.value == null) LogBacklog else NarrowedLogBacklog
+      commands.lines(listOf(adb, "-s", serial, "logcat") + format + listOf("-T", "$backlog")).batched().collect { batch ->
+        val keeping = kept.value
+        sink.append(batch.mapNotNull(parser::parse).filter { keeping == null || keeping.keeps(it) }.map { it.entry })
       }
       null
     } finally {
@@ -225,24 +244,94 @@ internal class AdbDevices(
     }
   }
 
-  /** The app in front and its processes; null when the device couldn't be asked. */
-  private suspend fun appInFront(adb: String, serial: String): AppInFront? {
-    val activities = shellOutput(adb, serial, "dumpsys activity activities | grep ResumedActivity") ?: return null
-    val packageName = parseForegroundPackage(activities)
-      ?: parseForegroundPackage(shellOutput(adb, serial, "dumpsys window | grep -E 'mCurrentFocus|mFocusedApp'").orEmpty())
-      ?: return AppInFront.Unknown
-    // The name comes from the device's own output and is checked to be a package name, so it's safe on its shell.
-    val pids = parsePids(shellOutput(adb, serial, "pidof", packageName).orEmpty())
-    return if (pids.isEmpty()) AppInFront.Unknown else AppInFront(packageName, pids)
+  /** What reads the lines and whose they are: `logcat · com.teya.storefront`, `logcat · 2 apps`, `logcat · all`, or `logcat` alone. */
+  private fun logSource(packages: LogPackages, front: String?): String = when {
+    packages is LogPackages.Only && packages.packages.isEmpty() -> "logcat · all"
+    packages is LogPackages.Only && packages.packages.size == 1 -> "logcat · ${packages.packages.single()}"
+    packages is LogPackages.Only -> "logcat · ${packages.packages.size} apps"
+    front != null -> "logcat · $front"
+    else -> "logcat"
   }
 
-  /** [packageName]'s processes; with no package, every line is kept. */
-  private data class AppInFront(val packageName: String?, val pids: Set<Int>?) {
-    val source: String get() = packageName?.let { "logcat · $it" } ?: "logcat"
+  /** The lines a log keeps: those logged by [userIds], or by [processes] for apps whose user id isn't known. */
+  private data class Keep(val userIds: Set<Int>, val processes: Set<Int>) {
+    fun isNotEmpty(): Boolean = userIds.isNotEmpty() || processes.isNotEmpty()
 
-    companion object {
-      val Unknown = AppInFront(null, null)
+    fun keeps(line: LogcatLine): Boolean = (line.uid != null && line.uid in userIds) || line.pid in processes
+  }
+
+  /**
+   * Who logs for a package on a device: its user ids from `pm list packages -U`, read again for a
+   * package not there yet at most every [UserIdsRereadRounds] rounds, or else its processes.
+   */
+  private inner class LogOwners(private val adb: String, private val serial: String) {
+    private var userIds: Map<String, Set<Int>> = emptyMap()
+    private var byUser = false
+    private var roundsSinceRead = 0
+
+    /** Reads the user ids; false when this Android doesn't list them. */
+    suspend fun readUserIds(): Boolean {
+      roundsSinceRead = 0
+      val read = shellOutput(adb, serial, "pm", "list", "packages", "-U")?.let(::parsePackageUids).orEmpty()
+      if (read.isNotEmpty()) userIds = read
+      byUser = byUser || read.isNotEmpty()
+      return byUser
     }
+
+    suspend fun keep(packages: Set<String>): Keep {
+      // The names reach the device's shell, so only package names go.
+      val names = packages.filter { PackageNamePattern.matches(it) }.toSet()
+      if (byUser && names.any { it !in userIds } && ++roundsSinceRead >= UserIdsRereadRounds) {
+        val _ = readUserIds()
+      }
+      val known = if (byUser) names.filter { !userIds[it].isNullOrEmpty() }.toSet() else emptySet()
+      val others = names - known
+      val processes = if (others.isEmpty()) emptySet() else parsePids(shellOutput(adb, serial, "pidof", *others.toTypedArray()).orEmpty())
+      return Keep(userIds = known.flatMap { userIds.getValue(it) }.toSet(), processes = processes)
+    }
+  }
+
+  /** The app in front; null when the device couldn't be asked. */
+  private suspend fun appInFront(adb: String, serial: String): InFront? {
+    val activities = shellOutput(adb, serial, "dumpsys activity activities | grep ResumedActivity") ?: return null
+    // The name comes from the device's own output and is checked to be a package name, so it's safe on its shell.
+    val packageName = parseForegroundPackage(activities)
+      ?: parseForegroundPackage(shellOutput(adb, serial, "dumpsys window | grep -E 'mCurrentFocus|mFocusedApp'").orEmpty())
+    return InFront(packageName)
+  }
+
+  /** The package of the app in front, or null when no app is. */
+  private data class InFront(val packageName: String?)
+
+  /**
+   * The apps whose lines the log can be narrowed to, read again every [AppsRefresh] while
+   * collected: the ones its user installed, and the one in front whichever it is.
+   */
+  fun apps(adb: String, device: MobileDevice): Flow<List<DeviceApp>> = flow {
+    while (true) {
+      readApps(adb, device.id.value)?.let { emit(it) }
+      delay(AppsRefresh)
+    }
+  }.distinctUntilChanged()
+
+  private suspend fun readApps(adb: String, serial: String): List<DeviceApp>? {
+    val output = shellOutput(adb, serial, AppsScript) ?: return null
+    val parts = output.split(InfoMarker)
+    val installed = parts.getOrElse(0) { "" }
+    // An Android that doesn't know `-U` may list nothing with it.
+    val names = parsePackages(installed).ifEmpty { parsePackages(shellOutput(adb, serial, "pm", "list", "packages", "-3").orEmpty()) }
+    val userIds = parsePackageUids(installed)
+    val running = parseRunningProcesses(parts.getOrElse(1) { "" })
+    val front = appInFront(adb, serial)?.packageName
+    return (listOfNotNull(front) + names).distinct()
+      .map { name ->
+        DeviceApp(
+          packageName = name,
+          running = name in running.packages || userIds[name].orEmpty().any { it in running.uids },
+          inFront = name == front,
+        )
+      }
+      .sortedWith(compareByDescending<DeviceApp> { it.inFront }.thenByDescending { it.running }.thenBy { it.packageName })
   }
 
   /** Android devices advertising wireless debugging, looked for while collected. */
@@ -412,6 +501,7 @@ internal class AdbDevices(
       DeviceCapability.Rotate,
       DeviceCapability.Screenshot,
       DeviceCapability.Logs,
+      DeviceCapability.LogsByApp,
     )
 
     /** Bits a second for a recording of the screen: less over Wi‑Fi, which has less to spare. */
@@ -430,11 +520,23 @@ internal class AdbDevices(
     val PairingPollInterval = 1.seconds
     val QrTimeout = 3.minutes
     val ForegroundRefresh = 3.seconds
+    val AppsRefresh = 5.seconds
 
     /** Rounds of [PairingPollInterval] between two `adb connect` tries after pairing. */
     const val ConnectAttemptRounds = 3
     const val MaxSwipeMillis = 60_000L
     const val LogBacklog = 300
+
+    /** More of the backlog is read when only some apps' lines are kept, so they have some too. */
+    const val NarrowedLogBacklog = 2000
+
+    /** Rounds of [ForegroundRefresh] before user ids are read again for a package not listed yet, e.g. one being installed. */
+    const val UserIdsRereadRounds = 4
+
+    /** What `adb shell` runs to list the apps the user installed with their user ids, then what's running. */
+    val AppsScript = "pm list packages -3 -U; echo $InfoMarker; ps -A -o UID=,NAME="
+
+    val PackageNamePattern = Regex("""^[A-Za-z][\w.]*$""")
 
     /** Service names this app's QR codes use, and Android Studio's. */
     val QrServicePrefixes = listOf("lemonade-", "studio-")

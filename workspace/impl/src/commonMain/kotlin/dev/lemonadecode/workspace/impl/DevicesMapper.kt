@@ -1,6 +1,7 @@
 package dev.lemonadecode.workspace.impl
 
 import dev.lemonadecode.domain.mobile.CablePairing
+import dev.lemonadecode.domain.mobile.DeviceApp
 import dev.lemonadecode.domain.mobile.DeviceAvailability
 import dev.lemonadecode.domain.mobile.DeviceCapability
 import dev.lemonadecode.domain.mobile.DeviceConnection
@@ -8,6 +9,7 @@ import dev.lemonadecode.domain.mobile.DeviceLogLine
 import dev.lemonadecode.domain.mobile.DeviceLogs
 import dev.lemonadecode.domain.mobile.DeviceScreen
 import dev.lemonadecode.domain.mobile.LogLevel
+import dev.lemonadecode.domain.mobile.LogPackages
 import dev.lemonadecode.domain.mobile.MobileDevice
 import dev.lemonadecode.domain.mobile.MobileError
 import dev.lemonadecode.domain.mobile.MobilePlatform
@@ -39,6 +41,10 @@ import dev.lemonadecode.workspace.strings.devices_ios
 import dev.lemonadecode.workspace.strings.devices_needs_adb
 import dev.lemonadecode.workspace.strings.devices_needs_libimobiledevice
 import dev.lemonadecode.workspace.strings.devices_title
+import dev.lemonadecode.workspace.strings.logs_apps_in_front
+import dev.lemonadecode.workspace.strings.logs_apps_loading
+import dev.lemonadecode.workspace.strings.logs_apps_none
+import dev.lemonadecode.workspace.strings.logs_apps_running
 import dev.lemonadecode.workspace.strings.logs_cleared
 import dev.lemonadecode.workspace.strings.logs_no_match
 import dev.lemonadecode.workspace.strings.logs_send_errors
@@ -79,6 +85,8 @@ import dev.lemonadecode.workspace.uimodel.DevicesContentModel
 import dev.lemonadecode.workspace.uimodel.DevicesLayoutOption
 import dev.lemonadecode.workspace.uimodel.DevicesPanelModel
 import dev.lemonadecode.workspace.uimodel.DevicesWindow
+import dev.lemonadecode.workspace.uimodel.LogAppModel
+import dev.lemonadecode.workspace.uimodel.LogAppsModel
 import dev.lemonadecode.workspace.uimodel.LogFilter
 import dev.lemonadecode.workspace.uimodel.LogLevelModel
 import dev.lemonadecode.workspace.uimodel.LogLineModel
@@ -96,6 +104,8 @@ internal data class MobileInput(
   val devices: List<MobileDevice> = emptyList(),
   /** The open device's logs and screen. */
   val logs: DeviceLogs? = null,
+  /** The open device's apps while the choice of whose lines to show is open; null while they're being read. */
+  val apps: List<DeviceApp>? = null,
   val screen: DeviceScreen? = null,
   /** Devices found on the network while pairing. */
   val nearby: List<NearbyDevice> = emptyList(),
@@ -334,11 +344,12 @@ internal object DevicesMapper {
         touch = DeviceCapability.Touch in caps && frame != null,
       ),
       screenDetail = screenDetail,
-      logs = logs(input.logs, state, agent),
+      logs = logs(input.logs, state, agent, apps = logApps(device, state, input.apps)),
     )
   }
 
-  fun logs(logs: DeviceLogs?, state: DevicesViewState, agent: String?): DeviceLogsModel {
+  /** [apps] is the choice of whose lines are shown, where the device has one. */
+  fun logs(logs: DeviceLogs?, state: DevicesViewState, agent: String?, apps: LogAppsModel? = null): DeviceLogsModel {
     val all = logs?.lines.orEmpty().let { lines -> state.pausedAt?.let { last -> lines.filter { it.sequence <= last } } ?: lines }
     val query = state.logQuery.trim()
     val matching = if (query.isEmpty()) all else all.filter { "${it.tag} ${it.message}".contains(query, ignoreCase = true) }
@@ -361,6 +372,40 @@ internal object DevicesMapper {
       paused = state.pausedAt != null,
       source = logs?.source.orEmpty(),
       sendErrorsLabel = if (errors > 0 && agent != null) Res.plurals.logs_send_errors.asLemonadeCodeString(errors, errors, agent) else null,
+      apps = apps,
+    )
+  }
+
+  /**
+   * The choice of whose lines [device]'s log shows, from the [apps] it lists (null while they're
+   * read); null for a device whose log can't be narrowed. Ticked apps it doesn't list, e.g. one
+   * uninstalled since, stay so they can be unticked.
+   */
+  fun logApps(device: MobileDevice, state: DevicesViewState, apps: List<DeviceApp>?): LogAppsModel? {
+    if (DeviceCapability.LogsByApp !in device.capabilities) return null
+    val ticked = (state.logPackages as? LogPackages.Only)?.packages.orEmpty()
+    val listed = apps.orEmpty()
+    val shown = listed + ticked.filter { name -> listed.none { it.packageName == name } }.sorted().map { DeviceApp(it) }
+    return LogAppsModel(
+      open = state.logAppsOpen,
+      followsAppInFront = state.logPackages == LogPackages.AppInFront,
+      showsAll = state.logPackages == LogPackages.All,
+      apps = shown.map { app ->
+        LogAppModel(
+          packageName = app.packageName,
+          ticked = app.packageName in ticked,
+          detail = when {
+            app.inFront -> Res.string.logs_apps_in_front
+            app.running -> Res.string.logs_apps_running
+            else -> null
+          }?.asLemonadeCodeString(),
+        )
+      },
+      emptyText = when {
+        shown.isNotEmpty() -> null
+        apps == null -> Res.string.logs_apps_loading
+        else -> Res.string.logs_apps_none
+      }?.asLemonadeCodeString(),
     )
   }
 

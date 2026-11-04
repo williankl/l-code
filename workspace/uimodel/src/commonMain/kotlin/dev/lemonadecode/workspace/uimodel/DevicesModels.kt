@@ -253,6 +253,32 @@ public data class DeviceLogsModel(
   val source: String,
   /** e.g. "Send 2 errors to claude"; null when no errors are shown. */
   val sendErrorsLabel: LemonadeCodeString?,
+  /** The choice of whose lines are shown, opened from [source]; null where the log can't be narrowed, e.g. iOS. */
+  val apps: LogAppsModel? = null,
+)
+
+/** Whose lines a device's log shows: the app in front, every app, or the apps ticked. */
+@Immutable
+public data class LogAppsModel(
+  val open: Boolean,
+  /** "App in front" is chosen: the log follows whichever app is in front. The default. */
+  val followsAppInFront: Boolean,
+  /** "All apps" is chosen, or no app is ticked: every line, the system's too. */
+  val showsAll: Boolean,
+  /** The device's apps, the one in front first, then the running ones; ticked ones it no longer lists stay at the end. */
+  val apps: List<LogAppModel>,
+  /** Shown instead of [apps] when there are none, e.g. "Looking for apps…". */
+  val emptyText: LemonadeCodeString?,
+)
+
+@Immutable
+public data class LogAppModel(
+  /** e.g. `com.teya.storefront`. */
+  val packageName: String,
+  /** Its lines are shown. */
+  val ticked: Boolean,
+  /** "In front" or "Running"; null for an app that isn't running. */
+  val detail: LemonadeCodeString?,
 )
 
 @Immutable

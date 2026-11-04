@@ -1,5 +1,6 @@
 package dev.lemonadecode.workspace.impl
 
+import dev.lemonadecode.domain.mobile.LogPackages
 import dev.lemonadecode.domain.mobile.MobileError
 import dev.lemonadecode.domain.review.DiffState
 import dev.lemonadecode.domain.review.Review
@@ -53,12 +54,14 @@ import dev.lemonadecode.workspace.uimodel.ThemeOption
 import dev.lemonadecode.workspace.uimodel.UpdatePhase
 import dev.lemonadecode.workspace.uimodel.WorkspaceContentModel
 import dev.lemonadecode.workspace.uimodel.WorkspaceEvent
+import dev.lemonadecode.workspace.uimodel.WorkspaceModel
 import dev.lemonadecode.workspace.uimodel.WorkspaceView
 import dev.lemonadecode.workspace.uimodel.WorktreeBranchModel
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import dev.lemonadecode.workspace.uimodel.SubSessionLocation as LocationModel
 
@@ -332,6 +335,61 @@ class WorkspacePresenterTest {
       errors.eventSink(WorkspaceEvent.PressDeviceHome)
       yieldUntil { mobile.actions.size >= 2 }
       assertEquals(listOf("tap 38021FDH2000AB 540,1200", "press 38021FDH2000AB Home"), mobile.actions)
+    }
+  }
+
+  @Test
+  fun `a device's log follows the app in front until apps are ticked, one, several or none`() = runTest {
+    settings.update { it.copy(mobilePlugin = true) }
+    mobile.setDevices(ShowcaseDevices.connected)
+    mobile.logs.value = mapOf(ShowcaseDevices.pixel.id to ShowcaseDevices.androidLogs)
+    mobile.apps.value = mapOf(ShowcaseDevices.pixel.id to ShowcaseDevices.apps)
+    fun WorkspaceModel.logs() = (devices?.content as? DevicesContentModel.Device)?.logs
+    presenter.test {
+      awaitItem().eventSink(WorkspaceEvent.ToggleDevices)
+      awaitItemWhere { it.devices != null }.eventSink(WorkspaceEvent.SelectDevice(ShowcaseDevices.pixel.id.value))
+      val front = awaitItemWhere { it.logs()?.lines?.isNotEmpty() == true }
+      assertEquals(true, front.logs()?.apps?.followsAppInFront)
+      assertEquals(LogPackages.AppInFront, mobile.logPackages.value[ShowcaseDevices.pixel.id])
+
+      front.eventSink(WorkspaceEvent.ToggleLogsPaused)
+      awaitItemWhere { it.logs()?.paused == true }.eventSink(WorkspaceEvent.ToggleLogApps)
+      val open = awaitItemWhere { it.logs()?.apps?.apps?.isNotEmpty() == true }
+      assertEquals(true, open.logs()?.apps?.open)
+      assertEquals(ShowcaseDevices.apps.map { it.packageName }, open.logs()?.apps?.apps?.map { it.packageName })
+
+      open.eventSink(WorkspaceEvent.ToggleLogApp("com.teya.pos"))
+      val one = awaitItemWhere { it.logs()?.apps?.apps?.any { app -> app.ticked } == true }
+      assertEquals(listOf("com.teya.pos"), one.logs()?.apps?.apps?.filter { it.ticked }?.map { it.packageName })
+      assertEquals(false, one.logs()?.paused, "a new choice reads the log again, live")
+      assertEquals(true, one.logs()?.apps?.open, "ticking keeps the list open for more")
+      yieldUntil { mobile.logPackages.value[ShowcaseDevices.pixel.id] == LogPackages.Only(setOf("com.teya.pos")) }
+
+      one.eventSink(WorkspaceEvent.ToggleLogApp("com.teya.storefront"))
+      yieldUntil { mobile.logPackages.value[ShowcaseDevices.pixel.id] == LogPackages.Only(setOf("com.teya.pos", "com.teya.storefront")) }
+      val two = awaitItemWhere { it.logs()?.apps?.apps?.count { app -> app.ticked } == 2 }
+
+      two.eventSink(WorkspaceEvent.ToggleLogApp("com.teya.pos"))
+      two.eventSink(WorkspaceEvent.ToggleLogApp("com.teya.storefront"))
+      val none = awaitItemWhere { it.logs()?.apps?.showsAll == true }
+      assertEquals(emptyList(), none.logs()?.apps?.apps?.filter { it.ticked })
+      yieldUntil { mobile.logPackages.value[ShowcaseDevices.pixel.id] == LogPackages.All }
+
+      none.eventSink(WorkspaceEvent.FollowAppInFront)
+      val back = awaitItemWhere { it.logs()?.apps?.followsAppInFront == true }
+      assertEquals(false, back.logs()?.apps?.open)
+      yieldUntil { mobile.logPackages.value[ShowcaseDevices.pixel.id] == LogPackages.AppInFront }
+
+      back.eventSink(WorkspaceEvent.ShowAllApps)
+      awaitItemWhere { it.logs()?.apps?.showsAll == true }.eventSink(WorkspaceEvent.DevicesBack)
+      awaitItemWhere { it.devices?.content is DevicesContentModel.Devices }.eventSink(WorkspaceEvent.SelectDevice(ShowcaseDevices.pixel.id.value))
+      val again = awaitItemWhere { it.logs() != null }
+      assertEquals(true, again.logs()?.apps?.followsAppInFront, "opening a device follows its app in front")
+
+      again.eventSink(WorkspaceEvent.DevicesBack)
+      awaitItemWhere { it.devices?.content is DevicesContentModel.Devices }.eventSink(WorkspaceEvent.SelectDevice(ShowcaseDevices.iphone.id.value))
+      val iphone = awaitItemWhere { (it.devices?.content as? DevicesContentModel.Device)?.platform == MobilePlatformModel.Ios }
+      assertNull(iphone.logs()?.apps, "an iPhone's log can't be narrowed")
     }
   }
 

@@ -549,6 +549,39 @@ class WorkspaceContentUiTest {
   }
 
   @Test
+  fun `the log's source opens the choice of whose lines it shows`() = show(WorkspaceShowcase.DeviceSideBySide) {
+    onNodeWithText("logcat · com.teya.storefront").assertExists()
+    expect(WorkspaceEvent.ToggleLogApps) { onNodeWithContentDescription("Choose whose logs to show").performClick() }
+  }
+
+  @Test
+  fun `the choice of apps follows the app in front, shows every app, or ticks apps found by name`() = show(WorkspaceShowcase.DeviceLogApps) {
+    onNodeWithText("Show logs from").assertExists()
+    onNodeWithText("In front").assertExists()
+    expect(WorkspaceEvent.FollowAppInFront) { onNodeWithText("App in front").performClick() }
+    expect(WorkspaceEvent.ShowAllApps) { onNodeWithText("All apps").performClick() }
+    expect(WorkspaceEvent.ToggleLogApp("com.teya.kitchen")) { onNodeWithText("com.teya.kitchen").performClick() }
+    expect(WorkspaceEvent.ToggleLogApp("com.teya.pos")) { onNodeWithText("com.teya.pos").performClick() }
+
+    onNode(hasSetTextAction() and hasText("Find an app")).assertExists()
+    val find = onNode(hasSetTextAction())
+    find.performTextReplacement("loyal")
+    waitForIdle()
+    onNodeWithText("com.teya.kitchen").assertDoesNotExist()
+    onNodeWithText("com.teya.loyalty").assertExists()
+    find.performTextReplacement("nothing like it")
+    waitForIdle()
+    onNodeWithText("No app matches.").assertExists()
+    expect(WorkspaceEvent.DismissLogApps) { find.performKeyInput { pressKey(Key.Escape) } }
+  }
+
+  @Test
+  fun `an iPhone's log has no choice of apps`() = show(WorkspaceShowcase.DeviceTabs) {
+    onNodeWithText("idevicesyslog · all processes").assertExists()
+    onNodeWithContentDescription("Choose whose logs to show").assertDoesNotExist()
+  }
+
+  @Test
   fun `in tabs, the device shows one pane and switches between them`() = show(WorkspaceShowcase.DeviceTabs) {
     onNodeWithText("idevicesyslog · all processes").assertExists()
     expect(WorkspaceEvent.SetDeviceTab(DeviceTab.Screen)) { onNodeWithText("Screen").performClick() }

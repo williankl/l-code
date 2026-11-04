@@ -147,6 +147,46 @@ private val ForegroundKeys = listOf("topResumedActivity", "mResumedActivity", "R
 /** Process ids from `pidof`: `1234 5678`. */
 internal fun parsePids(output: String): Set<Int> = output.split(Whitespace).mapNotNull { it.toIntOrNull() }.toSet()
 
+/**
+ * Each package's user ids from `pm list packages -U`, which Android 8 and later understand:
+ *
+ * ```
+ * package:com.teya.designsystem.dust.sample uid:10174
+ * package:com.google.android.gms uid:10111,1010111
+ * ```
+ *
+ * An Android that doesn't know `-U` lists no user ids, and this gives none.
+ */
+internal fun parsePackageUids(output: String): Map<String, Set<Int>> = output.lineSequence()
+  .mapNotNull { PackageUidPattern.find(it.trim()) }
+  .associate { match -> match.groupValues[1] to match.groupValues[2].split(',').mapNotNull { it.trim().toIntOrNull() }.toSet() }
+
+private val PackageUidPattern = Regex("""^package:(\S+)\s+uid:([\d,]+)""")
+
+/** The packages `pm list packages` names, `package:com.teya.storefront` a line, in its order. */
+internal fun parsePackages(output: String): List<String> = output.lineSequence()
+  .map { it.trim() }
+  .filter { it.startsWith("package:") }
+  .map { it.removePrefix("package:").substringBefore(' ') }
+  .filter { it.isNotEmpty() }
+  .distinct()
+  .toList()
+
+/** What runs on a device, from `ps -A -o UID=,NAME=`: user ids, and process names as packages. */
+internal data class RunningProcesses(val uids: Set<Int>, val packages: Set<String>)
+
+/**
+ * Reads `ps -A -o UID=,NAME=`, a process a line: `10174 com.teya.designsystem.dust.sample`. A
+ * process an app runs apart, `com.google.android.gms:persistent`, counts for its package.
+ */
+internal fun parseRunningProcesses(output: String): RunningProcesses {
+  val processes = output.lineSequence().map { it.trim().split(Whitespace, limit = 2) }.filter { it.size == 2 }.toList()
+  return RunningProcesses(
+    uids = processes.mapNotNull { it[0].toIntOrNull() }.toSet(),
+    packages = processes.map { it[1].trim().substringBefore(':') }.toSet(),
+  )
+}
+
 /** What `adb shell` runs to read a device's name, Android version, screen and serial number once, in one go. */
 internal val AndroidInfoScript: String = listOf(
   "settings get global device_name",
@@ -182,12 +222,15 @@ internal fun parseAndroidInfo(output: String): AndroidInfo {
 /** A line the device logged: when, how important, who and what. */
 internal data class LogEntry(val time: String, val level: LogLevel, val tag: String, val message: String)
 
-/** A logcat line and the process that logged it. */
-internal data class LogcatLine(val pid: Int, val entry: LogEntry)
+/** A logcat line and the process that logged it: its id, and its user id when logcat printed it. */
+internal data class LogcatLine(val pid: Int, val entry: LogEntry, val uid: Int? = null)
 
 /**
- * Reads `logcat -v threadtime` (`11-02 10:14:03.120  1234  1250 E Tag: message`) line by line.
- * A line in another format keeps the previous line's process and tag and counts as Info.
+ * Reads `logcat -v threadtime` (`11-02 10:14:03.120  1234  1250 E Tag: message`) line by line,
+ * and `-v threadtime -v uid` too, which puts the user id before the process id:
+ * `11-04 11:57:20.620 10174 12163 12183 W Parcel  : message`. A system user can show by name,
+ * `logd` or `root`, which gives no user id. A line in another format keeps the previous line's
+ * process, user and tag, and counts as Info.
  */
 internal class LogcatParser {
   private var previous: LogcatLine? = null
@@ -198,11 +241,12 @@ internal class LogcatParser {
     if (text.startsWith("--------- ")) return null
     val match = ThreadtimePattern.matchEntire(text)
     val parsed = if (match != null) {
-      val (time, pid, level, tag, message) = match.destructured
-      LogcatLine(pid.toInt(), LogEntry(time, logcatLevel(level.single()), tag.trim(), message))
+      val (time, uid, pid, level, tag) = match.destructured
+      val message = match.groupValues[6]
+      LogcatLine(pid.toInt(), LogEntry(time, logcatLevel(level.single()), tag.trim(), message), uid = uid.toIntOrNull())
     } else {
       val last = previous
-      LogcatLine(last?.pid ?: -1, LogEntry(last?.entry?.time.orEmpty(), LogLevel.Info, last?.entry?.tag.orEmpty(), text))
+      LogcatLine(last?.pid ?: -1, LogEntry(last?.entry?.time.orEmpty(), LogLevel.Info, last?.entry?.tag.orEmpty(), text), uid = last?.uid)
     }
     previous = parsed
     return parsed
@@ -219,7 +263,8 @@ internal class LogcatParser {
   }
 
   private companion object {
-    val ThreadtimePattern = Regex("""^\d\d-\d\d\s+(\d\d:\d\d:\d\d\.\d+)\s+(\d+)\s+\d+\s+([VDIWEFAS])\s+(.*?)\s*:(?: (.*))?$""")
+    /** Time, user (if printed: a number or a name), process, level, tag and message; the thread is left out. */
+    val ThreadtimePattern = Regex("""^\d\d-\d\d\s+(\d\d:\d\d:\d\d\.\d+)\s+(?:(\S+)\s+)?(\d+)\s+\d+\s+([VDIWEFAS])\s+(.*?)\s*:(?: (.*))?$""")
   }
 }
 

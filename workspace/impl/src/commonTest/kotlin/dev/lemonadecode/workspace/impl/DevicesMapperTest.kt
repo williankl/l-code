@@ -4,6 +4,7 @@ import dev.lemonadecode.domain.mobile.DeviceAvailability
 import dev.lemonadecode.domain.mobile.DeviceLogLine
 import dev.lemonadecode.domain.mobile.DeviceLogs
 import dev.lemonadecode.domain.mobile.LogLevel
+import dev.lemonadecode.domain.mobile.LogPackages
 import dev.lemonadecode.domain.update.AppInstallation
 import dev.lemonadecode.domain.update.AppVersion
 import dev.lemonadecode.domain.update.UpdateChannel
@@ -18,6 +19,10 @@ import dev.lemonadecode.workspace.strings.device_allow_debugging
 import dev.lemonadecode.workspace.strings.device_android_version
 import dev.lemonadecode.workspace.strings.device_usb
 import dev.lemonadecode.workspace.strings.device_wifi
+import dev.lemonadecode.workspace.strings.logs_apps_in_front
+import dev.lemonadecode.workspace.strings.logs_apps_loading
+import dev.lemonadecode.workspace.strings.logs_apps_none
+import dev.lemonadecode.workspace.strings.logs_apps_running
 import dev.lemonadecode.workspace.strings.logs_cleared
 import dev.lemonadecode.workspace.strings.logs_no_match
 import dev.lemonadecode.workspace.strings.logs_waiting
@@ -35,6 +40,7 @@ import dev.lemonadecode.workspace.uimodel.UpdatePhase
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -140,6 +146,35 @@ class DevicesMapperTest {
     assertEquals(errors.errorCount, errors.lines.size)
     assertEquals(2, DevicesMapper.shownErrors(logs, DevicesViewState(logFilter = LogFilter.Errors)).size)
     assertEquals(emptyList(), DevicesMapper.shownErrors(logs, DevicesViewState(logFilter = LogFilter.Warnings)))
+  }
+
+  @Test
+  fun `the choice of apps follows the app in front at first, ticks the ones picked and says which run`() {
+    val pixel = ShowcaseDevices.pixel
+    val loading = assertNotNull(DevicesMapper.logApps(pixel, DevicesViewState(), apps = null))
+    assertTrue(loading.followsAppInFront)
+    assertFalse(loading.showsAll)
+    assertEquals(Res.string.logs_apps_loading.asLemonadeCodeString(), loading.emptyText)
+
+    val picked = assertNotNull(DevicesMapper.logApps(pixel, DevicesViewState(logPackages = ShowcaseDevices.pickedApps, logAppsOpen = true), ShowcaseDevices.apps))
+    assertTrue(picked.open)
+    assertFalse(picked.followsAppInFront)
+    assertFalse(picked.showsAll)
+    assertNull(picked.emptyText)
+    assertEquals(listOf("com.teya.storefront", "com.teya.pos"), picked.apps.filter { it.ticked }.map { it.packageName })
+    assertEquals(Res.string.logs_apps_in_front.asLemonadeCodeString(), picked.apps[0].detail)
+    assertEquals(Res.string.logs_apps_running.asLemonadeCodeString(), picked.apps[1].detail)
+    assertNull(picked.apps[2].detail)
+
+    // A ticked app the device no longer lists, e.g. uninstalled, stays at the end to be unticked.
+    val gone = assertNotNull(DevicesMapper.logApps(pixel, DevicesViewState(logPackages = LogPackages.Only(setOf("com.teya.gone"))), ShowcaseDevices.apps.take(1)))
+    assertEquals(listOf("com.teya.storefront" to false, "com.teya.gone" to true), gone.apps.map { it.packageName to it.ticked })
+
+    val all = assertNotNull(DevicesMapper.logApps(pixel, DevicesViewState(logPackages = LogPackages.All), emptyList()))
+    assertTrue(all.showsAll)
+    assertEquals(Res.string.logs_apps_none.asLemonadeCodeString(), all.emptyText)
+
+    assertNull(DevicesMapper.logApps(ShowcaseDevices.iphone, DevicesViewState(), ShowcaseDevices.apps), "an iPhone's log can't be narrowed")
   }
 
   @Test

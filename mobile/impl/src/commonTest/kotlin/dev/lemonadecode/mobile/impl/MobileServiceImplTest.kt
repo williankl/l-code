@@ -2,6 +2,7 @@ package dev.lemonadecode.mobile.impl
 
 import app.cash.turbine.test
 import dev.lemonadecode.domain.mobile.CablePairing
+import dev.lemonadecode.domain.mobile.DeviceApp
 import dev.lemonadecode.domain.mobile.DeviceAvailability
 import dev.lemonadecode.domain.mobile.DeviceButton
 import dev.lemonadecode.domain.mobile.DeviceCapability
@@ -10,6 +11,7 @@ import dev.lemonadecode.domain.mobile.DeviceId
 import dev.lemonadecode.domain.mobile.DeviceLogs
 import dev.lemonadecode.domain.mobile.DeviceScreen
 import dev.lemonadecode.domain.mobile.LogLevel
+import dev.lemonadecode.domain.mobile.LogPackages
 import dev.lemonadecode.domain.mobile.MobileDevice
 import dev.lemonadecode.domain.mobile.MobileError
 import dev.lemonadecode.domain.mobile.MobilePlatform
@@ -50,6 +52,9 @@ class MobileServiceImplTest {
 
   private val pixel = DeviceId("38021FDH2000AB")
   private val logcat = "adb -s 38021FDH2000AB logcat -v threadtime -T 300"
+
+  /** Logcat with each line's user id and the longer backlog, as it's read for some apps only. */
+  private val logcatByUser = "adb -s 38021FDH2000AB logcat -v threadtime -v uid -T 2000"
 
   private fun TestScope.service(): MobileServiceImpl = MobileServiceImpl(
     settings = settings,
@@ -146,7 +151,7 @@ class MobileServiceImplTest {
     val service = service()
     runCurrent()
 
-    val android = setOf(DeviceCapability.Mirror, DeviceCapability.Touch, DeviceCapability.Keys, DeviceCapability.Rotate, DeviceCapability.Screenshot, DeviceCapability.Logs)
+    val android = setOf(DeviceCapability.Mirror, DeviceCapability.Touch, DeviceCapability.Keys, DeviceCapability.Rotate, DeviceCapability.Screenshot, DeviceCapability.Logs, DeviceCapability.LogsByApp)
     assertEquals(
       listOf(
         MobileDevice(pixel, MobilePlatform.Android, "Willian's Pixel", "15", DeviceConnection.Usb, "38021FDH2000AB", DeviceAvailability.Ready, 1080, 2400, android),
@@ -540,7 +545,8 @@ class MobileServiceImplTest {
     val latest = MutableStateFlow<DeviceLogs?>(null)
     val _ = backgroundScope.launch { service.logs(pixel).collect { latest.value = it } }
     runCurrent()
-    val lines = commands.stream(logcat)
+    // This Android lists no user ids, so the app's lines are told by its processes.
+    val lines = commands.stream("adb -s 38021FDH2000AB logcat -v threadtime -T 2000")
     repeat(1200) { lines.send("11-02 10:14:03.120  1234  1250 I Storefront: line ${it + 1}") }
     lines.send("11-02 10:14:03.121   999   999 E Other: not the app in front")
     runCurrent()
@@ -558,6 +564,167 @@ class MobileServiceImplTest {
     lines.send("11-02 10:14:05.000  1234  1250 W Storefront: after clearing")
     runCurrent()
     assertEquals(listOf(1201L to LogLevel.Warning), latest.value!!.lines.map { it.sequence to it.level })
+  }
+
+  @Test
+  fun `the picked app's lines are told by its user id, so they stay when it restarts`() = runTest {
+    answerPixel()
+    commands.answer("adb -s 38021FDH2000AB shell pm list packages -U", PackageUserIds)
+    val service = service()
+    runCurrent()
+
+    val latest = MutableStateFlow<DeviceLogs?>(null)
+    val _ = backgroundScope.launch { service.logs(pixel, LogPackages.Only(setOf(DustSample))).collect { latest.value = it } }
+    runCurrent()
+    val lines = commands.stream(logcatByUser)
+    lines.send("11-04 11:57:19.320 10174 12163 12163 I tem.dust.sample: Late-enabling -Xcheck:jni")
+    lines.send("11-04 11:57:19.400 10153  1058  1532 D EGL_emulation: app_time_stats: avg=961.14ms min=930.21ms max=992.07ms count=2")
+    lines.send("11-04 11:57:19.534  1000   509   553 I ActivityManager: Killing 12163:com.teya.designsystem.dust.sample/u0a174 (adj 0): stop")
+    lines.send("11-04 11:57:24.100 10174 12226 12226 I tem.dust.sample: started again with a new process")
+    runCurrent()
+
+    assertEquals("logcat · $DustSample", latest.value?.source)
+    assertEquals(listOf("Late-enabling -Xcheck:jni", "started again with a new process"), latest.value?.lines?.map { it.message })
+    assertEquals(0, commands.count("adb -s 38021FDH2000AB shell pidof"), "the user id is enough")
+  }
+
+  @Test
+  fun `several apps, or all of them, can be picked, and the source says which`() = runTest {
+    answerPixel()
+    commands.answer("adb -s 38021FDH2000AB shell pm list packages -U", PackageUserIds)
+    val service = service()
+    runCurrent()
+
+    service.logs(pixel, LogPackages.Only(setOf(DustSample, "com.teya.pos"))).test {
+      runCurrent()
+      commands.stream(logcatByUser).send("11-04 11:57:19.320 10174 12163 12163 I tem.dust.sample: from the sample")
+      commands.stream(logcatByUser).send("11-04 11:57:19.321 10180 13001 13001 W Pos: from the till")
+      commands.stream(logcatByUser).send("11-04 11:57:19.322 10153  1058  1532 D EGL_emulation: from the launcher")
+      runCurrent()
+      val logs = expectMostRecentItem()
+      assertEquals("logcat · 2 apps", logs.source)
+      assertEquals(listOf("from the sample", "from the till"), logs.lines.map { it.message })
+      cancelAndIgnoreRemainingEvents()
+    }
+
+    service.logs(pixel, LogPackages.All).test {
+      runCurrent()
+      val everything = "adb -s 38021FDH2000AB logcat -v threadtime -v uid -T 300"
+      commands.stream(everything).send("11-04 11:57:19.322 10153  1058  1532 D EGL_emulation: from the launcher")
+      commands.stream(everything).send("11-04 11:40:36.885  root   298   298 D Zygote  : Forked child process 9816")
+      runCurrent()
+      val logs = expectMostRecentItem()
+      assertEquals("logcat · all", logs.source)
+      assertEquals(listOf("from the launcher", "Forked child process 9816"), logs.lines.map { it.message })
+      cancelAndIgnoreRemainingEvents()
+    }
+  }
+
+  @Test
+  fun `following a device for other apps forgets the lines and reads again for those`() = runTest {
+    answerPixel()
+    commands.answer("adb -s 38021FDH2000AB shell pm list packages -U", PackageUserIds)
+    commands.answer("adb -s 38021FDH2000AB shell dumpsys activity activities", "  topResumedActivity=ActivityRecord{4197f47 u0 com.google.android.apps.nexuslauncher/.NexusLauncherActivity} t135}\n")
+    val service = service()
+    runCurrent()
+
+    val front = backgroundScope.launch { service.logs(pixel).collect {} }
+    runCurrent()
+    commands.stream(logcatByUser).send("11-04 11:57:19.322 10153  1058  1532 D EGL_emulation: from the launcher")
+    runCurrent()
+    front.cancel()
+
+    service.logs(pixel, LogPackages.Only(setOf(DustSample))).test {
+      runCurrent()
+      assertEquals(emptyList(), expectMostRecentItem().lines, "the launcher's lines are gone")
+      assertEquals(1, commands.openStreams[logcatByUser], "the launcher's reader stopped")
+      commands.stream(logcatByUser).send("11-04 11:57:24.100 10174 12226 12226 I tem.dust.sample: the sample's")
+      runCurrent()
+      assertEquals(listOf("the sample's"), expectMostRecentItem().lines.map { it.message })
+      cancelAndIgnoreRemainingEvents()
+    }
+    assertEquals(2, commands.count(logcatByUser), "logcat was started again for the sample")
+  }
+
+  @Test
+  fun `the app in front is followed by its user id, and the source names it`() = runTest {
+    answerPixel()
+    commands.answer("adb -s 38021FDH2000AB shell pm list packages -U", PackageUserIds)
+    var resumed = "com.google.android.apps.nexuslauncher/.NexusLauncherActivity"
+    commands.answer("adb -s 38021FDH2000AB shell dumpsys activity activities") { ProcessOutput(0, "  topResumedActivity=ActivityRecord{4197f47 u0 $resumed} t135}\n", "") }
+    val service = service()
+    runCurrent()
+
+    val latest = MutableStateFlow<DeviceLogs?>(null)
+    val _ = backgroundScope.launch { service.logs(pixel).collect { latest.value = it } }
+    runCurrent()
+    val lines = commands.stream(logcatByUser)
+    lines.send("11-04 11:57:19.322 10153  1058  1532 D EGL_emulation: the launcher's")
+    lines.send("11-04 11:57:19.323 10174 12163 12163 I tem.dust.sample: not in front yet")
+    runCurrent()
+    assertEquals("logcat · com.google.android.apps.nexuslauncher", latest.value?.source)
+    assertEquals(listOf("the launcher's"), latest.value?.lines?.map { it.message })
+
+    resumed = "$DustSample/.MainActivity"
+    advanceTimeBy(3.seconds)
+    runCurrent()
+    lines.send("11-04 11:57:22.000 10174 12163 12163 I tem.dust.sample: in front now")
+    runCurrent()
+    assertEquals("logcat · $DustSample", latest.value?.source)
+    assertEquals(listOf("the launcher's", "in front now"), latest.value?.lines?.map { it.message })
+  }
+
+  @Test
+  fun `without user ids, the picked apps are followed by their processes, looked at again as they restart`() = runTest {
+    answerPixel()
+    var pids = "12163\n"
+    commands.answer("adb -s 38021FDH2000AB shell pidof $DustSample") { ProcessOutput(0, pids, "") }
+    val service = service()
+    runCurrent()
+
+    val latest = MutableStateFlow<DeviceLogs?>(null)
+    val _ = backgroundScope.launch { service.logs(pixel, LogPackages.Only(setOf(DustSample, "not a package; reboot"))).collect { latest.value = it } }
+    runCurrent()
+    val lines = commands.stream("adb -s 38021FDH2000AB logcat -v threadtime -T 2000")
+    lines.send("11-04 11:57:19.320 12163 12163 I tem.dust.sample: first process")
+    pids = "12226\n"
+    advanceTimeBy(3.seconds)
+    runCurrent()
+    lines.send("11-04 11:57:19.320 12163 12163 I tem.dust.sample: an old process's late line")
+    lines.send("11-04 11:57:24.100 12226 12226 I tem.dust.sample: second process")
+    runCurrent()
+
+    assertEquals(listOf("first process", "second process"), latest.value?.lines?.map { it.message })
+    assertTrue(commands.ran.none { "reboot" in it }, "only package names reach the device's shell")
+  }
+
+  @Test
+  fun `the apps to pick from are the ones installed, the one in front first, then the running ones`() = runTest {
+    answerPixel()
+    commands.answer(
+      "adb -s 38021FDH2000AB shell pm list packages -3 -U",
+      "package:com.teya.pos uid:10180\npackage:$DustSample uid:10174\npackage:com.teya.terminal.cds.sample uid:10176\n$InfoMarker\n10174 $DustSample\n10176 com.teya.terminal.cds.sample:remote\n10153 com.google.android.apps.nexuslauncher\n",
+    )
+    commands.answer("adb -s 38021FDH2000AB shell dumpsys activity activities", "  topResumedActivity=ActivityRecord{4197f47 u0 com.google.android.apps.nexuslauncher/.NexusLauncherActivity} t135}\n")
+    val service = service()
+    runCurrent()
+
+    service.apps(pixel).test {
+      assertEquals(
+        listOf(
+          DeviceApp("com.google.android.apps.nexuslauncher", running = true, inFront = true),
+          DeviceApp(DustSample, running = true),
+          DeviceApp("com.teya.terminal.cds.sample", running = true),
+          DeviceApp("com.teya.pos"),
+        ),
+        awaitItem(),
+      )
+      cancelAndIgnoreRemainingEvents()
+    }
+    service.apps(DeviceId("00008130-001A2C3E")).test {
+      assertEquals(emptyList(), awaitItem(), "a device that isn't connected has none")
+      awaitComplete()
+    }
   }
 
   @Test
@@ -623,3 +790,9 @@ class MobileServiceImplTest {
     assertEquals(listOf("storefront(CFNetwork)" to LogLevel.Error), latest.value?.lines?.map { it.tag to it.level })
   }
 }
+
+/** A package an Android 13 emulator had installed, with its user id below. */
+private const val DustSample = "com.teya.designsystem.dust.sample"
+
+/** What `pm list packages -U` lists, as that emulator does. */
+private const val PackageUserIds = "package:com.teya.designsystem.dust.sample uid:10174\npackage:com.google.android.apps.nexuslauncher uid:10153\npackage:com.teya.pos uid:10180\n"

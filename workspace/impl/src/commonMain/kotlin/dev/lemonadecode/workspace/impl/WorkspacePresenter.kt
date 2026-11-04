@@ -18,6 +18,7 @@ import dev.lemonadecode.domain.mobile.DeviceId
 import dev.lemonadecode.domain.mobile.DeviceKey
 import dev.lemonadecode.domain.mobile.DeviceLogLine
 import dev.lemonadecode.domain.mobile.LogLevel
+import dev.lemonadecode.domain.mobile.LogPackages
 import dev.lemonadecode.domain.mobile.MobileDevice
 import dev.lemonadecode.domain.mobile.MobileError
 import dev.lemonadecode.domain.mobile.NearbyKind
@@ -123,7 +124,10 @@ public class WorkspacePresenter internal constructor(
     val devicesView = view.devices?.takeIf { settings.mobilePlugin }
     val openDevice = devicesView?.takeIf { it.step == DevicesStep.Device }?.deviceId
     val screenShown = openDevice != null && (settings.devicesLayout == DevicesLayout.SideBySide || devicesView.tab == DeviceTab.Screen)
-    val deviceLogs by remember(openDevice) { openDevice?.let(mobileService::logs) ?: flowOf(null) }.collectAsState(initial = null)
+    val logPackages = devicesView?.logPackages ?: LogPackages.AppInFront
+    val deviceLogs by remember(openDevice, logPackages) { openDevice?.let { mobileService.logs(it, logPackages) } ?: flowOf(null) }.collectAsState(initial = null)
+    val appsShown = openDevice != null && devicesView?.logAppsOpen == true
+    val deviceApps by remember(openDevice, appsShown) { if (appsShown && openDevice != null) mobileService.apps(openDevice) else flowOf(null) }.collectAsState(initial = null)
     val deviceScreen by remember(openDevice, screenShown) { if (screenShown && openDevice != null) mobileService.screen(openDevice) else flowOf(null) }.collectAsState(initial = null)
     val nearbyPlatform = devicesView?.takeIf { it.step == DevicesStep.PairMethod || it.step == DevicesStep.PairNearby }?.pairPlatform
     val nearby by remember(nearbyPlatform) { nearbyPlatform?.let(mobileService::nearby) ?: flowOf(emptyList()) }.collectAsState(initial = emptyList())
@@ -315,6 +319,8 @@ public class WorkspacePresenter internal constructor(
               logQuery = "",
               pausedAt = null,
               logsCleared = false,
+              logPackages = LogPackages.AppInFront,
+              logAppsOpen = false,
             )
           }
           is WorkspaceEvent.SetDeviceTab -> updateDevices { it.copy(tab = event.tab) }
@@ -374,6 +380,14 @@ public class WorkspacePresenter internal constructor(
                 is LemonadeCodeResult.Failure -> fail(ErrorMessages.of(pasted.error))
               }
             }
+          }
+          WorkspaceEvent.ToggleLogApps -> updateDevices { it.copy(logAppsOpen = !it.logAppsOpen) }
+          WorkspaceEvent.DismissLogApps -> updateDevices { it.copy(logAppsOpen = false) }
+          WorkspaceEvent.FollowAppInFront -> updateDevices { it.showingLogsOf(LogPackages.AppInFront).copy(logAppsOpen = false) }
+          WorkspaceEvent.ShowAllApps -> updateDevices { it.showingLogsOf(LogPackages.All).copy(logAppsOpen = false) }
+          is WorkspaceEvent.ToggleLogApp -> updateDevices { panel ->
+            val ticked = (panel.logPackages as? LogPackages.Only)?.packages.orEmpty()
+            panel.showingLogsOf(LogPackages.Only(if (event.packageName in ticked) ticked - event.packageName else ticked + event.packageName))
           }
           WorkspaceEvent.StartPairing -> updateDevices { DevicesViewState(step = DevicesStep.PairPlatform, attempt = it.attempt) }
           is WorkspaceEvent.ChoosePairingPlatform -> updateDevices { it.copy(step = DevicesStep.PairMethod, pairPlatform = event.platform.toDomain(), pairError = null) }
@@ -575,6 +589,7 @@ public class WorkspacePresenter internal constructor(
         tools = mobileTools,
         devices = mobileDevices,
         logs = deviceLogs,
+        apps = deviceApps,
         screen = deviceScreen,
         nearby = nearby,
         qr = qrPairing,
@@ -663,6 +678,9 @@ private fun WorkspaceViewState.closingPopovers(): WorkspaceViewState = copy(
   worktreeBranch = null,
   takenBranch = null,
 )
+
+/** The log showing [packages]' lines; a new choice starts it over, so it's live and not cleared by hand. */
+private fun DevicesViewState.showingLogsOf(packages: LogPackages): DevicesViewState = if (packages == logPackages) this else copy(logPackages = packages, pausedAt = null, logsCleared = false)
 
 /** Where a pairing or connection leaves the panel: on the device it added, or back with what went wrong. */
 private fun DevicesViewState.afterPairing(result: LemonadeCodeResult<MobileDevice, MobileError>): DevicesViewState = when (result) {

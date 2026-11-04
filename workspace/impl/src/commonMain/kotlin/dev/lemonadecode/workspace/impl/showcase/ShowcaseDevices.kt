@@ -1,5 +1,6 @@
 package dev.lemonadecode.workspace.impl.showcase
 
+import dev.lemonadecode.domain.mobile.DeviceApp
 import dev.lemonadecode.domain.mobile.DeviceCapability
 import dev.lemonadecode.domain.mobile.DeviceConnection
 import dev.lemonadecode.domain.mobile.DeviceId
@@ -7,6 +8,7 @@ import dev.lemonadecode.domain.mobile.DeviceLogLine
 import dev.lemonadecode.domain.mobile.DeviceLogs
 import dev.lemonadecode.domain.mobile.DeviceScreen
 import dev.lemonadecode.domain.mobile.LogLevel
+import dev.lemonadecode.domain.mobile.LogPackages
 import dev.lemonadecode.domain.mobile.MobileDevice
 import dev.lemonadecode.domain.mobile.MobilePlatform
 import dev.lemonadecode.domain.mobile.MobileTools
@@ -25,7 +27,15 @@ import org.jetbrains.skia.Surface
 
 /** The devices, logs and phone screen the Devices screens of the design show. */
 internal object ShowcaseDevices {
-  private val android = setOf(DeviceCapability.Mirror, DeviceCapability.Touch, DeviceCapability.Keys, DeviceCapability.Rotate, DeviceCapability.Screenshot, DeviceCapability.Logs)
+  private val android = setOf(
+    DeviceCapability.Mirror,
+    DeviceCapability.Touch,
+    DeviceCapability.Keys,
+    DeviceCapability.Rotate,
+    DeviceCapability.Screenshot,
+    DeviceCapability.Logs,
+    DeviceCapability.LogsByApp,
+  )
   private val iosUsb = setOf(DeviceCapability.Mirror, DeviceCapability.Screenshot, DeviceCapability.Logs)
 
   val tools = MobileTools(adb = "/usr/bin/adb", libimobiledevice = "/usr/bin")
@@ -70,6 +80,20 @@ internal object ShowcaseDevices {
       line(11, LogLevel.Debug, "OkHttp", "<-- 200 OK /api/cart/checkout (171 ms)"),
     ),
   )
+
+  /** The Pixel's apps to show the logs of: the store in front, the till running, and the rest. */
+  val apps = listOf(
+    DeviceApp("com.teya.storefront", running = true, inFront = true),
+    DeviceApp("com.teya.pos", running = true),
+    DeviceApp("com.teya.designsystem.sample"),
+    DeviceApp("com.teya.kitchen"),
+    DeviceApp("com.teya.loyalty"),
+    DeviceApp("com.teya.storefront.dev"),
+    DeviceApp("com.teya.terminal.sample"),
+  )
+
+  /** The store and the till, picked from [apps]. */
+  val pickedApps = LogPackages.Only(setOf("com.teya.storefront", "com.teya.pos"))
 
   val iosLogs = DeviceLogs(
     source = "idevicesyslog · all processes",

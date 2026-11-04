@@ -16,6 +16,7 @@ import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertWidthIsEqualTo
+import androidx.compose.ui.test.click
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasScrollToIndexAction
 import androidx.compose.ui.test.hasSetTextAction
@@ -228,6 +229,57 @@ class WorkspaceContentUiTest {
     expect(WorkspaceEvent.TogglePreview) { onNodeWithText("Preview").performClick() }
     expect(WorkspaceEvent.SendToNewSubSession) { onNodeWithText("New sub-session").performClick() }
     expect(WorkspaceEvent.SendToSession) { onNodeWithText("Paste into terminal").performClick() }
+  }
+
+  @Test
+  fun `a file's path in its header can be selected and copied without folding the file`() {
+    val clipboard = FakeClipboard()
+    show(WorkspaceShowcase.CommentOnDiff, edit = { it }, clipboard = clipboard) {
+      events.clear()
+      selectAcross(rateLimit)
+      assertEquals(emptyList(), events, "a drag over the path selects it and does nothing else")
+      onAllNodes(isRoot())[0].performKeyInput { withKeyDown(CopyKey) { pressKey(Key.C) } }
+      waitForIdle()
+      assertEquals(rateLimit, clipboard.text)
+    }
+  }
+
+  @Test
+  fun `with its path selected, a file's header still folds and opens in full on a click`() = show(WorkspaceShowcase.CommentOnDiff, edit = { it }) {
+    selectAcross(rateLimit)
+    expect(WorkspaceEvent.ToggleFileExpanded(rateLimit)) { onAllNodesWithContentDescription("Collapse file")[0].performClick() }
+    // A click on the path itself, without a drag, still does nothing.
+    events.clear()
+    onNodeWithText(rateLimit).performMouseInput { click(center) }
+    waitForIdle()
+    assertEquals(emptyList(), events)
+    onNode(hasScrollToIndexAction()).performScrollToNode(hasText(app))
+    selectAcross(app)
+    expect(WorkspaceEvent.ToggleFullFile(app)) { onNodeWithText("Full file").performClick() }
+  }
+
+  @Test
+  fun `a file's copy button names itself and puts the path on the clipboard`() {
+    val clipboard = FakeClipboard()
+    show(WorkspaceShowcase.CommentOnDiff, edit = { it }, clipboard = clipboard) {
+      val copy = onAllNodesWithContentDescription("Copy path")[0]
+      copy.performMouseInput { moveTo(center) }
+      waitForIdle()
+      onNodeWithText("Copy path").assertExists()
+      expect(WorkspaceEvent.CopiedFilePath(rateLimit)) { copy.performClick() }
+      assertEquals(rateLimit, clipboard.text)
+    }
+  }
+
+  /** Drags the mouse from the first letter of [text] to past its last, as a person selecting it. */
+  private fun DesktopComposeUiTest.selectAcross(text: String) {
+    onNodeWithText(text).performMouseInput {
+      moveTo(Offset(1f, centerY))
+      press()
+      moveTo(centerRight + Offset(20f, 0f), delayMillis = 50)
+      release()
+    }
+    waitForIdle()
   }
 
   @Test
@@ -636,6 +688,9 @@ class WorkspaceContentUiTest {
     override val nativeClipboard: java.awt.datatransfer.Clipboard = java.awt.datatransfer.Clipboard("test")
   }
 }
+
+/** The key Compose copies a selection with: ⌘ on macOS, Ctrl elsewhere. */
+private val CopyKey = if (System.getProperty("os.name").orEmpty().startsWith("Mac")) Key.MetaLeft else Key.CtrlLeft
 
 /** The serials of the showcase's devices, as the panel raises them. */
 private object ShowcaseDevicesIds {

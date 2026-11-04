@@ -155,6 +155,9 @@ public sealed interface WorkspaceEvent {
   public data class ToggleFullFile(val fileId: String) : WorkspaceEvent
   public data class ShowFullFile(val fileId: String) : WorkspaceEvent
 
+  /** A changed file's path is on the clipboard: confirms it with a toast. */
+  public data class CopiedFilePath(val path: String) : WorkspaceEvent
+
   /** Switches a file between its text diff and its rendered preview. */
   public data class ToggleFilePreview(val fileId: String) : WorkspaceEvent
 

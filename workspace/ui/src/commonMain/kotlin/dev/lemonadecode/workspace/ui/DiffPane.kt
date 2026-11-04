@@ -19,6 +19,7 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -32,6 +33,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -85,6 +87,7 @@ import dev.lemonadecode.workspace.strings.diff_vs
 import dev.lemonadecode.workspace.strings.file_added
 import dev.lemonadecode.workspace.strings.file_collapse
 import dev.lemonadecode.workspace.strings.file_comment_count
+import dev.lemonadecode.workspace.strings.file_copy_path
 import dev.lemonadecode.workspace.strings.file_deleted
 import dev.lemonadecode.workspace.strings.file_expand
 import dev.lemonadecode.workspace.strings.file_full
@@ -378,7 +381,11 @@ private val BasePickerWidth = 340.dp
 private val BasePickerMaxHeight = 300.dp
 private val FileListWidth = 248.dp
 
-/** The changed files beside the diff; the one in view is lit, and picking one scrolls the diff to it. */
+/**
+ * The changed files beside the diff; the one in view is lit, and picking one scrolls the diff to it.
+ * The names aren't selectable here, since a drag to select would take the press that picks the
+ * file; the path in each file's header can be selected and copied instead.
+ */
 @Composable
 private fun ChangedFiles(
   files: List<DiffFileModel>,
@@ -483,16 +490,21 @@ private fun DiffFileHeader(
       shape = SymbolContainerShape.Rounded,
       modifier = Modifier.semantics { contentDescription = changeName },
     )
-    LemonadeUi.Text(
-      text = buildAnnotatedString {
-        withStyle(SpanStyle(color = colors.content.contentSecondary)) { append(file.directory) }
-        withStyle(SpanStyle(color = colors.content.contentPrimary, fontWeight = FontWeight.SemiBold)) {
-          append(file.fileName)
-        }
-      },
-      textStyle = LemonadeTheme.typography.bodySmallRegular,
-      maxLines = 1,
-    )
+    // Only the path can be selected: a drag over it selects text and ⌘C (Ctrl+C) copies it,
+    // while the header's buttons and chips still answer only to their own clicks.
+    SelectionContainer {
+      LemonadeUi.Text(
+        text = buildAnnotatedString {
+          withStyle(SpanStyle(color = colors.content.contentSecondary)) { append(file.directory) }
+          withStyle(SpanStyle(color = colors.content.contentPrimary, fontWeight = FontWeight.SemiBold)) {
+            append(file.fileName)
+          }
+        },
+        textStyle = LemonadeTheme.typography.bodySmallRegular,
+        maxLines = 1,
+      )
+    }
+    CopyPathButton(path = file.path, onEvent = onEvent)
     LemonadeUi.Tag(label = file.language, voice = TagVoice.Neutral)
     if (file.commentCount > 0) {
       val commentCountLabel = pluralStringResource(Res.plurals.file_comment_count, file.commentCount, file.commentCount)
@@ -535,5 +547,31 @@ private fun DiffFileHeader(
         onChipClicked = { onEvent(WorkspaceEvent.ToggleFullFile(file.id)) },
       )
     }
+  }
+}
+
+/** Puts a file's path on the clipboard, as Copy folder path does for a session, and says so. */
+@Composable
+private fun CopyPathButton(
+  path: String,
+  onEvent: (WorkspaceEvent) -> Unit,
+) {
+  val clipboard = LocalClipboard.current
+  val scope = rememberCoroutineScope()
+  val label = stringResource(Res.string.file_copy_path)
+  HoverTooltip(text = label, placement = TooltipPlacement.BelowStart) {
+    LemonadeUi.IconButton(
+      icon = LemonadeIcons.Copy,
+      contentDescription = label,
+      onClick = {
+        scope.launch {
+          val _ = runCatching { clipboard.setClipEntry(plainTextClipEntry(path)) }
+          onEvent(WorkspaceEvent.CopiedFilePath(path))
+        }
+      },
+      variant = LemonadeButtonVariant.Neutral,
+      type = LemonadeButtonType.Ghost,
+      size = LemonadeButtonSize.XSmall,
+    )
   }
 }

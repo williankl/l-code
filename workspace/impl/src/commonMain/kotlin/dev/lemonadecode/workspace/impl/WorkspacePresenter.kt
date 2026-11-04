@@ -53,6 +53,7 @@ import dev.lemonadecode.workspace.impl.WorkspaceModelMapper.toDomain
 import dev.lemonadecode.workspace.impl.WorkspaceModelMapper.toPreference
 import dev.lemonadecode.workspace.strings.Res
 import dev.lemonadecode.workspace.strings.devices_disconnected
+import dev.lemonadecode.workspace.strings.file_path_copied
 import dev.lemonadecode.workspace.strings.logs_errors_sent
 import dev.lemonadecode.workspace.strings.screenshot_attached
 import dev.lemonadecode.workspace.strings.screenshot_failed
@@ -490,6 +491,7 @@ public class WorkspacePresenter internal constructor(
             it.copy(fullFiles = full, fileExpansion = it.fileExpansion + (event.fileId to true))
           }
           is WorkspaceEvent.ShowFullFile -> update { it.copy(fullFiles = it.fullFiles + event.fileId) }
+          is WorkspaceEvent.CopiedFilePath -> showToast(Res.string.file_path_copied.asLemonadeCodeString(event.path))
 
           is WorkspaceEvent.StartCommentRange -> update { it.copy(dragging = LineRange(event.fileId, event.lineIndex, event.lineIndex)) }
           is WorkspaceEvent.DragCommentRange -> update { state ->

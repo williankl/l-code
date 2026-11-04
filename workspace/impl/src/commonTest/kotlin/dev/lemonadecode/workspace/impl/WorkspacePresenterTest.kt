@@ -26,6 +26,7 @@ import dev.lemonadecode.updates.fake.FakeUpdateService
 import dev.lemonadecode.workspace.impl.showcase.ShowcaseDevices
 import dev.lemonadecode.workspace.impl.showcase.ShowcaseFixtures
 import dev.lemonadecode.workspace.strings.Res
+import dev.lemonadecode.workspace.strings.file_path_copied
 import dev.lemonadecode.workspace.strings.session_path_copied
 import dev.lemonadecode.workspace.strings.time_hours_ago
 import dev.lemonadecode.workspace.strings.update_failed_checksum
@@ -690,6 +691,20 @@ class WorkspacePresenterTest {
       val copied = awaitItemWhere { it.toast != null }
       assertEquals(null, copied.sessions.menu)
       assertEquals(Res.string.session_path_copied.asLemonadeCodeString(ShowcaseFixtures.Repo), copied.toast)
+      awaitItemWhere { it.toast == null }
+    }
+  }
+
+  @Test
+  fun `copying a file's path from the diff confirms with a toast for a moment`() = runTest {
+    withSession()
+    val path = ShowcaseFixtures.path("rl")
+    presenter.test {
+      awaitItem().eventSink(WorkspaceEvent.SelectView(WorkspaceView.Diff))
+      awaitItemWhere { it.content is WorkspaceContentModel.Diff }.eventSink(WorkspaceEvent.CopiedFilePath(path))
+      val copied = awaitItemWhere { it.toast != null }
+      assertEquals(Res.string.file_path_copied.asLemonadeCodeString(path), copied.toast)
+      assertIs<WorkspaceContentModel.Diff>(copied.content)
       awaitItemWhere { it.toast == null }
     }
   }

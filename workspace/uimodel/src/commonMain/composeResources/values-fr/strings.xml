@@ -334,6 +334,8 @@
   <string name="logs_filter">Filtrer les lignes</string>
   <string name="logs_filter_placeholder">Filtrer par tag ou texte</string>
   <string name="logs_clear">Effacer les journaux</string>
+  <string name="logs_copy">Copier les lignes affichées</string>
+  <string name="logs_copied">Copié</string>
   <string name="logs_live">En direct</string>
   <string name="logs_paused">En pause</string>
   <string name="logs_pause">Mettre le flux en pause</string>

@@ -224,6 +224,7 @@ public data class MirrorControlsModel(
   val touch: Boolean = false,
 )
 
+/** Which lines a device's log shows: every line, only warnings, or only errors (fatal ones included). */
 public enum class LogFilter { All, Warnings, Errors }
 
 public enum class LogLevelModel(public val letter: String) {
@@ -238,7 +239,7 @@ public enum class LogLevelModel(public val letter: String) {
 @Immutable
 public data class DeviceLogsModel(
   val filter: LogFilter,
-  /** Warnings and errors among the lines the search keeps. */
+  /** How many lines Warnings and Errors would show: warnings, and errors with fatal ones, among the lines the search keeps. */
   val warningCount: Int,
   val errorCount: Int,
   val searchOpen: Boolean,

@@ -1,7 +1,9 @@
 package dev.lemonadecode.workspace.impl
 
 import dev.lemonadecode.domain.mobile.DeviceAvailability
+import dev.lemonadecode.domain.mobile.DeviceLogLine
 import dev.lemonadecode.domain.mobile.DeviceLogs
+import dev.lemonadecode.domain.mobile.LogLevel
 import dev.lemonadecode.domain.update.AppInstallation
 import dev.lemonadecode.domain.update.AppVersion
 import dev.lemonadecode.domain.update.UpdateChannel
@@ -28,6 +30,7 @@ import dev.lemonadecode.workspace.strings.updates_development
 import dev.lemonadecode.workspace.strings.updates_not_checked
 import dev.lemonadecode.workspace.uimodel.LanguageOption
 import dev.lemonadecode.workspace.uimodel.LogFilter
+import dev.lemonadecode.workspace.uimodel.LogLevelModel
 import dev.lemonadecode.workspace.uimodel.UpdatePhase
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -93,8 +96,13 @@ class DevicesMapperTest {
     val logs = ShowcaseDevices.androidLogs
     val all = DevicesMapper.logs(logs, DevicesViewState(), "claude")
     assertEquals(9, all.lines.size)
-    assertEquals(4, all.warningCount)
+    assertEquals(2, all.warningCount)
     assertEquals(2, all.errorCount)
+
+    val warnings = DevicesMapper.logs(logs, DevicesViewState(logFilter = LogFilter.Warnings), "claude")
+    assertEquals(listOf("RateLimiter", "Choreographer"), warnings.lines.map { it.tag })
+    assertEquals(setOf(LogLevelModel.Warning), warnings.lines.map { it.level }.toSet())
+    assertNull(warnings.sendErrorsLabel, "no error is shown, so there are none to send")
 
     val errors = DevicesMapper.logs(logs, DevicesViewState(logFilter = LogFilter.Errors), "claude")
     assertEquals(listOf("RateLimiter", "CheckoutViewModel"), errors.lines.map { it.tag })
@@ -110,6 +118,28 @@ class DevicesMapperTest {
 
     val none = DevicesMapper.logs(logs, DevicesViewState(logQuery = "nothing like it"), "claude")
     assertEquals(Res.string.logs_no_match.asLemonadeCodeString(), none.emptyText)
+  }
+
+  @Test
+  fun `warnings show warnings alone, and errors show fatal lines too, as their counts say`() {
+    fun line(sequence: Long, level: LogLevel) = DeviceLogLine(sequence, "10:14:03.120", level, "Tag", "message $sequence")
+    val levels = listOf(LogLevel.Verbose, LogLevel.Debug, LogLevel.Info, LogLevel.Warning, LogLevel.Error, LogLevel.Fatal)
+    val logs = DeviceLogs(source = "logcat", lines = levels.mapIndexed { index, level -> line(index.toLong(), level) })
+
+    val all = DevicesMapper.logs(logs, DevicesViewState(), "claude")
+    assertEquals(6, all.lines.size)
+    assertEquals(1, all.warningCount)
+    assertEquals(2, all.errorCount)
+
+    val warnings = DevicesMapper.logs(logs, DevicesViewState(logFilter = LogFilter.Warnings), "claude")
+    assertEquals(listOf(LogLevelModel.Warning), warnings.lines.map { it.level })
+    assertEquals(warnings.warningCount, warnings.lines.size)
+
+    val errors = DevicesMapper.logs(logs, DevicesViewState(logFilter = LogFilter.Errors), "claude")
+    assertEquals(listOf(LogLevelModel.Error, LogLevelModel.Fatal), errors.lines.map { it.level })
+    assertEquals(errors.errorCount, errors.lines.size)
+    assertEquals(2, DevicesMapper.shownErrors(logs, DevicesViewState(logFilter = LogFilter.Errors)).size)
+    assertEquals(emptyList(), DevicesMapper.shownErrors(logs, DevicesViewState(logFilter = LogFilter.Warnings)))
   }
 
   @Test

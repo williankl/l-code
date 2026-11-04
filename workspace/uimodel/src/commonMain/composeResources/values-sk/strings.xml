@@ -352,6 +352,8 @@
   <string name="logs_filter">Filtrovať riadky</string>
   <string name="logs_filter_placeholder">Filtrovať podľa značky alebo textu</string>
   <string name="logs_clear">Vymazať logy</string>
+  <string name="logs_copy">Kopírovať zobrazené riadky</string>
+  <string name="logs_copied">Skopírované</string>
   <string name="logs_live">Naživo</string>
   <string name="logs_paused">Pozastavené</string>
   <string name="logs_pause">Pozastaviť stream</string>

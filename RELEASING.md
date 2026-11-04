@@ -60,7 +60,6 @@ variables live in Settings → Secrets and variables → Actions.
 
 - Make the repository public. Homebrew and users download the builds from the release, and a
   private repository's release files need a login.
-- Add a LICENSE file, then fill in `license:` in `snap/snapcraft.yaml`.
 
 ### macOS signing (needed for Homebrew)
 

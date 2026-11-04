@@ -219,4 +219,19 @@ class WorkspaceFlowUiTest {
       assertEquals(listOf(SessionId("cf")), sessions.closed)
     }
   }
+
+  @Test
+  fun `a session's right-click menu closes it too, and goes with it`() {
+    sessions.setSessions(listOf(ShowcaseFixtures.session("ar", "api-ratelimit"), ShowcaseFixtures.session("cf", "checkout-flake")))
+    flow {
+      onNodeWithText("checkout-flake").performMouseInput { rightClick(center) }
+      waitFor(hasText("Close session"))
+      onNodeWithText("Close session").performClick()
+      // The row and the menu's header, which names it, both go.
+      waitUntil(timeoutMillis = 5_000) { onAllNodes(hasText("checkout-flake")).fetchSemanticsNodes().isEmpty() }
+      onNodeWithText("Close session").assertDoesNotExist()
+      waitFor(hasText("api-ratelimit"))
+      assertEquals(listOf(SessionId("cf")), sessions.closed)
+    }
+  }
 }

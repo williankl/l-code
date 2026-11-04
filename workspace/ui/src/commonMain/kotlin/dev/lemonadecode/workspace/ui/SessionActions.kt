@@ -220,6 +220,14 @@ private fun SessionMenuItems(
       onClick = { onEvent(WorkspaceEvent.StartNamingWorktree(id)) },
     )
   }
+  // Last, and apart: like a middle click, it ends the session and its sub-sessions.
+  ContextMenuDivider()
+  ContextMenuItem(
+    label = stringResource(Res.string.session_close),
+    icon = LemonadeIcons.Trash,
+    critical = true,
+    onClick = { onEvent(WorkspaceEvent.CloseSession(id)) },
+  )
 }
 
 /** Text on the clipboard as plain text. */

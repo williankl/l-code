@@ -488,6 +488,27 @@ class WorkspaceContentUiTest {
       expect(WorkspaceEvent.StartRenamingSession("d3")) { onNodeWithText("Rename").performClick() }
       expect(WorkspaceEvent.CopiedSessionPath(ShowcaseFixtures.Repo)) { onNodeWithText("Copy folder path").performClick() }
       assertEquals(ShowcaseFixtures.Repo, clipboard.text)
+      expect(WorkspaceEvent.CloseSession("d3")) { onNodeWithText("Close session").performClick() }
+    }
+  }
+
+  @Test
+  fun `the session menu closes the session, like a middle click, even with no sub-session to offer`() {
+    val menu = SessionMenuModel(
+      sessionId = "cf",
+      title = "checkout-flake",
+      location = "~/scratch",
+      folderPath = "/tmp",
+      canStartSubSession = false,
+      branch = null,
+      worktreeAvailable = false,
+    )
+    show(WorkspaceShowcase.SessionTree, edit = { it.copy(sessions = it.sessions.copy(menu = menu)) }) {
+      onNodeWithText("New sub-session in current worktree").assertDoesNotExist()
+      events.clear()
+      onNodeWithText("Close session").performClick()
+      waitForIdle()
+      assertEquals(listOf<WorkspaceEvent>(WorkspaceEvent.CloseSession("cf")), events)
     }
   }
 

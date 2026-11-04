@@ -55,8 +55,8 @@ drawer, and a dot on the toggle tells you when one of them needs input.
 </tr>
 </table>
 
-**Right-click a session** to rename it, copy its folder path, or start a sub-session from it.
-Middle-click closes it. **⌘W** closes the selected session and its sub-sessions.
+**Right-click a session** to rename it, copy its folder path, start a sub-session from it, or close
+it. Middle-click closes it too. **⌘W** closes the selected session and its sub-sessions.
 
 <img src="images/session-menu.png" width="100%" alt="The right-click menu of a session, naming it and its folder">
 
@@ -296,7 +296,7 @@ With the mouse:
 
 | Action | Does |
 |---|---|
-| Right-click a session | Rename, copy folder path, start a sub-session |
+| Right-click a session | Rename, copy folder path, start a sub-session, close |
 | Middle-click a session | Close it |
 | Click **+** beside a line | Comment on that line |
 | Drag across lines | Comment on a range |

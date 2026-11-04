@@ -158,6 +158,29 @@
   <string name="session_path_copied">Copiado: %1$s</string>
   <string name="session_close">Cerrar sesión</string>
 
+  <!-- Closing a session that leaves worktrees no other session uses -->
+  <string name="close_session_title">¿Cerrar %1$s?</string>
+  <string name="close_session_sub_session">Su subsesión se cierra con ella.</string>
+  <string name="close_session_sub_sessions">Sus subsesiones se cierran con ella.</string>
+  <string name="close_session_worktree">Ninguna otra sesión usa este worktree. ¿Eliminarlo también?</string>
+  <string name="close_session_worktrees">Ninguna otra sesión usa estos worktrees. ¿Eliminarlos también?</string>
+  <string name="close_session_detached">HEAD desacoplado</string>
+  <string name="close_session_changes">Tiene cambios sin confirmar que se perderán</string>
+  <string name="close_session_branch_stays">Solo se elimina la carpeta. La rama %1$s se queda.</string>
+  <string name="close_session_folder_goes">Solo se elimina la carpeta.</string>
+  <string name="close_session_branches_stay">Solo se eliminan las carpetas. Sus ramas se quedan.</string>
+  <string name="close_session_delete_worktree">Cerrar y eliminar el worktree</string>
+  <string name="close_session_delete_worktrees">Cerrar y eliminar los worktrees</string>
+  <string name="close_session_keep_worktree">Cerrar y conservar el worktree</string>
+  <string name="close_session_keep_worktrees">Cerrar y conservar los worktrees</string>
+  <string name="worktree_deleted">Worktree %1$s eliminado</string>
+  <plurals name="worktrees_deleted">
+    <item quantity="one">%1$d worktree eliminado</item>
+    <item quantity="many">%1$d worktrees eliminados</item>
+    <item quantity="other">%1$d worktrees eliminados</item>
+  </plurals>
+  <string name="error_worktree_delete">No se pudo eliminar el worktree %1$s: %2$s</string>
+
   <!-- New session -->
   <string name="action_new_terminal">Nuevo terminal</string>
   <string name="no_sessions_title">Aún no hay sesiones</string>

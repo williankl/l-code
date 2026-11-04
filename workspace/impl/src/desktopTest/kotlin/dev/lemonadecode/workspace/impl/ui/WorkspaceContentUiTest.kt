@@ -25,9 +25,11 @@ import androidx.compose.ui.test.assertWidthIsEqualTo
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
+import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasScrollToIndexAction
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.onAllNodesWithContentDescription
@@ -57,6 +59,8 @@ import dev.lemonadecode.workspace.strings.update_failed_download
 import dev.lemonadecode.workspace.strings.worktree_branch_invalid
 import dev.lemonadecode.workspace.ui.TerminalTranscript
 import dev.lemonadecode.workspace.ui.WorkspaceContent
+import dev.lemonadecode.workspace.uimodel.CloseSessionDialogModel
+import dev.lemonadecode.workspace.uimodel.ClosingWorktreeModel
 import dev.lemonadecode.workspace.uimodel.DeviceScreenModel
 import dev.lemonadecode.workspace.uimodel.DeviceTab
 import dev.lemonadecode.workspace.uimodel.DevicesContentModel
@@ -822,6 +826,46 @@ class WorkspaceContentUiTest {
       onNodeWithText("Close session").performClick()
       waitForIdle()
       assertEquals(listOf<WorkspaceEvent>(WorkspaceEvent.CloseSession("cf")), events)
+    }
+  }
+
+  @Test
+  fun `the close dialog names the session and its worktree, warns of lost changes and raises each answer`() = show(WorkspaceShowcase.ClosingWorktree) {
+    val inDialog = hasAnyAncestor(isDialog())
+    // It takes the keys from whatever had them behind it, like the terminal.
+    onNode(isDialog()).assertIsFocused()
+    onNode(hasText("Close sub-2?") and inDialog).assertExists()
+    onNode(hasText("No other session uses this worktree. Delete it too?") and inDialog).assertExists()
+    onNode(hasText("~/code/storefront.worktrees/sub-2") and inDialog).assertExists()
+    onNode(hasText("feat/rate-limit-sub-2") and inDialog).assertExists()
+    onNode(hasText("Has uncommitted changes that will be lost") and inDialog).assertExists()
+    onNode(hasText("Only the folder is deleted. The branch feat/rate-limit-sub-2 stays.") and inDialog).assertExists()
+
+    expect(WorkspaceEvent.ConfirmCloseSession(deleteWorktrees = true)) { onNodeWithText("Close and delete worktree").performClick() }
+    expect(WorkspaceEvent.ConfirmCloseSession(deleteWorktrees = false)) { onNodeWithText("Close, keep worktree").performClick() }
+    expect(WorkspaceEvent.CancelCloseSession) { onNodeWithText("Cancel").performClick() }
+    expect(WorkspaceEvent.CancelCloseSession) { onNode(isDialog()).performKeyInput { pressKey(Key.Escape) } }
+  }
+
+  @Test
+  fun `closing a session with sub-sessions in clean worktrees asks about them all`() {
+    val dialog = CloseSessionDialogModel(
+      sessionName = "api-ratelimit",
+      subSessionCount = 2,
+      worktrees = listOf(
+        ClosingWorktreeModel(path = "~/code/storefront.worktrees/sub-2", branch = "feat/rate-limit-sub-2", hasChanges = false),
+        ClosingWorktreeModel(path = "~/code/storefront/.claude/worktrees/agent-7", branch = null, hasChanges = false),
+      ),
+    )
+    show(WorkspaceShowcase.AfterCreatingBoth, edit = { it.copy(closeSession = dialog) }) {
+      onNodeWithText("Close api-ratelimit?").assertExists()
+      onNodeWithText("Its sub-sessions close with it. No other session uses these worktrees. Delete them too?").assertExists()
+      onNodeWithText("~/code/storefront/.claude/worktrees/agent-7").assertExists()
+      onNodeWithText("detached HEAD").assertExists()
+      onNodeWithText("Has uncommitted changes that will be lost").assertDoesNotExist()
+      onNodeWithText("Only the folders are deleted. Their branches stay.").assertExists()
+      expect(WorkspaceEvent.ConfirmCloseSession(deleteWorktrees = true)) { onNodeWithText("Close and delete worktrees").performClick() }
+      expect(WorkspaceEvent.ConfirmCloseSession(deleteWorktrees = false)) { onNodeWithText("Close, keep worktrees").performClick() }
     }
   }
 

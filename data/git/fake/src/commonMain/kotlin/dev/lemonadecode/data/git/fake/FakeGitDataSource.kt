@@ -5,6 +5,7 @@ import dev.lemonadecode.data.git.GitBranchTip
 import dev.lemonadecode.data.git.GitCheckout
 import dev.lemonadecode.data.git.GitDataSource
 import dev.lemonadecode.data.git.GitError
+import dev.lemonadecode.data.git.GitWorktree
 import dev.lemonadecode.platform.core.LemonadeCodeResult
 
 /** Configurable [GitDataSource]: set the results, read the calls. */
@@ -26,10 +27,17 @@ public class FakeGitDataSource : GitDataSource {
   public var workingFiles: Map<String, ByteArray> = emptyMap()
   public var addWorktreeResult: LemonadeCodeResult<Unit, GitError> = LemonadeCodeResult.success(Unit)
 
+  /** Linked worktrees by the folder asked about; any other folder is in a main checkout. */
+  public var linkedWorktrees: Map<String, GitWorktree> = emptyMap()
+  public var removeWorktreeResult: LemonadeCodeResult<Unit, GitError> = LemonadeCodeResult.success(Unit)
+
   public val diffCalls: MutableList<Pair<String, String>> = mutableListOf()
   public val worktreeCalls: MutableList<WorktreeCall> = mutableListOf()
+  public val removeWorktreeCalls: MutableList<RemoveWorktreeCall> = mutableListOf()
 
   public data class WorktreeCall(val root: String, val path: String, val branch: String, val startPoint: String)
+
+  public data class RemoveWorktreeCall(val root: String, val path: String, val force: Boolean)
 
   override suspend fun checkout(directory: String): LemonadeCodeResult<GitCheckout, GitError> = checkoutResult
 
@@ -75,5 +83,16 @@ public class FakeGitDataSource : GitDataSource {
   ): LemonadeCodeResult<Unit, GitError> {
     worktreeCalls += WorktreeCall(repositoryRoot, path, branch, startPoint)
     return addWorktreeResult
+  }
+
+  override suspend fun linkedWorktree(directory: String): LemonadeCodeResult<GitWorktree?, GitError> = LemonadeCodeResult.success(linkedWorktrees[directory])
+
+  override suspend fun removeWorktree(
+    repositoryRoot: String,
+    path: String,
+    force: Boolean,
+  ): LemonadeCodeResult<Unit, GitError> {
+    removeWorktreeCalls += RemoveWorktreeCall(repositoryRoot, path, force)
+    return removeWorktreeResult
   }
 }

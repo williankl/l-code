@@ -1,5 +1,6 @@
 package dev.lemonadecode.sessions.api
 
+import dev.lemonadecode.domain.session.LinkedWorktree
 import dev.lemonadecode.domain.session.Session
 import dev.lemonadecode.domain.session.SessionId
 import dev.lemonadecode.domain.session.SessionOrigin
@@ -53,6 +54,19 @@ public interface SessionService {
   public fun close(id: SessionId)
 
   /**
+   * The linked git worktree the session's folder is in, with whether it has changes now. Null in a
+   * repository's main checkout, outside git, and when git can't tell.
+   */
+  public suspend fun worktreeOf(id: SessionId): LinkedWorktree?
+
+  /**
+   * Deletes [worktree]'s folder with `git worktree remove`; its branch stays. Without [force] git
+   * refuses while it has changes; with it they are lost. Close the sessions in it first: this waits
+   * a moment for their shells to end, so none is left in the folder.
+   */
+  public suspend fun removeWorktree(worktree: LinkedWorktree, force: Boolean): LemonadeCodeResult<Unit, SessionError>
+
+  /**
    * Gives the session a name of the user's own, kept as the shell moves and across launches.
    * Null or blank goes back to the name Lemonade Code gives it.
    */
@@ -82,6 +96,9 @@ public sealed interface SessionError {
   public data object NotARepository : SessionError
 
   public data class WorktreeFailed(val message: String) : SessionError
+
+  /** Git wouldn't remove the worktree at [path]. */
+  public data class WorktreeNotRemoved(val path: String, val message: String) : SessionError
 
   /** Git already has a branch called [branch], so a new worktree can't be created on it. */
   public data class BranchExists(val branch: String) : SessionError

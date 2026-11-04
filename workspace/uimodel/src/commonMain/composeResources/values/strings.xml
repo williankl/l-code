@@ -149,6 +149,28 @@
   <string name="session_path_copied">Copied %1$s</string>
   <string name="session_close">Close session</string>
 
+  <!-- Closing a session that leaves worktrees no other session uses -->
+  <string name="close_session_title">Close %1$s?</string>
+  <string name="close_session_sub_session">Its sub-session closes with it.</string>
+  <string name="close_session_sub_sessions">Its sub-sessions close with it.</string>
+  <string name="close_session_worktree">No other session uses this worktree. Delete it too?</string>
+  <string name="close_session_worktrees">No other session uses these worktrees. Delete them too?</string>
+  <string name="close_session_detached">detached HEAD</string>
+  <string name="close_session_changes">Has uncommitted changes that will be lost</string>
+  <string name="close_session_branch_stays">Only the folder is deleted. The branch %1$s stays.</string>
+  <string name="close_session_folder_goes">Only the folder is deleted.</string>
+  <string name="close_session_branches_stay">Only the folders are deleted. Their branches stay.</string>
+  <string name="close_session_delete_worktree">Close and delete worktree</string>
+  <string name="close_session_delete_worktrees">Close and delete worktrees</string>
+  <string name="close_session_keep_worktree">Close, keep worktree</string>
+  <string name="close_session_keep_worktrees">Close, keep worktrees</string>
+  <string name="worktree_deleted">Deleted the worktree %1$s</string>
+  <plurals name="worktrees_deleted">
+    <item quantity="one">Deleted %1$d worktree</item>
+    <item quantity="other">Deleted %1$d worktrees</item>
+  </plurals>
+  <string name="error_worktree_delete">Couldn’t delete the worktree %1$s: %2$s</string>
+
   <!-- New session -->
   <string name="action_new_terminal">New terminal</string>
   <string name="no_sessions_title">No sessions yet</string>

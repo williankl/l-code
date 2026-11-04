@@ -60,7 +60,9 @@ drawer, and a dot on the toggle tells you when one of them needs input.
 </table>
 
 **Right-click a session** to rename it, copy its folder path, start a sub-session from it, or close
-it. Middle-click closes it too. **⌘W** closes the selected session and its sub-sessions.
+it. Middle-click closes it too. **⌘W** closes the selected session and its sub-sessions. If that
+would leave a git worktree with no session in it, you're asked first whether to delete the worktree
+too (see [Closing a worktree's session](#closing-a-worktrees-session)).
 
 <img src="images/session-menu.png" width="100%" alt="The right-click menu of a session, naming it and its folder">
 
@@ -171,6 +173,27 @@ Before anything is created, the panel shows you the exact folder and branch you'
 <img src="images/new-worktree.png" width="100%" alt="The New sub-session panel previewing a new worktree's folder and branch">
 
 <img src="images/worktree-created.png" width="100%" alt="sub-1 in the same folder and sub-2 in its own worktree, both under bench-redis">
+
+### Closing a worktree's session
+
+When you close a session (right-click › **Close session**, a middle click or **⌘W**) and that would
+leave a git worktree with no session in it, Lemonade Code asks before anything closes. That covers a
+worktree you made for a sub-session and one an agent made for itself, like Claude Code entering a
+worktree, and the worktrees of the sub-sessions that close with it. A repository's main checkout is
+never offered, and neither is a worktree another open session is still in.
+
+The dialog names the session and each worktree, with its folder and branch. A worktree with
+uncommitted changes or new files says so: they're lost if you delete it.
+
+| Choice | Does |
+|---|---|
+| **Close and delete worktree** | Closes the session, then deletes the worktree's folder with `git worktree remove`. The branch stays. |
+| **Close, keep worktree** | Closes the session and leaves the folder as it is. |
+| **Cancel** or **Esc** | Nothing closes. |
+
+Closing a session that isn't in a worktree works as before, with no question.
+
+<img src="images/close-worktree.png" width="100%" alt="Closing sub-2 asks whether to delete its worktree too, warning that it has uncommitted changes and saying its branch stays">
 
 ---
 
@@ -303,7 +326,7 @@ On Windows and Linux, use **Ctrl** wherever you see **⌘**.
 | Keys | Does |
 |---|---|
 | **⌘T** | New terminal session |
-| **⌘W** | Close the selected session and its sub-sessions |
+| **⌘W** | Close the selected session and its sub-sessions, asking first about a worktree that would be left unused |
 | **⌘↵** | Paste the unsent comments into the terminal |
 | **Esc** | Close the open menu, panel or drawer |
 

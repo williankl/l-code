@@ -167,6 +167,30 @@
   <string name="session_path_copied">Skopírované: %1$s</string>
   <string name="session_close">Zavrieť reláciu</string>
 
+  <!-- Closing a session that leaves worktrees no other session uses -->
+  <string name="close_session_title">Zavrieť %1$s?</string>
+  <string name="close_session_sub_session">Jej podrelácia sa zavrie spolu s ňou.</string>
+  <string name="close_session_sub_sessions">Jej podrelácie sa zavrú spolu s ňou.</string>
+  <string name="close_session_worktree">Tento worktree nepoužíva žiadna iná relácia. Odstrániť aj ten?</string>
+  <string name="close_session_worktrees">Tieto worktree nepoužíva žiadna iná relácia. Odstrániť aj tie?</string>
+  <string name="close_session_detached">odpojený HEAD</string>
+  <string name="close_session_changes">Má necommitnuté zmeny, ktoré sa stratia</string>
+  <string name="close_session_branch_stays">Odstráni sa iba priečinok. Vetva %1$s zostane.</string>
+  <string name="close_session_folder_goes">Odstráni sa iba priečinok.</string>
+  <string name="close_session_branches_stay">Odstránia sa iba priečinky. Ich vetvy zostanú.</string>
+  <string name="close_session_delete_worktree">Zavrieť a odstrániť worktree</string>
+  <string name="close_session_delete_worktrees">Zavrieť a odstrániť všetky worktree</string>
+  <string name="close_session_keep_worktree">Zavrieť, worktree ponechať</string>
+  <string name="close_session_keep_worktrees">Zavrieť, worktree ponechať</string>
+  <string name="worktree_deleted">Worktree %1$s bol odstránený</string>
+  <plurals name="worktrees_deleted">
+    <item quantity="one">Odstránený %1$d worktree</item>
+    <item quantity="few">Odstránené %1$d worktree</item>
+    <item quantity="many">Odstránených %1$d worktree</item>
+    <item quantity="other">Odstránených %1$d worktree</item>
+  </plurals>
+  <string name="error_worktree_delete">Worktree %1$s sa nepodarilo odstrániť: %2$s</string>
+
   <!-- New session -->
   <string name="action_new_terminal">Nový terminál</string>
   <string name="no_sessions_title">Zatiaľ žiadne relácie</string>

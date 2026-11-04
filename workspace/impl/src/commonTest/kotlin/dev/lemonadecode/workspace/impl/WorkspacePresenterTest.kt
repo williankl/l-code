@@ -4,7 +4,10 @@ import dev.lemonadecode.domain.mobile.LogPackages
 import dev.lemonadecode.domain.mobile.MobileError
 import dev.lemonadecode.domain.review.DiffState
 import dev.lemonadecode.domain.review.Review
+import dev.lemonadecode.domain.session.LinkedWorktree
+import dev.lemonadecode.domain.session.Session
 import dev.lemonadecode.domain.session.SessionId
+import dev.lemonadecode.domain.session.SessionPlacement
 import dev.lemonadecode.domain.settings.AppLanguage
 import dev.lemonadecode.domain.settings.ThemePreference
 import dev.lemonadecode.domain.update.AppRelease
@@ -23,12 +26,14 @@ import dev.lemonadecode.platform.process.HomeDirectory
 import dev.lemonadecode.platform.sound.Chime
 import dev.lemonadecode.platform.sound.testing.FakeSoundPlayer
 import dev.lemonadecode.review.fake.FakeReviewService
+import dev.lemonadecode.sessions.api.SessionError
 import dev.lemonadecode.sessions.fake.FakeSessionService
 import dev.lemonadecode.settings.fake.FakeSettingsService
 import dev.lemonadecode.updates.fake.FakeUpdateService
 import dev.lemonadecode.workspace.impl.showcase.ShowcaseDevices
 import dev.lemonadecode.workspace.impl.showcase.ShowcaseFixtures
 import dev.lemonadecode.workspace.strings.Res
+import dev.lemonadecode.workspace.strings.error_worktree_delete
 import dev.lemonadecode.workspace.strings.file_path_copied
 import dev.lemonadecode.workspace.strings.session_path_copied
 import dev.lemonadecode.workspace.strings.time_hours_ago
@@ -36,6 +41,9 @@ import dev.lemonadecode.workspace.strings.update_failed_checksum
 import dev.lemonadecode.workspace.strings.updates_up_to_date
 import dev.lemonadecode.workspace.strings.worktree_branch_invalid
 import dev.lemonadecode.workspace.strings.worktree_branch_taken
+import dev.lemonadecode.workspace.strings.worktree_deleted
+import dev.lemonadecode.workspace.uimodel.CloseSessionDialogModel
+import dev.lemonadecode.workspace.uimodel.ClosingWorktreeModel
 import dev.lemonadecode.workspace.uimodel.DeviceScreenModel
 import dev.lemonadecode.workspace.uimodel.DevicesButtonModel
 import dev.lemonadecode.workspace.uimodel.DevicesContentModel
@@ -650,6 +658,171 @@ class WorkspacePresenterTest {
       sessions.setSessions(sessions.sessions.value + ShowcaseFixtures.session("cf", "checkout-flake"))
       val back = awaitItemWhere { it.sessions.tiles.any { tile -> tile.id == "cf" } }
       assertEquals(null, back.sessions.menu)
+    }
+  }
+
+  private val worktree = LinkedWorktree(
+    path = "${ShowcaseFixtures.Repo}.worktrees/sub-2",
+    branch = "feat/rate-limit-sub-2",
+    mainCheckout = ShowcaseFixtures.Repo,
+    hasChanges = true,
+  )
+
+  private fun inWorktree(id: String, name: String, parent: String = "ar") = ShowcaseFixtures.session(
+    id,
+    name,
+    parent = parent,
+    branch = worktree.branch,
+    placement = SessionPlacement.Worktree,
+    folder = worktree.path,
+  )
+
+  /** api-ratelimit in the main checkout, and its sub-session sub-2 in a worktree of its own. */
+  private fun withWorktree(vararg more: Session) {
+    sessions.setSessions(listOf(ShowcaseFixtures.session("ar", "api-ratelimit"), inWorktree("s2", "sub-2")) + more)
+    sessions.worktrees = listOf(worktree)
+  }
+
+  private val worktreeDialog = CloseSessionDialogModel(
+    sessionName = "sub-2",
+    subSessionCount = 0,
+    worktrees = listOf(ClosingWorktreeModel(path = "~/code/storefront.worktrees/sub-2", branch = "feat/rate-limit-sub-2", hasChanges = true)),
+  )
+
+  @Test
+  fun `closing a session in no worktree closes it straight away, without asking`() = runTest {
+    withFamily()
+    presenter.test {
+      awaitItem().eventSink(WorkspaceEvent.CloseSession("r1"))
+      val closed = awaitItemWhere { it.sessions.tiles.size == 2 }
+      assertEquals(listOf(SessionId("r1")), sessions.closed)
+      assertEquals(null, closed.closeSession)
+      // Outside git there's nothing to ask git about: it closes in the same breath.
+      closed.eventSink(WorkspaceEvent.CloseSession("cf"))
+      assertEquals(listOf(SessionId("r1"), SessionId("cf")), sessions.closed)
+    }
+  }
+
+  @Test
+  fun `closing a session in a worktree no other session uses asks first`() = runTest {
+    withWorktree()
+    presenter.test {
+      awaitItem().eventSink(WorkspaceEvent.CloseSession("s2"))
+      val asking = awaitItemWhere { it.closeSession != null }
+      assertEquals(worktreeDialog, asking.closeSession)
+      assertEquals(emptyList(), sessions.closed, "nothing closes before the answer")
+      assertEquals(2, asking.sessions.tiles.size)
+    }
+  }
+
+  @Test
+  fun `cancelling keeps the session and its worktree`() = runTest {
+    withWorktree()
+    presenter.test {
+      awaitItem().eventSink(WorkspaceEvent.CloseSession("s2"))
+      awaitItemWhere { it.closeSession != null }.eventSink(WorkspaceEvent.CancelCloseSession)
+      val cancelled = awaitItemWhere { it.closeSession == null }
+      assertEquals(2, cancelled.sessions.tiles.size)
+      assertEquals(emptyList(), sessions.closed)
+      assertEquals(emptyList(), sessions.removedWorktrees)
+    }
+  }
+
+  @Test
+  fun `closing and keeping the worktree closes only the session`() = runTest {
+    withWorktree()
+    presenter.test {
+      awaitItem().eventSink(WorkspaceEvent.CloseSession("s2"))
+      awaitItemWhere { it.closeSession != null }.eventSink(WorkspaceEvent.ConfirmCloseSession(deleteWorktrees = false))
+      val closed = awaitItemWhere { it.closeSession == null && it.sessions.tiles.size == 1 }
+      assertEquals(listOf(SessionId("s2")), sessions.closed)
+      assertEquals(emptyList(), sessions.removedWorktrees)
+      assertEquals(null, closed.toast)
+    }
+  }
+
+  @Test
+  fun `closing and deleting closes the session first, then forces the worktree it warned about`() = runTest {
+    withWorktree()
+    presenter.test {
+      awaitItem().eventSink(WorkspaceEvent.CloseSession("s2"))
+      awaitItemWhere { it.closeSession != null }.eventSink(WorkspaceEvent.ConfirmCloseSession(deleteWorktrees = true))
+      val deleted = awaitItemWhere { it.toast != null }
+      assertEquals(listOf(SessionId("s2")), sessions.closed)
+      assertEquals(listOf(FakeSessionService.RemoveWorktreeCall(worktree, force = true, stillOpen = emptyList())), sessions.removedWorktrees)
+      assertEquals(Res.string.worktree_deleted.asLemonadeCodeString("~/code/storefront.worktrees/sub-2"), deleted.toast)
+      assertEquals(null, deleted.closeSession)
+    }
+  }
+
+  @Test
+  fun `a clean worktree is deleted without force`() = runTest {
+    withWorktree()
+    sessions.worktrees = listOf(worktree.copy(hasChanges = false))
+    presenter.test {
+      awaitItem().eventSink(WorkspaceEvent.CloseSession("s2"))
+      val asking = awaitItemWhere { it.closeSession != null }
+      assertEquals(false, asking.closeSession?.worktrees?.single()?.hasChanges)
+      asking.eventSink(WorkspaceEvent.ConfirmCloseSession(deleteWorktrees = true))
+      yieldUntil { sessions.removedWorktrees.isNotEmpty() }
+      assertEquals(false, sessions.removedWorktrees.single().force)
+    }
+  }
+
+  @Test
+  fun `a worktree git won't delete says why in the error banner`() = runTest {
+    withWorktree()
+    sessions.removeWorktreeResult = LemonadeCodeResult.failure(SessionError.WorktreeNotRemoved(worktree.path, "it is locked"))
+    presenter.test {
+      awaitItem().eventSink(WorkspaceEvent.CloseSession("s2"))
+      awaitItemWhere { it.closeSession != null }.eventSink(WorkspaceEvent.ConfirmCloseSession(deleteWorktrees = true))
+      val failed = awaitItemWhere { it.error != null }
+      assertEquals(Res.string.error_worktree_delete.asLemonadeCodeString("~/code/storefront.worktrees/sub-2", "it is locked"), failed.error)
+      assertEquals(listOf(SessionId("s2")), sessions.closed, "the session closed all the same")
+      assertEquals(null, failed.toast)
+    }
+  }
+
+  @Test
+  fun `a worktree another open session still uses isn't offered`() = runTest {
+    withWorktree(inWorktree("s3", "sub-3"))
+    presenter.test {
+      awaitItem().eventSink(WorkspaceEvent.CloseSession("s2"))
+      val closed = awaitItemWhere { it.sessions.tiles.size == 2 }
+      assertEquals(listOf(SessionId("s2")), sessions.closed)
+      assertEquals(null, closed.closeSession)
+      assertEquals(emptyList(), sessions.removedWorktrees)
+    }
+  }
+
+  @Test
+  fun `closing a parent asks about the worktree its sub-sessions leave, once`() = runTest {
+    withWorktree(inWorktree("s3", "sub-3"))
+    presenter.test {
+      awaitItem().eventSink(WorkspaceEvent.CloseSession("ar"))
+      val asking = awaitItemWhere { it.closeSession != null }
+      assertEquals(worktreeDialog.copy(sessionName = "api-ratelimit", subSessionCount = 2), asking.closeSession)
+      asking.eventSink(WorkspaceEvent.ConfirmCloseSession(deleteWorktrees = true))
+      yieldUntil { sessions.removedWorktrees.isNotEmpty() }
+      assertEquals(listOf(ar), sessions.closed)
+      assertEquals(emptyList(), sessions.removedWorktrees.single().stillOpen, "every session in it closed first")
+    }
+  }
+
+  @Test
+  fun `command W and the session menu both ask first`() = runTest {
+    withWorktree()
+    presenter.test {
+      awaitItem().eventSink(WorkspaceEvent.SelectSession("s2"))
+      awaitItemWhere { it.header?.name == "sub-2" }.eventSink(WorkspaceEvent.CloseSelectedSession)
+      awaitItemWhere { it.closeSession != null }.eventSink(WorkspaceEvent.CancelCloseSession)
+
+      awaitItemWhere { it.closeSession == null }.eventSink(WorkspaceEvent.OpenSessionMenu("s2"))
+      awaitItemWhere { it.sessions.menu?.sessionId == "s2" }.eventSink(WorkspaceEvent.CloseSession("s2"))
+      val asking = awaitItemWhere { it.closeSession != null }
+      assertEquals(null, asking.sessions.menu, "the menu gives way to the dialog")
+      assertEquals(worktreeDialog, asking.closeSession)
+      assertEquals(emptyList(), sessions.closed)
     }
   }
 

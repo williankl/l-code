@@ -149,6 +149,28 @@
   <string name="session_path_copied">%1$s kopiert</string>
   <string name="session_close">Sitzung schließen</string>
 
+  <!-- Closing a session that leaves worktrees no other session uses -->
+  <string name="close_session_title">%1$s schließen?</string>
+  <string name="close_session_sub_session">Die Untersitzung wird mit ihr geschlossen.</string>
+  <string name="close_session_sub_sessions">Die Untersitzungen werden mit ihr geschlossen.</string>
+  <string name="close_session_worktree">Keine andere Sitzung nutzt diesen Worktree. Ihn auch löschen?</string>
+  <string name="close_session_worktrees">Keine andere Sitzung nutzt diese Worktrees. Sie auch löschen?</string>
+  <string name="close_session_detached">losgelöster HEAD</string>
+  <string name="close_session_changes">Hat nicht committete Änderungen, die verloren gehen</string>
+  <string name="close_session_branch_stays">Nur der Ordner wird gelöscht. Der Branch %1$s bleibt.</string>
+  <string name="close_session_folder_goes">Nur der Ordner wird gelöscht.</string>
+  <string name="close_session_branches_stay">Nur die Ordner werden gelöscht. Ihre Branches bleiben.</string>
+  <string name="close_session_delete_worktree">Schließen und Worktree löschen</string>
+  <string name="close_session_delete_worktrees">Schließen und Worktrees löschen</string>
+  <string name="close_session_keep_worktree">Schließen, Worktree behalten</string>
+  <string name="close_session_keep_worktrees">Schließen, Worktrees behalten</string>
+  <string name="worktree_deleted">Worktree %1$s gelöscht</string>
+  <plurals name="worktrees_deleted">
+    <item quantity="one">%1$d Worktree gelöscht</item>
+    <item quantity="other">%1$d Worktrees gelöscht</item>
+  </plurals>
+  <string name="error_worktree_delete">Worktree %1$s konnte nicht gelöscht werden: %2$s</string>
+
   <!-- New session -->
   <string name="action_new_terminal">Neues Terminal</string>
   <string name="no_sessions_title">Noch keine Sitzungen</string>

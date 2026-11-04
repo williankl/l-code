@@ -5,6 +5,7 @@ import dev.lemonadecode.data.git.GitBranchTip
 import dev.lemonadecode.data.git.GitCheckout
 import dev.lemonadecode.data.git.GitDataSource
 import dev.lemonadecode.data.git.GitError
+import dev.lemonadecode.data.git.GitWorktree
 import dev.lemonadecode.platform.architecture.LemonadeCodeCoroutineDispatchers
 import dev.lemonadecode.platform.core.LemonadeCodeResult
 import dev.lemonadecode.platform.core.flatMap
@@ -132,6 +133,42 @@ internal class GitCliDataSource(
     .flatMap { it.requireSuccess() }
     .map { }
 
+  /**
+   * A linked worktree has a git folder of its own inside the repository's, so `--git-dir` and
+   * `--git-common-dir` differ; in a main checkout or a submodule they are the same folder, printed
+   * alike. Both are asked from the top-level folder, where neither is relative to a subfolder.
+   */
+  override suspend fun linkedWorktree(directory: String): LemonadeCodeResult<GitWorktree?, GitError> {
+    val checkout = when (val found = checkout(directory)) {
+      is LemonadeCodeResult.Success -> found.value
+      is LemonadeCodeResult.Failure -> return if (found.error == GitError.NotARepository) LemonadeCodeResult.success(null) else found
+    }
+    val root = checkout.root
+    return git(root, "rev-parse", "--git-dir", "--git-common-dir").flatMap { it.requireSuccess() }.flatMap { dirs ->
+      val (gitDir, commonDir) = dirs.stdout.lines().map { it.trim() }.filter { it.isNotEmpty() }.let { it.getOrNull(0) to it.getOrNull(1) }
+      if (gitDir == commonDir) return@flatMap LemonadeCodeResult.success(null)
+      git(root, "worktree", "list", "--porcelain").flatMap { it.requireSuccess() }.flatMap { list ->
+        val main = mainWorktree(list.stdout) ?: return@flatMap LemonadeCodeResult.failure(GitError.CommandFailed("git lists no main worktree"))
+        // What `git worktree remove` checks before it refuses, untracked files shown whatever the config says.
+        git(root, "status", "--porcelain", "--untracked-files=normal", "--ignore-submodules=none").flatMap { it.requireSuccess() }.map { status ->
+          GitWorktree(root = root, branch = checkout.branch, mainRoot = main, hasChanges = status.stdout.isNotBlank())
+        }
+      }
+    }
+  }
+
+  override suspend fun removeWorktree(
+    repositoryRoot: String,
+    path: String,
+    force: Boolean,
+  ): LemonadeCodeResult<Unit, GitError> {
+    val arguments = listOfNotNull("worktree", "remove", "--force".takeIf { force }, path)
+    // Ignored files go too, and a worktree's build output can be large.
+    return git(repositoryRoot, *arguments.toTypedArray(), timeoutSeconds = 120)
+      .flatMap { it.requireSuccess() }
+      .map { }
+  }
+
   private suspend fun git(
     directory: String,
     vararg arguments: String,
@@ -145,6 +182,12 @@ internal class GitCliDataSource(
     const val WholeFile = 1_000_000
   }
 }
+
+/** The first worktree `git worktree list --porcelain` names: the main checkout, or the bare repository. */
+internal fun mainWorktree(porcelain: String): String? = porcelain.lineSequence()
+  .firstOrNull { it.startsWith("worktree ") }
+  ?.removePrefix("worktree ")
+  ?.trimEnd()
 
 /** `for-each-ref` lines of name, commit time in seconds and author, split by tabs. */
 internal fun parseBranchTips(output: String): Map<String, GitBranchTip> = output.lineSequence()

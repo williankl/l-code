@@ -14,6 +14,7 @@ import dev.lemonadecode.domain.review.FileContent
 import dev.lemonadecode.domain.review.FileDiff
 import dev.lemonadecode.domain.review.Review
 import dev.lemonadecode.domain.review.ReviewComment
+import dev.lemonadecode.domain.session.LinkedWorktree
 import dev.lemonadecode.domain.session.Session
 import dev.lemonadecode.domain.session.SessionId
 import dev.lemonadecode.domain.session.SessionOrigin
@@ -32,6 +33,7 @@ import dev.lemonadecode.domain.update.UpdateChannel
 import dev.lemonadecode.domain.update.UpdateChecks
 import dev.lemonadecode.domain.update.UpdateState
 import dev.lemonadecode.platform.syntax.SyntaxHighlighter
+import dev.lemonadecode.workspace.impl.ClosingSession
 import dev.lemonadecode.workspace.impl.Composer
 import dev.lemonadecode.workspace.impl.DevicesStep
 import dev.lemonadecode.workspace.impl.DevicesViewState
@@ -89,6 +91,11 @@ public enum class WorkspaceShowcase(
   SessionMenu("6a", "Menu on lua-script", "Right-click a session: the menu names it and its folder, and the row holds a ring."),
   RenamingSession("6b", "Renaming in place", "Rename swaps the menu’s actions for a name field."),
   NamingWorktree("6c", "Naming a new worktree", "New sub-session in new worktree swaps the menu’s actions for a branch field, filled with a suggestion."),
+  ClosingWorktree(
+    "6d",
+    "Closing a session in a worktree",
+    "No other session uses sub-2’s worktree, so closing it asks whether to delete that too. It has uncommitted changes; its branch stays either way.",
+  ),
   SettingsList("8a", "Settings list", "Six rows show their current value; the gear's dot says an update is out. Open one to change it."),
   SettingsLanguage("8b", "Language, Deutsch chosen", "Each language in its own name, with its flag. The whole app follows at once."),
   SettingsPlugins("8c", "Plugins › Mobile", "The Mobile plugin mirrors Android and iOS screens, pairs devices and reads their logs."),
@@ -265,6 +272,7 @@ private fun treeScene(
   renaming: Boolean = false,
   worktreeBranch: String? = null,
   namingWorktree: Boolean = false,
+  closing: ClosingSession? = null,
   extraTranscripts: Map<String, List<TerminalLineModel>> = emptyMap(),
 ) = scene(
   sessions = sessions,
@@ -279,6 +287,7 @@ private fun treeScene(
       renaming = sessionMenu?.takeIf { renaming },
       namingWorktree = sessionMenu?.takeIf { namingWorktree },
       worktreeBranch = worktreeBranch,
+      closing = closing,
     )
   },
   plan = plan,
@@ -291,6 +300,29 @@ private fun treeScene(
     "r2" to ShowcaseTranscripts.subSession("api-ratelimit", listOf(comment("app", 9))),
   ) + extraTranscripts,
 )
+
+/** sub-1 in bench-redis's folder and sub-2 in a worktree of its own, sub-2 selected. */
+private fun bothKindsScene(closing: ClosingSession? = null): Scene {
+  val sameFolder = session("s1", "sub-1", parent = "d4")
+  val worktree = session(
+    "s2",
+    "sub-2",
+    parent = "d4",
+    branch = "feat/rate-limit-sub-2",
+    placement = SessionPlacement.Worktree,
+    folder = "$Repo.worktrees/sub-2",
+  )
+  val sessions = treeSessions.toMutableList().apply { addAll(indexOfFirst { it.id.value == "d4" } + 1, listOf(sameFolder, worktree)) }
+  return treeScene(
+    sessions = sessions,
+    selected = "s2",
+    closing = closing,
+    extraTranscripts = mapOf(
+      "s1" to ShowcaseTranscripts.blank("bench-redis", rule = "same folder"),
+      "s2" to ShowcaseTranscripts.worktree("bench-redis", "sub-2", "feat/rate-limit-sub-2"),
+    ),
+  )
+}
 
 private const val SuggestedBranch = "worktree/generating-bugs"
 
@@ -318,26 +350,7 @@ private fun sceneFor(showcase: WorkspaceShowcase): Scene = when (showcase) {
     plan = worktreePlan(SuggestedBranch),
     worktreeBranch = SuggestedBranch,
   )
-  WorkspaceShowcase.AfterCreatingBoth -> {
-    val sameFolder = session("s1", "sub-1", parent = "d4")
-    val worktree = session(
-      "s2",
-      "sub-2",
-      parent = "d4",
-      branch = "feat/rate-limit-sub-2",
-      placement = SessionPlacement.Worktree,
-      folder = "$Repo.worktrees/sub-2",
-    )
-    val sessions = treeSessions.toMutableList().apply { addAll(indexOfFirst { it.id.value == "d4" } + 1, listOf(sameFolder, worktree)) }
-    treeScene(
-      sessions = sessions,
-      selected = "s2",
-      extraTranscripts = mapOf(
-        "s1" to ShowcaseTranscripts.blank("bench-redis", rule = "same folder"),
-        "s2" to ShowcaseTranscripts.worktree("bench-redis", "sub-2", "feat/rate-limit-sub-2"),
-      ),
-    )
-  }
+  WorkspaceShowcase.AfterCreatingBoth -> bothKindsScene()
   WorkspaceShowcase.SettingsOpen -> sentScene(AppSettings(keepAwake = true)).let { scene ->
     scene.copy(input = scene.input.copy(view = scene.input.view.copy(settingsOpen = true)))
   }
@@ -354,6 +367,14 @@ private fun sceneFor(showcase: WorkspaceShowcase): Scene = when (showcase) {
   WorkspaceShowcase.SessionMenu -> treeScene(sessionMenu = SessionId("d3"))
   WorkspaceShowcase.RenamingSession -> treeScene(sessionMenu = SessionId("d3"), renaming = true)
   WorkspaceShowcase.NamingWorktree -> treeScene(sessionMenu = SessionId("d3"), worktreeBranch = SuggestedBranch, namingWorktree = true)
+  WorkspaceShowcase.ClosingWorktree -> bothKindsScene(
+    closing = ClosingSession(
+      sessionId = SessionId("s2"),
+      name = "sub-2",
+      subSessionCount = 0,
+      worktrees = listOf(LinkedWorktree("$Repo.worktrees/sub-2", "feat/rate-limit-sub-2", Repo, hasChanges = true)),
+    ),
+  )
   WorkspaceShowcase.SettingsList -> settingsScene(SettingsPage.List)
   WorkspaceShowcase.SettingsLanguage -> settingsScene(SettingsPage.Language, language = AppLanguage.German, update = UpdateState.None)
   WorkspaceShowcase.SettingsPlugins -> settingsScene(SettingsPage.Plugins, update = UpdateState.None)

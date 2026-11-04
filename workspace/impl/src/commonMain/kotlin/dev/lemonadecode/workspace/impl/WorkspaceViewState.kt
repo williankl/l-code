@@ -78,6 +78,8 @@ internal data class WorkspaceViewState(
   val takenBranch: String? = null,
   /** A sub-session is on its way: another Enter or click waits for it rather than starting a second. */
   val startingSubSession: Boolean = false,
+  /** A session about to close that leaves worktrees unused, while the dialog asks what to do with them. */
+  val closing: ClosingSession? = null,
   val error: LemonadeCodeString? = null,
   val toast: LemonadeCodeString? = null,
 )

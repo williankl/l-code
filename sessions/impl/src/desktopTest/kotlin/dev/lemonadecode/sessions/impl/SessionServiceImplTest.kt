@@ -1,7 +1,10 @@
 package dev.lemonadecode.sessions.impl
 
 import dev.lemonadecode.data.git.GitCheckout
+import dev.lemonadecode.data.git.GitError
+import dev.lemonadecode.data.git.GitWorktree
 import dev.lemonadecode.data.git.fake.FakeGitDataSource
+import dev.lemonadecode.domain.session.LinkedWorktree
 import dev.lemonadecode.domain.session.SessionOrigin
 import dev.lemonadecode.domain.session.SessionStatus
 import dev.lemonadecode.domain.session.SubSessionLocation
@@ -27,6 +30,7 @@ import java.nio.file.Files
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
 
@@ -311,6 +315,34 @@ class SessionServiceImplTest {
     )
     assertTrue(git.worktreeCalls.isEmpty())
     assertEquals(listOf(parent), service.sessions.value.map { it.id })
+  }
+
+  @Test
+  fun `a session's worktree comes from git, and removing it waits for the shell in it to end`() = runBlocking<Unit> {
+    val main = File(home, "storefront").apply { mkdirs() }
+    val folder = File(home, "storefront.worktrees/sub-1").apply { mkdirs() }
+    git.linkedWorktrees = mapOf(folder.path to GitWorktree(root = folder.path, branch = "feat/x", mainRoot = main.path, hasChanges = true))
+    val inside = service.openTerminal(folder.path).getOrNull()!!
+    val outside = service.openTerminal(main.path).getOrNull()!!
+
+    val worktree = LinkedWorktree(path = folder.path, branch = "feat/x", mainCheckout = main.path, hasChanges = true)
+    assertEquals(worktree, service.worktreeOf(inside))
+    assertEquals(null, service.worktreeOf(outside), "the main checkout isn't a linked worktree")
+
+    val shell = registry.terminal(inside)!!.pid
+    service.close(inside)
+    assertTrue(service.removeWorktree(worktree, force = true).isSuccess)
+    assertEquals(listOf(FakeGitDataSource.RemoveWorktreeCall(main.path, folder.path, force = true)), git.removeWorktreeCalls)
+    assertFalse(ProcessHandle.of(shell).map { it.isAlive }.orElse(false), "the shell ended before git ran")
+  }
+
+  @Test
+  fun `a worktree git won't remove says why`() = runBlocking<Unit> {
+    git.removeWorktreeResult = LemonadeCodeResult.failure(GitError.CommandFailed("fatal: '/x' contains modified or untracked files, use --force to delete it"))
+    assertEquals(
+      LemonadeCodeResult.failure(SessionError.WorktreeNotRemoved("/x", "'/x' contains modified or untracked files, use --force to delete it")),
+      service.removeWorktree(LinkedWorktree("/x", "feat/x", "/repo", hasChanges = false), force = false),
+    )
   }
 
   @Test

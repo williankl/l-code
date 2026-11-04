@@ -1,5 +1,6 @@
 package dev.lemonadecode.sessions.fake
 
+import dev.lemonadecode.domain.session.LinkedWorktree
 import dev.lemonadecode.domain.session.Session
 import dev.lemonadecode.domain.session.SessionId
 import dev.lemonadecode.domain.session.SessionOrigin
@@ -39,6 +40,19 @@ public class FakeSessionService(initial: List<Session> = emptyList()) : SessionS
 
   /** Branches git already has: starting a worktree on one fails. */
   public var existingBranches: Set<String> = emptySet()
+
+  /**
+   * Linked worktrees, which a session is in when its folder is inside one. A sub-session started in
+   * a new worktree adds its own; removing one takes it away.
+   */
+  public var worktrees: List<LinkedWorktree> = emptyList()
+
+  /** What [removeWorktree] answers; null removes it. */
+  public var removeWorktreeResult: LemonadeCodeResult<Unit, SessionError>? = null
+  public val removedWorktrees: MutableList<RemoveWorktreeCall> = mutableListOf()
+
+  /** [stillOpen]: the sessions still in the worktree when it was asked to go. */
+  public data class RemoveWorktreeCall(val worktree: LinkedWorktree, val force: Boolean, val stillOpen: List<SessionId> = emptyList())
 
   public data class StartCall(
     val parentId: SessionId,
@@ -109,6 +123,9 @@ public class FakeSessionService(initial: List<Session> = emptyList()) : SessionS
     val plan = planSubSession(parentId, location, namePrefix, branch) ?: return LemonadeCodeResult.failure(SessionError.NotARepository)
     if (plan.createsBranch && plan.branch in existingBranches) return LemonadeCodeResult.failure(SessionError.BranchExists(plan.branch.orEmpty()))
     val id = SessionId("sub-${nextId++}")
+    if (plan.createsBranch) {
+      worktrees = worktrees + LinkedWorktree(plan.workingDirectory, plan.branch, parent.repositoryRoot ?: parent.workingDirectory, hasChanges = false)
+    }
     state.update {
       it + parent.copy(
         id = id,
@@ -139,6 +156,18 @@ public class FakeSessionService(initial: List<Session> = emptyList()) : SessionS
       list.forEach { if (it.parentId in doomed) doomed += it.id }
       list.filterNot { it.id in doomed }
     }
+  }
+
+  override suspend fun worktreeOf(id: SessionId): LinkedWorktree? {
+    val session = state.value.firstOrNull { it.id == id } ?: return null
+    return worktrees.firstOrNull { it.contains(session.workingDirectory) }
+  }
+
+  override suspend fun removeWorktree(worktree: LinkedWorktree, force: Boolean): LemonadeCodeResult<Unit, SessionError> {
+    removedWorktrees += RemoveWorktreeCall(worktree, force, state.value.filter { worktree.contains(it.workingDirectory) }.map { it.id })
+    removeWorktreeResult?.let { return it }
+    worktrees = worktrees.filterNot { it.path == worktree.path }
+    return LemonadeCodeResult.success(Unit)
   }
 
   override fun rename(id: SessionId, name: String?) {

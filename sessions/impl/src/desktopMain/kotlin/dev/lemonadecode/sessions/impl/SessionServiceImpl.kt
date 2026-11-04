@@ -1,7 +1,9 @@
 package dev.lemonadecode.sessions.impl
 
 import dev.lemonadecode.data.git.GitDataSource
+import dev.lemonadecode.data.git.GitError
 import dev.lemonadecode.domain.session.BranchName
+import dev.lemonadecode.domain.session.LinkedWorktree
 import dev.lemonadecode.domain.session.Session
 import dev.lemonadecode.domain.session.SessionId
 import dev.lemonadecode.domain.session.SessionOrigin
@@ -12,6 +14,7 @@ import dev.lemonadecode.domain.session.SubSessionPlan
 import dev.lemonadecode.platform.architecture.LemonadeCodeCoroutineDispatchers
 import dev.lemonadecode.platform.core.LemonadeCodeResult
 import dev.lemonadecode.platform.core.getOrNull
+import dev.lemonadecode.platform.core.mapError
 import dev.lemonadecode.platform.core.safeSuspendRunCatching
 import dev.lemonadecode.platform.di.AppScope
 import dev.lemonadecode.platform.process.HomeDirectory
@@ -73,6 +76,12 @@ internal class SessionServiceImpl(
   private val resumes = MutableStateFlow<Map<SessionId, String>>(emptyMap())
   private val saver = AtomicReference<Job?>(null)
   private val shuttingDown = AtomicBoolean(false)
+
+  /**
+   * Process ids of the shells just closed and what they ran, with how long they're waited for:
+   * until they end, or [EndingWait] after closing, whichever comes first.
+   */
+  private val ending = ConcurrentHashMap<Long, TimeSource.Monotonic.ValueTimeMark>()
 
   /** How long a resumed agent has to show up before it counts as gone, unless it is still running. */
   @Volatile internal var resumeGrace: Duration = 20.seconds
@@ -151,12 +160,38 @@ internal class SessionServiceImpl(
 
   override fun close(id: SessionId) {
     val doomed = SubSessionPlanner.subtree(state.value, id)
+    forgetEnded()
+    val until = TimeSource.Monotonic.markNow() + EndingWait
     doomed.forEach { sessionId ->
       watchers.remove(sessionId)?.cancel()
-      registry.remove(sessionId)?.close()
+      registry.remove(sessionId)?.let { terminal ->
+        processTree(terminal.pid).forEach { ending[it] = until }
+        terminal.close()
+      }
     }
     resumes.update { it - doomed.toSet() }
     state.update { sessions -> sessions.filterNot { it.id in doomed } }
+  }
+
+  override suspend fun worktreeOf(id: SessionId): LinkedWorktree? {
+    val session = state.value.firstOrNull { it.id == id } ?: return null
+    val worktree = git.linkedWorktree(session.workingDirectory).getOrNull() ?: return null
+    return LinkedWorktree(path = worktree.root, branch = worktree.branch, mainCheckout = worktree.mainRoot, hasChanges = worktree.hasChanges)
+  }
+
+  override suspend fun removeWorktree(worktree: LinkedWorktree, force: Boolean): LemonadeCodeResult<Unit, SessionError> {
+    // A shell, or an agent it ran, still in the folder could write into it as it goes, and on
+    // Windows would keep it from being deleted at all.
+    while (forgetEnded()) delay(EndingPoll)
+    return git.removeWorktree(worktree.mainCheckout, worktree.path, force).mapError { error ->
+      SessionError.WorktreeNotRemoved(worktree.path, error.describe())
+    }
+  }
+
+  /** Drops the closed processes that have ended or been waited for long enough; true while any are left. */
+  private fun forgetEnded(): Boolean {
+    ending.entries.removeIf { (pid, until) -> until.hasPassedNow() || !isRunning(pid) }
+    return ending.isNotEmpty()
   }
 
   override fun rename(id: SessionId, name: String?) {
@@ -392,7 +427,24 @@ internal class SessionServiceImpl(
     val AgentPollInterval = 1.seconds
     val SaveDelay = 500.milliseconds
     const val MaxRestoredLines = 1_000
+    val EndingWait = 3.seconds
+    val EndingPoll = 50.milliseconds
   }
+}
+
+/** [pid] and every process it started, still running. */
+private fun processTree(pid: Long): List<Long> = runCatching {
+  ProcessHandle.of(pid).map { handle -> listOf(pid) + handle.descendants().map { it.pid() }.toList() }.orElse(emptyList())
+}.getOrDefault(listOf(pid))
+
+private fun isRunning(pid: Long): Boolean = ProcessHandle.of(pid).map { it.isAlive }.orElse(false)
+
+/** What git said, without its `fatal:`. */
+private fun GitError.describe(): String = when (this) {
+  is GitError.CommandFailed -> message.removePrefix("fatal: ").removePrefix("error: ")
+  is GitError.Unavailable -> message
+  is GitError.RefNotFound -> ref
+  GitError.NotARepository -> "not a git repository"
 }
 
 /** The last part of [path]: `app` for `/Users/me/app`, and on [windows] for `C:\Users\me\app` too. */

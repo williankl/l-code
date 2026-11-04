@@ -17,6 +17,8 @@ public data class WorkspaceModel(
   val content: WorkspaceContentModel,
   val settings: SettingsModel,
   val newSubSession: NewSubSessionModel,
+  /** Asks whether to delete the worktrees a closing session leaves unused; null otherwise. */
+  val closeSession: CloseSessionDialogModel? = null,
   /** The Devices panel while it's open; null when closed or the Mobile plugin is off. */
   val devices: DevicesPanelModel? = null,
   /** Brief problem report, e.g. a worktree that couldn't be created. */

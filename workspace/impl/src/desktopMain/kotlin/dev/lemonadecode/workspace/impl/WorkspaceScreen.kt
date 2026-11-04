@@ -15,6 +15,7 @@ import androidx.compose.ui.platform.UriHandler
 import com.teya.lemonade.LemonadeTheme
 import dev.lemonadecode.domain.session.SessionId
 import dev.lemonadecode.platform.designsystem.LemonadeCodeTheme
+import dev.lemonadecode.platform.designsystem.isDark
 import dev.lemonadecode.platform.di.AppScope
 import dev.lemonadecode.platform.localization.ProvideAppLanguage
 import dev.lemonadecode.platform.presenter.presenterAsState
@@ -40,16 +41,24 @@ public class WorkspaceScreen internal constructor(
   @Composable
   public fun rememberModel(): State<WorkspaceModel> = presenterAsState { presenterProvider() }
 
-  /** [onBackground] gets the colour behind everything, for the window to paint while it resizes. */
+  /**
+   * [onBackground] gets the colour behind everything, for the window to paint while it resizes, and
+   * [onDarkTheme] whether the app is drawn dark, for the window's title bar to match.
+   */
   @Composable
-  public fun Content(modifier: Modifier = Modifier, onBackground: (Color) -> Unit = {}) {
+  public fun Content(modifier: Modifier = Modifier, onBackground: (Color) -> Unit = {}, onDarkTheme: (Boolean) -> Unit = {}) {
     val model by rememberModel()
-    Content(model = model, modifier = modifier, onBackground = onBackground)
+    Content(model = model, modifier = modifier, onBackground = onBackground, onDarkTheme = onDarkTheme)
   }
 
   @Composable
-  public fun Content(model: WorkspaceModel, modifier: Modifier = Modifier, onBackground: (Color) -> Unit = {}) {
-    Themed(model, onBackground) {
+  public fun Content(
+    model: WorkspaceModel,
+    modifier: Modifier = Modifier,
+    onBackground: (Color) -> Unit = {},
+    onDarkTheme: (Boolean) -> Unit = {},
+  ) {
+    Themed(model, onBackground, onDarkTheme) {
       WorkspaceContent(
         model = model,
         terminal = { sessionId, slotModifier -> LiveTerminal(sessionId, slotModifier) },
@@ -60,18 +69,31 @@ public class WorkspaceScreen internal constructor(
 
   /** The Devices panel for its own window; draws nothing while it's docked or closed. */
   @Composable
-  public fun Devices(model: WorkspaceModel, modifier: Modifier = Modifier, onBackground: (Color) -> Unit = {}) {
+  public fun Devices(
+    model: WorkspaceModel,
+    modifier: Modifier = Modifier,
+    onBackground: (Color) -> Unit = {},
+    onDarkTheme: (Boolean) -> Unit = {},
+  ) {
     val panel = model.devices?.takeIf { it.window == DevicesWindow.Separate } ?: return
-    Themed(model, onBackground) {
+    Themed(model, onBackground, onDarkTheme) {
       DevicesWindowContent(panel = panel, onEvent = model.eventSink, modifier = modifier)
     }
   }
 
   /** The theme and language the settings pick, and links that open the way terminal links do. */
   @Composable
-  private fun Themed(model: WorkspaceModel, onBackground: (Color) -> Unit, content: @Composable () -> Unit) {
+  private fun Themed(
+    model: WorkspaceModel,
+    onBackground: (Color) -> Unit,
+    onDarkTheme: (Boolean) -> Unit,
+    content: @Composable () -> Unit,
+  ) {
     ProvideAppLanguage(model.settings.language.tag) {
-      LemonadeCodeTheme(mode = model.settings.theme.toThemeMode()) {
+      val mode = model.settings.theme.toThemeMode()
+      val dark = mode.isDark()
+      LaunchedEffect(dark) { onDarkTheme(dark) }
+      LemonadeCodeTheme(mode = mode) {
         val background = LemonadeTheme.colors.background.bgSubtle
         LaunchedEffect(background) { onBackground(background) }
         // Links in the UI open the way terminal links do, which works on Linux desktops too.

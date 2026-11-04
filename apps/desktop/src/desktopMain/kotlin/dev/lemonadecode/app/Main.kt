@@ -28,6 +28,7 @@ import java.io.File
  * terminal at home when there are none. A [folder] opens a terminal there as well.
  */
 public fun main(args: Array<String>) {
+  followSystemTitleBars()
   val graph = createGraph<AppGraph>()
   graph.initializers.forEach { initializer -> graph.applicationScope.launch { initializer.run() } }
   val folder = args.firstOrNull()?.let(::File)?.takeIf { it.isDirectory }?.absolutePath
@@ -58,7 +59,7 @@ public fun main(args: Array<String>) {
       state = rememberWindowState(size = DpSize(1440.dp, 900.dp), position = WindowPosition(Alignment.Center)),
       onCloseRequest = ::quit,
     ) {
-      graph.workspaceScreen.Content(model = model, onBackground = { window.paintBehind(it) })
+      graph.workspaceScreen.Content(model = model, onBackground = { window.paintBehind(it) }, onDarkTheme = { window.matchTitleBar(it) })
     }
     // The Devices panel's own window, after ↗, so it can sit on another display. Closing it closes the panel.
     val devices = model.devices?.takeIf { it.window == DevicesWindow.Separate }
@@ -76,7 +77,7 @@ public fun main(args: Array<String>) {
             window.requestFocus()
           }
         }
-        graph.workspaceScreen.Devices(model = model, onBackground = { window.paintBehind(it) })
+        graph.workspaceScreen.Devices(model = model, onBackground = { window.paintBehind(it) }, onDarkTheme = { window.matchTitleBar(it) })
       }
     }
   }

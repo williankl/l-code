@@ -175,10 +175,10 @@ public sealed interface DeviceScreenModel {
   @Immutable
   public data object Loading : DeviceScreenModel
 
-  /** The latest capture, a PNG of [width] by [height] pixels. */
+  /** The latest picture of a screen [width] by [height] device pixels; [picture] can be smaller. */
   @Immutable
   public class Frame(
-    public val png: ByteArray,
+    public val picture: ScreenPictureModel,
     public val width: Int,
     public val height: Int,
   ) : DeviceScreenModel
@@ -189,6 +189,23 @@ public sealed interface DeviceScreenModel {
     val title: LemonadeCodeString,
     val detail: LemonadeCodeString,
   ) : DeviceScreenModel
+}
+
+/** What a mirrored screen's frame draws: an encoded image, or a video's decoded pixels. */
+@Immutable
+public sealed interface ScreenPictureModel {
+  /** An encoded image, e.g. a PNG. */
+  @Immutable
+  public class Encoded(public val bytes: ByteArray) : ScreenPictureModel
+
+  /** 4 bytes a pixel, blue, green, red and alpha, [rowBytes] to a row. */
+  @Immutable
+  public class Bgra(
+    public val pixels: ByteArray,
+    public val width: Int,
+    public val height: Int,
+    public val rowBytes: Int,
+  ) : ScreenPictureModel
 }
 
 /** The buttons under the mirrored screen; only what the device supports is there. */

@@ -24,8 +24,8 @@ What Lemonade Code doesn't do yet. Want something that isn't here?
 
 ## Devices
 
-- **Screens arrive a few times a second.** The mirror is made of `adb` screen captures, not a video
-  stream, so animations look choppy.
+- **iOS screens arrive a few times a second.** Android streams its screen as video, but an iPhone
+  or iPad is mirrored with one `idevicescreenshot` after another.
 - **iOS is view only.** iPhones and iPads can't be tapped or typed on from Lemonade Code, and their
   screen only shows over a cable. Newer iOS versions may need the developer disk image mounted
   before `idevicescreenshot` can capture them.

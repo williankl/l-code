@@ -3,6 +3,7 @@ package dev.lemonadecode.workspace.impl.ui
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.Clipboard
@@ -16,6 +17,7 @@ import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertWidthIsEqualTo
+import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasScrollToIndexAction
@@ -26,6 +28,7 @@ import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performMouseInput
@@ -48,7 +51,9 @@ import dev.lemonadecode.workspace.strings.update_failed_download
 import dev.lemonadecode.workspace.strings.worktree_branch_invalid
 import dev.lemonadecode.workspace.ui.TerminalTranscript
 import dev.lemonadecode.workspace.ui.WorkspaceContent
+import dev.lemonadecode.workspace.uimodel.DeviceScreenModel
 import dev.lemonadecode.workspace.uimodel.DeviceTab
+import dev.lemonadecode.workspace.uimodel.DevicesContentModel
 import dev.lemonadecode.workspace.uimodel.DevicesLayoutOption
 import dev.lemonadecode.workspace.uimodel.DevicesPanelModel
 import dev.lemonadecode.workspace.uimodel.DevicesWindow
@@ -56,6 +61,7 @@ import dev.lemonadecode.workspace.uimodel.LanguageOption
 import dev.lemonadecode.workspace.uimodel.LogFilter
 import dev.lemonadecode.workspace.uimodel.MobilePlatformModel
 import dev.lemonadecode.workspace.uimodel.PairingMethod
+import dev.lemonadecode.workspace.uimodel.ScreenPictureModel
 import dev.lemonadecode.workspace.uimodel.SessionMenuModel
 import dev.lemonadecode.workspace.uimodel.SessionsPanelModel
 import dev.lemonadecode.workspace.uimodel.SettingsPage
@@ -424,6 +430,25 @@ class WorkspaceContentUiTest {
   fun `in tabs, the device shows one pane and switches between them`() = show(WorkspaceShowcase.DeviceTabs) {
     onNodeWithText("idevicesyslog · all processes").assertExists()
     expect(WorkspaceEvent.SetDeviceTab(DeviceTab.Screen)) { onNodeWithText("Screen").performClick() }
+  }
+
+  @Test
+  fun `a video frame's pixels draw in their own colours`() {
+    // Two pixels, blue then green then red then alpha each: pure red.
+    val red = ScreenPictureModel.Bgra(byteArrayOf(0, 0, -1, -1, 0, 0, -1, -1), 2, 1, 8)
+    show(WorkspaceShowcase.DisplayMain, edit = { model ->
+      val devices = model.devices
+      val device = devices?.content as DevicesContentModel.Device
+      model.copy(devices = devices.copy(window = DevicesWindow.Docked, content = device.copy(screen = DeviceScreenModel.Frame(red, 1080, 2400))))
+    }) {
+      val home = onNodeWithContentDescription("Home").getUnclippedBoundsInRoot()
+      val pixels = onRoot().captureToImage().toPixelMap()
+      // Well inside the picture, which ends just above its buttons.
+      val x = ((home.left + home.right) / 2).value.toInt()
+      val y = (home.top - 120.dp).value.toInt()
+      val colour = pixels[x, y]
+      assertTrue(colour.red > 0.9f && colour.green < 0.1f && colour.blue < 0.1f, "the picture drew $colour")
+    }
   }
 
   @Test

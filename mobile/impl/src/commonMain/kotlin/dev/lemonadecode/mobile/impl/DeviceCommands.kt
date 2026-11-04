@@ -23,6 +23,12 @@ internal interface DeviceCommands {
    * The program is stopped when collection stops.
    */
   fun lines(command: List<String>): Flow<String>
+
+  /**
+   * Starts [command] and emits its standard output in chunks as it comes, for programs that keep
+   * writing bytes, like a screen recording. Ends and stops the program like [lines].
+   */
+  fun bytes(command: List<String>): Flow<ByteArray>
 }
 
 /** A program started by [DeviceCommands.lines] exited with [exitCode]; the message is what it printed on standard error. */

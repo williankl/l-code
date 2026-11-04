@@ -35,7 +35,23 @@ internal class ProcessDeviceCommands(
 
   override suspend fun runForBytes(command: List<String>, timeout: Duration): LemonadeCodeResult<BinaryProcessOutput, Throwable> = processes.runForBytes(command, folder, timeout)
 
-  override fun lines(command: List<String>): Flow<String> = callbackFlow {
+  override fun lines(command: List<String>): Flow<String> = output(command) { input, send ->
+    input.bufferedReader().useLines { lines -> lines.forEach { send(it.removeSuffix("\r")) } }
+  }
+
+  override fun bytes(command: List<String>): Flow<ByteArray> = output(command) { input, send ->
+    val chunk = ByteArray(ChunkSize)
+    input.use {
+      while (true) {
+        val read = it.read(chunk)
+        if (read < 0) break
+        if (read > 0) send(chunk.copyOf(read))
+      }
+    }
+  }
+
+  /** Starts [command] and sends what [read] makes of its standard output, until it exits or isn't collected. */
+  private fun <T> output(command: List<String>, read: suspend (InputStream, suspend (T) -> Unit) -> Unit): Flow<T> = callbackFlow {
     val process = ProcessBuilder(command)
       .directory(File(folder))
       .redirectInput(ProcessBuilder.Redirect.from(File(NullDevice)))
@@ -43,7 +59,7 @@ internal class ProcessDeviceCommands(
     val errors = async(dispatchers.io) { process.errorStream.lastLines() }
     val _ = launch(dispatchers.io) {
       try {
-        process.inputStream.bufferedReader().useLines { lines -> lines.forEach { send(it.removeSuffix("\r")) } }
+        read(process.inputStream) { send(it) }
       } catch (_: IOException) {
         // The process was stopped while being read.
       }
@@ -82,6 +98,7 @@ internal class ProcessDeviceCommands(
 
   private companion object {
     const val ErrorLines = 20
+    const val ChunkSize = 64 * 1024
     val NullDevice: String = if (System.getProperty("os.name").orEmpty().startsWith("Windows")) "NUL" else "/dev/null"
   }
 }

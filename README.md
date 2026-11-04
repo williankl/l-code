@@ -227,6 +227,14 @@ How the app uses Lemonade, and the few pieces it adds on top, is in the **[desig
 
 <br>
 
+## 📄 License
+
+Lemonade Code is free to use, change and share, at home or at work. What you can't do is sell it, or
+sell a product or service whose value comes mainly from it. The exact terms are in the
+**[license](LICENSE)**: the Apache 2.0 license with the Commons Clause added.
+
+<br>
+
 <div align="center">
 <sub>Made with Kotlin, Compose Multiplatform and 🍋 <a href="https://github.com/teya-engineering/lemonade-design-system">Lemonade</a>.</sub>
 </div>

@@ -10,7 +10,9 @@ website: https://github.com/williankl/loupe
 source-code: https://github.com/williankl/loupe
 issues: https://github.com/williankl/loupe/issues
 icon: snap/gui/lemonade-code.png
-# license: add the SPDX id once the repository has a LICENSE file.
+# Apache 2.0 with the Commons Clause (see LICENSE). The clause has no official SPDX id, so this
+# uses ScanCode's, which snapcraft accepts.
+license: Apache-2.0 AND LicenseRef-scancode-commons-clause
 
 base: core24
 grade: stable

@@ -316,6 +316,8 @@
   <string name="logs_filter">Filter lines</string>
   <string name="logs_filter_placeholder">Filter by tag or text</string>
   <string name="logs_clear">Clear logs</string>
+  <string name="logs_copy">Copy the lines shown</string>
+  <string name="logs_copied">Copied</string>
   <string name="logs_live">Live</string>
   <string name="logs_paused">Paused</string>
   <string name="logs_pause">Pause the stream</string>

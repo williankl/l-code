@@ -316,6 +316,8 @@
   <string name="logs_filter">Zeilen filtern</string>
   <string name="logs_filter_placeholder">Nach Tag oder Text filtern</string>
   <string name="logs_clear">Logs leeren</string>
+  <string name="logs_copy">Angezeigte Zeilen kopieren</string>
+  <string name="logs_copied">Kopiert</string>
   <string name="logs_live">Live</string>
   <string name="logs_paused">Pausiert</string>
   <string name="logs_pause">Stream pausieren</string>

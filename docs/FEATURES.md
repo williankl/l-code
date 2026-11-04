@@ -226,7 +226,9 @@ Lemonade Code finds them on your `PATH`, in the Android SDK and in Homebrew's fo
   Back, Home, turning it sideways and, with the keyboard button on, your typing. iPhones and iPads
   show their screen over a cable only, to look at.
 - **Logs that matter.** Android shows the lines of the app in front; iOS shows the whole system log.
-  Filter by level or by text, pause the stream while you read, or clear it.
+  Show only warnings or only errors, filter by text, pause the stream while you read, or clear it.
+  Select lines with the mouse and copy them with ⌘C, Ctrl+C or a right-click, or copy every line
+  shown with the copy button. The list holds still while you select or scroll back.
 - **Hand it to the agent.** **Send errors** pastes the error lines into the session's terminal,
   saying which device and log they came from. The camera button saves a screenshot and pastes its
   path, which Claude Code attaches as a picture. Nothing runs until you press Enter.

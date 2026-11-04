@@ -347,7 +347,7 @@ internal object DevicesMapper {
     return DeviceLogsModel(
       filter = state.logFilter,
       warningCount = matching.count { it.level.passes(LogFilter.Warnings) },
-      errorCount = matching.count { it.level.isError },
+      errorCount = matching.count { it.level.passes(LogFilter.Errors) },
       searchOpen = state.logSearch,
       query = state.logQuery,
       lines = shown.map { it.toModel() },
@@ -425,9 +425,10 @@ internal object DevicesMapper {
     else -> Res.string.detail_two.asLemonadeCodeString(joined(parts.take(3)), joined(parts.drop(3)))
   }
 
+  /** All keeps every line; Warnings only warnings; Errors errors and fatal ones. */
   private fun LogLevel.passes(filter: LogFilter): Boolean = when (filter) {
     LogFilter.All -> true
-    LogFilter.Warnings -> this == LogLevel.Warning || isError
+    LogFilter.Warnings -> this == LogLevel.Warning
     LogFilter.Errors -> isError
   }
 

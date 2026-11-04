@@ -1,6 +1,9 @@
 package dev.lemonadecode.workspace.impl.ui
 
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.toPixelMap
@@ -14,6 +17,7 @@ import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.MouseButton
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertWidthIsEqualTo
@@ -59,6 +63,8 @@ import dev.lemonadecode.workspace.uimodel.DevicesPanelModel
 import dev.lemonadecode.workspace.uimodel.DevicesWindow
 import dev.lemonadecode.workspace.uimodel.LanguageOption
 import dev.lemonadecode.workspace.uimodel.LogFilter
+import dev.lemonadecode.workspace.uimodel.LogLevelModel
+import dev.lemonadecode.workspace.uimodel.LogLineModel
 import dev.lemonadecode.workspace.uimodel.MobilePlatformModel
 import dev.lemonadecode.workspace.uimodel.PairingMethod
 import dev.lemonadecode.workspace.uimodel.ScreenPictureModel
@@ -427,6 +433,122 @@ class WorkspaceContentUiTest {
   }
 
   @Test
+  fun `dragging across log lines selects them, and the copy keys copy them as text, a line each`() {
+    val clipboard = FakeClipboard()
+    show(WorkspaceShowcase.DeviceSideBySide, edit = { it }, clipboard = clipboard) {
+      selectLogLines(from = "10:18:31.737", to = "18 of 20 requests")
+      onRoot().performKeyInput { withKeyDown(CopyKey) { pressKey(Key.C) } }
+      waitForIdle()
+      assertEquals(
+        """
+        10:18:31.737 D  OkHttp --> POST /api/cart/checkout
+        10:18:32.474 D  OkHttp <-- 200 OK /api/cart/checkout (184 ms)
+        10:18:33.948 W  RateLimiter 18 of 20 requests used in the 60 s window
+        """.trimIndent(),
+        clipboard.text,
+      )
+    }
+  }
+
+  @Test
+  fun `the right-click menu copies the selected log lines too`() {
+    val clipboard = FakeClipboard()
+    show(WorkspaceShowcase.DeviceSideBySide, edit = { it }, clipboard = clipboard) {
+      selectLogLines(from = "429 Too Many Requests", to = "Checkout failed")
+      onNodeWithText("429 Too Many Requests", substring = true).performMouseInput { rightClick(Offset(60f, 6f)) }
+      waitForIdle()
+      onNodeWithText("Copy").performClick()
+      waitForIdle()
+      assertEquals(
+        """
+        10:18:35.422 E  RateLimiter 429 Too Many Requests · retry-after 30 s
+        10:18:36.159 E  CheckoutViewModel Checkout failed: RateLimitException at RateLimitInterceptor.kt:42
+        """.trimIndent(),
+        clipboard.text,
+      )
+    }
+  }
+
+  @Test
+  fun `the copy button copies every line shown, and says it did`() {
+    val clipboard = FakeClipboard()
+    show(WorkspaceShowcase.DeviceSideBySide, edit = { it }, clipboard = clipboard) {
+      onNodeWithContentDescription("Copy the lines shown").performClick()
+      waitForIdle()
+      val copied = clipboard.text.orEmpty().lines()
+      assertEquals(9, copied.size)
+      assertEquals("10:18:31.737 D  OkHttp --> POST /api/cart/checkout", copied.first())
+      assertEquals("10:18:39.107 D  OkHttp <-- 200 OK /api/cart/checkout (171 ms)", copied.last())
+      onNodeWithContentDescription("Copied").assertExists()
+    }
+  }
+
+  @Test
+  fun `live logs follow the newest line, but hold still while lines are selected`() {
+    var count by mutableStateOf(60)
+    show(WorkspaceShowcase.DeviceSideBySide, edit = { it.withLogLines(manyLogLines(count)) }) {
+      onNodeWithText("line 60.", substring = true).assertIsDisplayed()
+      count = 70
+      waitForIdle()
+      onNodeWithText("line 70.", substring = true).assertIsDisplayed()
+
+      selectLogLines(from = "line 66.", to = "line 68.")
+      count = 120
+      waitForIdle()
+      onNodeWithText("line 66.", substring = true).assertIsDisplayed()
+      onNodeWithText("line 120.", substring = true).assertDoesNotExist()
+
+      // A plain click clears the selection, and the list catches up.
+      onNodeWithText("line 67.", substring = true).performMouseInput { click(Offset(20f, 4f)) }
+      waitForIdle()
+      onNodeWithText("line 120.", substring = true).assertIsDisplayed()
+    }
+  }
+
+  @Test
+  fun `scrolling up stops following the live lines, and scrolling back down follows again`() {
+    var count by mutableStateOf(60)
+    show(WorkspaceShowcase.DeviceSideBySide, edit = { it.withLogLines(manyLogLines(count)) }) {
+      onNodeWithText("line 60.", substring = true).performMouseInput {
+        moveTo(center)
+        scroll(-200f)
+      }
+      waitForIdle()
+      onNodeWithText("line 1.", substring = true).assertIsDisplayed()
+      count = 80
+      waitForIdle()
+      onNodeWithText("line 1.", substring = true).assertIsDisplayed()
+      onNodeWithText("line 80.", substring = true).assertDoesNotExist()
+
+      onNodeWithText("line 1.", substring = true).performMouseInput {
+        moveTo(center)
+        scroll(400f)
+      }
+      waitForIdle()
+      count = 90
+      waitForIdle()
+      onNodeWithText("line 90.", substring = true).assertIsDisplayed()
+    }
+  }
+
+  @Test
+  fun `a selection still copies the lines it reaches once they scroll out of sight`() {
+    val clipboard = FakeClipboard()
+    show(WorkspaceShowcase.DeviceSideBySide, edit = { it.withLogLines(manyLogLines(60)) }, clipboard = clipboard) {
+      selectLogLines(from = "line 40.", to = "line 42.")
+      onNodeWithText("line 42.", substring = true).performMouseInput {
+        moveTo(center)
+        scroll(-200f)
+      }
+      waitForIdle()
+      onNodeWithText("line 1.", substring = true).assertIsDisplayed()
+      onRoot().performKeyInput { withKeyDown(CopyKey) { pressKey(Key.C) } }
+      waitForIdle()
+      assertEquals(listOf("line 40.", "line 41.", "line 42."), clipboard.text.orEmpty().lines().map { it.substringAfter("Tag ") })
+    }
+  }
+
+  @Test
   fun `in tabs, the device shows one pane and switches between them`() = show(WorkspaceShowcase.DeviceTabs) {
     onNodeWithText("idevicesyslog · all processes").assertExists()
     expect(WorkspaceEvent.SetDeviceTab(DeviceTab.Screen)) { onNodeWithText("Screen").performClick() }
@@ -716,6 +838,34 @@ class WorkspaceContentUiTest {
 
 /** The key Compose copies a selection with: ⌘ on macOS, Ctrl elsewhere. */
 private val CopyKey = if (System.getProperty("os.name").orEmpty().startsWith("Mac")) Key.MetaLeft else Key.CtrlLeft
+
+/**
+ * Selects from the start of the log line showing [from] to the end of the one showing [to], by
+ * dragging from that end back to the row's left edge, which selects from its first character.
+ */
+@OptIn(ExperimentalTestApi::class)
+private fun DesktopComposeUiTest.selectLogLines(from: String, to: String) {
+  val start = onNodeWithText(from, substring = true).fetchSemanticsNode().boundsInRoot
+  val end = onNodeWithText(to, substring = true).fetchSemanticsNode().boundsInRoot
+  onRoot().performMouseInput {
+    moveTo(Offset(end.right - 12f, end.bottom - 4f))
+    press()
+    moveTo(Offset(end.right - 40f, end.center.y))
+    moveTo(Offset(start.left + 1f, start.top + 4f))
+    release()
+  }
+  waitForIdle()
+}
+
+/** [count] Info lines, `line 1.` to `line <count>.`, oldest first. */
+private fun manyLogLines(count: Int): List<LogLineModel> = (1..count).map { LogLineModel(key = it.toLong(), time = "10:20:00.000", level = LogLevelModel.Info, tag = "Tag", message = "line $it.") }
+
+/** The open device's logs showing [lines]. */
+private fun WorkspaceModel.withLogLines(lines: List<LogLineModel>): WorkspaceModel {
+  val panel = devices ?: return this
+  val device = panel.content as? DevicesContentModel.Device ?: return this
+  return copy(devices = panel.copy(content = device.copy(logs = device.logs.copy(lines = lines, emptyText = null))))
+}
 
 /** The serials of the showcase's devices, as the panel raises them. */
 private object ShowcaseDevicesIds {

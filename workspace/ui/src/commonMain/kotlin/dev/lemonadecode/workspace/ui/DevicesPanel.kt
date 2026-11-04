@@ -8,6 +8,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
@@ -18,7 +19,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -33,20 +33,29 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.isSpecified
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asComposeImageBitmap
@@ -59,8 +68,17 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.key.utf16CodePoint
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.PointerInputScope
+import androidx.compose.ui.input.pointer.isPrimaryPressed
+import androidx.compose.ui.input.pointer.isShiftPressed
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.LocalPinnableContainer
+import androidx.compose.ui.layout.PinnableContainer
+import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -69,6 +87,7 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextIndent
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
@@ -118,6 +137,8 @@ import dev.lemonadecode.workspace.strings.devices_pair
 import dev.lemonadecode.workspace.strings.devices_separate
 import dev.lemonadecode.workspace.strings.logs_all
 import dev.lemonadecode.workspace.strings.logs_clear
+import dev.lemonadecode.workspace.strings.logs_copied
+import dev.lemonadecode.workspace.strings.logs_copy
 import dev.lemonadecode.workspace.strings.logs_errors
 import dev.lemonadecode.workspace.strings.logs_filter
 import dev.lemonadecode.workspace.strings.logs_filter_placeholder
@@ -191,6 +212,8 @@ import dev.lemonadecode.workspace.uimodel.PairingMethod
 import dev.lemonadecode.workspace.uimodel.QrCodeModel
 import dev.lemonadecode.workspace.uimodel.ScreenPictureModel
 import dev.lemonadecode.workspace.uimodel.WorkspaceEvent
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.skia.Bitmap
@@ -692,43 +715,52 @@ private fun LogsPane(
       horizontalArrangement = Arrangement.spacedBy(spaces.spacing200),
       modifier = Modifier.fillMaxWidth().padding(start = spaces.spacing400, end = spaces.spacing400, top = spaces.spacing100, bottom = spaces.spacing200),
     ) {
-      LemonadeUi.Chip(
-        label = stringResource(Res.string.logs_all),
-        selected = logs.filter == LogFilter.All,
-        leadingIcon = null,
-        onChipClicked = { onEvent(WorkspaceEvent.SetLogFilter(LogFilter.All)) },
-      )
-      LemonadeUi.Chip(
-        label = stringResource(Res.string.logs_warnings),
-        selected = logs.filter == LogFilter.Warnings,
-        leadingIcon = null,
-        counter = logs.warningCount.takeIf { it > 0 },
-        onChipClicked = { onEvent(WorkspaceEvent.SetLogFilter(LogFilter.Warnings)) },
-      )
-      LemonadeUi.Chip(
-        label = stringResource(Res.string.logs_errors),
-        selected = logs.filter == LogFilter.Errors,
-        leadingIcon = null,
-        counter = logs.errorCount.takeIf { it > 0 },
-        onChipClicked = { onEvent(WorkspaceEvent.SetLogFilter(LogFilter.Errors)) },
-      )
-      Spacer(modifier = Modifier.weight(1f))
-      LemonadeUi.IconButton(
-        icon = LemonadeIcons.Search,
-        contentDescription = stringResource(Res.string.logs_filter),
-        onClick = { onEvent(WorkspaceEvent.ToggleLogSearch) },
-        variant = LemonadeButtonVariant.Neutral,
-        type = if (logs.searchOpen) LemonadeButtonType.Solid else LemonadeButtonType.Ghost,
-        size = LemonadeButtonSize.XSmall,
-      )
-      LemonadeUi.IconButton(
-        icon = LemonadeIcons.Trash,
-        contentDescription = stringResource(Res.string.logs_clear),
-        onClick = { onEvent(WorkspaceEvent.ClearLogs) },
-        variant = LemonadeButtonVariant.Neutral,
-        type = LemonadeButtonType.Ghost,
-        size = LemonadeButtonSize.XSmall,
-      )
+      // The chips take what the buttons leave, and scroll sideways when a narrow panel can't fit them.
+      Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(spaces.spacing200),
+        modifier = Modifier.weight(1f).horizontalScroll(rememberScrollState()),
+      ) {
+        LemonadeUi.Chip(
+          label = stringResource(Res.string.logs_all),
+          selected = logs.filter == LogFilter.All,
+          leadingIcon = null,
+          onChipClicked = { onEvent(WorkspaceEvent.SetLogFilter(LogFilter.All)) },
+        )
+        LemonadeUi.Chip(
+          label = stringResource(Res.string.logs_warnings),
+          selected = logs.filter == LogFilter.Warnings,
+          leadingIcon = null,
+          counter = logs.warningCount.takeIf { it > 0 },
+          onChipClicked = { onEvent(WorkspaceEvent.SetLogFilter(LogFilter.Warnings)) },
+        )
+        LemonadeUi.Chip(
+          label = stringResource(Res.string.logs_errors),
+          selected = logs.filter == LogFilter.Errors,
+          leadingIcon = null,
+          counter = logs.errorCount.takeIf { it > 0 },
+          onChipClicked = { onEvent(WorkspaceEvent.SetLogFilter(LogFilter.Errors)) },
+        )
+      }
+      Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(spaces.spacing100)) {
+        LemonadeUi.IconButton(
+          icon = LemonadeIcons.Search,
+          contentDescription = stringResource(Res.string.logs_filter),
+          onClick = { onEvent(WorkspaceEvent.ToggleLogSearch) },
+          variant = LemonadeButtonVariant.Neutral,
+          type = if (logs.searchOpen) LemonadeButtonType.Solid else LemonadeButtonType.Ghost,
+          size = LemonadeButtonSize.XSmall,
+        )
+        CopyLinesButton(lines = logs.lines)
+        LemonadeUi.IconButton(
+          icon = LemonadeIcons.Trash,
+          contentDescription = stringResource(Res.string.logs_clear),
+          onClick = { onEvent(WorkspaceEvent.ClearLogs) },
+          variant = LemonadeButtonVariant.Neutral,
+          type = LemonadeButtonType.Ghost,
+          size = LemonadeButtonSize.XSmall,
+        )
+      }
     }
     if (logs.searchOpen) {
       LemonadeUi.SearchField(
@@ -738,25 +770,7 @@ private fun LogsPane(
         modifier = Modifier.fillMaxWidth().padding(start = spaces.spacing400, end = spaces.spacing400, bottom = spaces.spacing200),
       )
     }
-    val listState = rememberLazyListState()
-    LaunchedEffect(logs.lines.size, logs.lines.lastOrNull()?.key, logs.paused) {
-      if (!logs.paused && logs.lines.isNotEmpty()) listState.scrollToItem(logs.lines.lastIndex)
-    }
-    Box(modifier = Modifier.weight(1f).fillMaxWidth().background(colors.background.bgSubtle)) {
-      val emptyText = logs.emptyText
-      if (emptyText != null) {
-        LemonadeUi.Text(
-          text = emptyText.resolve(),
-          textStyle = LemonadeTheme.typography.bodySmallRegular,
-          textAlign = TextAlign.Center,
-          color = colors.content.contentSecondary,
-          modifier = Modifier.fillMaxWidth().padding(horizontal = spaces.spacing300, vertical = spaces.spacing600),
-        )
-      }
-      LazyColumn(state = listState, contentPadding = PaddingValues(spaces.spacing200), modifier = Modifier.fillMaxSize()) {
-        items(logs.lines, key = { it.key }) { line -> LogRow(line) }
-      }
-    }
+    LogLines(logs = logs, modifier = Modifier.weight(1f).fillMaxWidth())
     Row(
       verticalAlignment = Alignment.CenterVertically,
       horizontalArrangement = Arrangement.spacedBy(spaces.spacing300),
@@ -788,12 +802,202 @@ private fun LogsPane(
   }
 }
 
-/** One log line: time, level letter, tag and message, in columns; errors on a red wash. */
+/**
+ * The lines, newest last, selectable with the mouse: a drag, even across lines, a double or triple
+ * click, or a shift-click selects, and ⌘C, Ctrl+C or the right-click menu copies the selection as
+ * text, a line each. While live the list follows the newest line, except while lines are being
+ * selected or after it was scrolled up; scrolling back to the bottom or resuming follows again.
+ */
+@Composable
+private fun LogLines(
+  logs: DeviceLogsModel,
+  modifier: Modifier = Modifier,
+) {
+  val spaces = LemonadeTheme.spaces
+  val colors = LemonadeTheme.colors
+  val lines = logs.lines
+  val listState = rememberLazyListState()
+  val selection = remember { LogSelection() }
+  val pins = remember { LinePins() }
+  var follow by remember { mutableStateOf(true) }
+  LaunchedEffect(logs.paused) { if (!logs.paused) follow = true }
+  LaunchedEffect(listState) {
+    snapshotFlow { listState.canScrollForward }.collect { more -> if (!more) follow = true }
+  }
+  val holding = selection.holding
+  LaunchedEffect(lines.size, lines.lastOrNull()?.key, logs.paused, follow, holding) {
+    if (!logs.paused && follow && !holding && lines.isNotEmpty()) listState.scrollToItem(lines.lastIndex)
+  }
+  Box(modifier = modifier.background(colors.background.bgSubtle)) {
+    val emptyText = logs.emptyText
+    if (emptyText != null) {
+      LemonadeUi.Text(
+        text = emptyText.resolve(),
+        textStyle = LemonadeTheme.typography.bodySmallRegular,
+        textAlign = TextAlign.Center,
+        color = colors.content.contentSecondary,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = spaces.spacing300, vertical = spaces.spacing600),
+      )
+    }
+    SelectionContainer(
+      modifier = Modifier
+        .fillMaxSize()
+        .onFocusChanged { selection.focused = it.hasFocus }
+        .pointerInput(selection, listState) {
+          trackLogSelection(selection, onScrolledBack = { if (listState.canScrollBackward) follow = false })
+        },
+    ) {
+      LazyColumn(state = listState, contentPadding = PaddingValues(spaces.spacing200), modifier = Modifier.fillMaxSize()) {
+        items(lines, key = { it.key }) { line ->
+          if (holding) KeepComposed(line.key, pins)
+          LogRow(line)
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Whether lines are being selected, as far as the mouse tells: the selection itself is the
+ * [SelectionContainer]'s own. It holds from a press until a plain click clears it again, or the
+ * list loses the focus, which clears it too.
+ */
+@Stable
+private class LogSelection {
+  /** The button is down in the list. */
+  var pressed by mutableStateOf(false)
+
+  /** The last press dragged, clicked twice or thrice, or held Shift: it selected something. */
+  var selected by mutableStateOf(false)
+
+  /** The list has the focus, as it does once something in it is selected. */
+  var focused by mutableStateOf(false)
+
+  /** The list should hold still: a selection is being made or is there. */
+  val holding: Boolean get() = pressed || (selected && focused)
+}
+
+/**
+ * Watches the mouse over the log lines without taking anything from the selection underneath:
+ * presses, drags and clicks update [selection]; scrolling towards older lines calls [onScrolledBack].
+ */
+private suspend fun PointerInputScope.trackLogSelection(
+  selection: LogSelection,
+  onScrolledBack: () -> Unit,
+) = awaitPointerEventScope {
+  var downAt = Offset.Unspecified
+  var lastDownAt = Offset.Unspecified
+  var lastDownTime = 0L
+  var clicks = 0
+  while (true) {
+    val event = awaitPointerEvent(PointerEventPass.Initial)
+    val change = event.changes.firstOrNull() ?: continue
+    when (event.type) {
+      PointerEventType.Scroll -> if (change.scrollDelta.y < 0f) onScrolledBack()
+      PointerEventType.Press -> if (event.buttons.isPrimaryPressed && !downAt.isSpecified) {
+        val again = lastDownAt.isSpecified &&
+          change.uptimeMillis - lastDownTime < viewConfiguration.doubleTapTimeoutMillis &&
+          (change.position - lastDownAt).getDistance() < viewConfiguration.touchSlop
+        clicks = if (again) clicks + 1 else 1
+        downAt = change.position
+        lastDownAt = change.position
+        lastDownTime = change.uptimeMillis
+        selection.pressed = true
+        selection.selected = clicks > 1 || event.keyboardModifiers.isShiftPressed
+      }
+      PointerEventType.Move -> if (downAt.isSpecified && (change.position - downAt).getDistance() > viewConfiguration.touchSlop) {
+        selection.selected = true
+      }
+      PointerEventType.Release -> if (downAt.isSpecified && !event.buttons.isPrimaryPressed) {
+        downAt = Offset.Unspecified
+        selection.pressed = false
+      }
+      else -> Unit
+    }
+  }
+}
+
+/** Keeps the line [key] composed while it scrolls out of sight, so a selection reaching it still copies it. */
+@Composable
+private fun KeepComposed(key: Long, pins: LinePins) {
+  val container = LocalPinnableContainer.current ?: return
+  DisposableEffect(container, key) {
+    pins.pin(key, container)
+    onDispose { pins.release(key) }
+  }
+}
+
+/**
+ * The lines kept composed, by key. A lazy list lays pinned items out of sight in the order they
+ * were pinned, and a selection goes by where its lines are, so each new one pins them all again in
+ * the lines' own order, which their keys follow.
+ */
+private class LinePins {
+  private val containers = mutableMapOf<Long, PinnableContainer>()
+  private val handles = mutableMapOf<Long, PinnableContainer.PinnedHandle>()
+
+  fun pin(key: Long, container: PinnableContainer) {
+    containers[key] = container
+    // Released and pinned again in one go, before the list measures, so none of them leaves.
+    handles.values.forEach { it.release() }
+    handles.clear()
+    containers.keys.sorted().forEach { handles[it] = containers.getValue(it).pin() }
+  }
+
+  fun release(key: Long) {
+    val _ = containers.remove(key)
+    handles.remove(key)?.release()
+  }
+}
+
+/** Copies the lines shown, as text a line each, and says so for a moment. */
+@Composable
+private fun CopyLinesButton(lines: List<LogLineModel>) {
+  val clipboard = LocalClipboard.current
+  val scope = rememberCoroutineScope()
+  var copied by remember { mutableStateOf(false) }
+  LaunchedEffect(copied) {
+    if (copied) {
+      delay(CopiedMillis)
+      copied = false
+    }
+  }
+  LemonadeUi.IconButton(
+    icon = if (copied) LemonadeIcons.Check else LemonadeIcons.Copy,
+    contentDescription = stringResource(if (copied) Res.string.logs_copied else Res.string.logs_copy),
+    onClick = {
+      val text = lines.joinToString("\n") { it.plainText() }
+      scope.launch {
+        val _ = runCatching { clipboard.setClipEntry(plainTextClipEntry(text)) }
+        copied = true
+      }
+    },
+    enabled = lines.isNotEmpty(),
+    variant = LemonadeButtonVariant.Neutral,
+    type = LemonadeButtonType.Ghost,
+    size = LemonadeButtonSize.XSmall,
+  )
+}
+
+/** How long the copy button shows it copied. */
+private const val CopiedMillis = 1_500L
+
+/** The time column is at least this many characters wide. */
+private const val LogTimeColumns = 9
+
+/** [LogLineModel] as one line of text, as it's shown and copied: time, level letter, tag and message. */
+private fun LogLineModel.plainText(): String = "${time.padEnd(LogTimeColumns)} ${level.letter}  $tag $message"
+
+/**
+ * One log line: time, level letter, tag and message, in columns; errors on a red wash. It's one
+ * text, so a selection across lines copies each whole, and a long message wraps under its own column.
+ */
 @Composable
 private fun LogRow(line: LogLineModel) {
   val colors = LemonadeTheme.colors
   val style = LemonadeCodeTheme.typography.codeSmall
   val ch = rememberCharWidth(style)
+  val density = LocalDensity.current
   val error = line.level == LogLevelModel.Error || line.level == LogLevelModel.Fatal
   val levelColor = when (line.level) {
     LogLevelModel.Error, LogLevelModel.Fatal -> colors.content.contentCritical
@@ -801,29 +1005,26 @@ private fun LogRow(line: LogLineModel) {
     LogLevelModel.Info -> colors.content.contentInfo
     LogLevelModel.Debug, LogLevelModel.Verbose -> colors.content.contentTertiary
   }
-  Row(
-    horizontalArrangement = Arrangement.spacedBy(ch),
+  val time = line.time.padEnd(LogTimeColumns)
+  val text = buildAnnotatedString {
+    withStyle(SpanStyle(color = colors.content.contentTertiary)) { append(time) }
+    append(' ')
+    withStyle(SpanStyle(color = levelColor, fontWeight = FontWeight.SemiBold)) { append(line.level.letter) }
+    append("  ")
+    withStyle(SpanStyle(color = LemonadeTheme.themed.blue.content)) { append(line.tag) }
+    withStyle(SpanStyle(color = colors.content.contentPrimary)) { append(' ').append(line.message) }
+  }
+  // Wrapped lines start under the tag, past the time and the level.
+  val messageColumn = with(density) { (ch * (time.length + 4)).toSp() }
+  LemonadeUi.Text(
+    text = text,
+    textStyle = style.copy(textIndent = TextIndent(restLine = messageColumn)),
     modifier = Modifier
       .fillMaxWidth()
       .clip(LemonadeTheme.shapes.radius150)
       .background(if (error) colors.background.bgCriticalSubtle else Color.Transparent)
       .padding(horizontal = LemonadeTheme.spaces.spacing200, vertical = 1.dp),
-  ) {
-    LemonadeUi.Text(text = line.time, textStyle = style.copy(color = colors.content.contentTertiary), maxLines = 1, modifier = Modifier.widthIn(min = ch * 9))
-    LemonadeUi.Text(
-      text = line.level.letter,
-      textStyle = style.copy(color = levelColor, fontWeight = FontWeight.SemiBold),
-      modifier = Modifier.width(ch * 2),
-    )
-    LemonadeUi.Text(
-      text = buildAnnotatedString {
-        withStyle(SpanStyle(color = LemonadeTheme.themed.blue.content)) { append(line.tag) }
-        withStyle(SpanStyle(color = colors.content.contentPrimary)) { append(' ').append(line.message) }
-      },
-      textStyle = style,
-      modifier = Modifier.weight(1f),
-    )
-  }
+  )
 }
 
 /** "● Live" or "● Paused"; pressing it pauses or resumes the list. */

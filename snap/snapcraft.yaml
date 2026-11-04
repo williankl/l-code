@@ -10,9 +10,9 @@ website: https://github.com/williankl/loupe
 source-code: https://github.com/williankl/loupe
 issues: https://github.com/williankl/loupe/issues
 icon: snap/gui/lemonade-code.png
-# Apache 2.0 with the Commons Clause (see LICENSE). The clause has no official SPDX id, so this
-# uses ScanCode's, which snapcraft accepts.
-license: Apache-2.0 AND LicenseRef-scancode-commons-clause
+# No license field: the app is Apache 2.0 with the Commons Clause (see LICENSE), and `snap pack`
+# only takes ids from snapd's own SPDX list, which has no Commons Clause and refuses every
+# LicenseRef- id. Plain Apache-2.0 would leave the clause out, so LICENSE stays the word on it.
 
 base: core24
 grade: stable

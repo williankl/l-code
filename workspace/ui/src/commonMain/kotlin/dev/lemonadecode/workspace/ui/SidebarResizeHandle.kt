@@ -34,8 +34,9 @@ import org.jetbrains.compose.resources.stringResource
 internal expect val HorizontalResizePointerIcon: PointerIcon
 
 /**
- * The gap between the sessions sidebar and the main panel. Dragging it moves the sidebar's edge
- * through [onResize] as the pointer goes; letting go reports the final width to [onResizeFinished].
+ * The gap between a side panel and the main panel. Dragging it moves the panel's edge through
+ * [onResize] as the pointer goes; letting go reports the final width to [onResizeFinished]. A
+ * panel at the end of the window ([atEnd]) grows as the pointer moves towards the start.
  */
 @Composable
 internal fun SidebarResizeHandle(
@@ -45,6 +46,8 @@ internal fun SidebarResizeHandle(
   onResize: (Dp) -> Unit,
   onResizeFinished: (Dp) -> Unit,
   modifier: Modifier = Modifier,
+  atEnd: Boolean = false,
+  label: String = stringResource(Res.string.sessions_resize),
 ) {
   val density = LocalDensity.current
   val interaction = remember { MutableInteractionSource() }
@@ -54,10 +57,10 @@ internal fun SidebarResizeHandle(
   // edge only comes back once the pointer does.
   var pulled by remember { mutableStateOf(sidebarWidth) }
   val state = rememberDraggableState { delta ->
-    pulled += with(density) { delta.toDp() }
+    val moved = with(density) { delta.toDp() }
+    pulled += if (atEnd) -moved else moved
     onResize(pulled.coerceIn(minWidth, maxWidth))
   }
-  val label = stringResource(Res.string.sessions_resize)
 
   Box(
     contentAlignment = Alignment.Center,

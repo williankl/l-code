@@ -110,6 +110,7 @@
   <!-- Sessions -->
   <string name="sessions_title">Sitzungen</string>
   <string name="sessions_resize">Breite der Sitzungsliste ändern</string>
+  <string name="devices_resize">Breite des Gerätebereichs ändern</string>
   <string name="action_new_session">Neue Sitzung</string>
   <string name="status_working">arbeitet</string>
   <string name="status_needs_input">wartet auf dich</string>

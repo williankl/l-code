@@ -35,6 +35,8 @@ import dev.lemonadecode.workspace.strings.worktree_branch_taken
 import dev.lemonadecode.workspace.uimodel.DeviceScreenModel
 import dev.lemonadecode.workspace.uimodel.DevicesButtonModel
 import dev.lemonadecode.workspace.uimodel.DevicesContentModel
+import dev.lemonadecode.workspace.uimodel.DevicesLayoutOption
+import dev.lemonadecode.workspace.uimodel.DevicesPanelModel
 import dev.lemonadecode.workspace.uimodel.DevicesWindow
 import dev.lemonadecode.workspace.uimodel.DiffRowModel
 import dev.lemonadecode.workspace.uimodel.LanguageOption
@@ -269,6 +271,33 @@ class WorkspacePresenterTest {
       open.eventSink(WorkspaceEvent.SetMobilePlugin(false))
       val closed = awaitItemWhere { it.topBar.devices == null }
       assertEquals(null, closed.devices)
+    }
+  }
+
+  @Test
+  fun `the docked devices panel keeps one width for a device's screen and logs together, and one for the rest`() = runTest {
+    settings.update { it.copy(mobilePlugin = true) }
+    mobile.setDevices(ShowcaseDevices.connected)
+    presenter.test {
+      awaitItem().eventSink(WorkspaceEvent.ToggleDevices)
+      val list = awaitItemWhere { it.devices != null }
+      assertEquals(DevicesPanelModel.DefaultWidth, list.devices?.width)
+      list.eventSink(WorkspaceEvent.ResizeDevicesPanel(500))
+      val resized = awaitItemWhere { it.devices?.width == 500 }
+      assertEquals(500, settings.settings.value.devicesPanelWidth)
+
+      // A device's screen and logs together start wider, and dragging them leaves the list's width alone.
+      resized.eventSink(WorkspaceEvent.SelectDevice(ShowcaseDevices.pixel.id.value))
+      val device = awaitItemWhere { it.devices?.content is DevicesContentModel.Device }
+      assertEquals(DevicesPanelModel.DefaultWideWidth, device.devices?.width)
+      device.eventSink(WorkspaceEvent.ResizeDevicesPanel(5_000))
+      val widest = awaitItemWhere { it.devices?.width == DevicesPanelModel.MaxWidth }
+      assertEquals(DevicesPanelModel.MaxWidth, settings.settings.value.devicesPanelWideWidth)
+      assertEquals(500, settings.settings.value.devicesPanelWidth)
+
+      // In tabs the device takes the narrow width again.
+      widest.eventSink(WorkspaceEvent.SetDevicesLayout(DevicesLayoutOption.Tabs))
+      awaitItemWhere { it.devices?.width == 500 }
     }
   }
 

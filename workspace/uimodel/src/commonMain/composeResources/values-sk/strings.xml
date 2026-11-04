@@ -124,6 +124,7 @@
   <!-- Sessions -->
   <string name="sessions_title">Relácie</string>
   <string name="sessions_resize">Zmeniť šírku panela relácií</string>
+  <string name="devices_resize">Zmeniť šírku panela zariadení</string>
   <string name="action_new_session">Nová relácia</string>
   <string name="status_working">pracuje</string>
   <string name="status_needs_input">čaká na vás</string>

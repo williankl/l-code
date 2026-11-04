@@ -36,7 +36,18 @@ public data class DevicesPanelModel(
   val content: DevicesContentModel,
   /** Goes up by one each time the separate window should come to the front. */
   val focusRequest: Int = 0,
-)
+  /** Its width in dp while docked, as last dragged; a device's screen and logs together have their own. */
+  val width: Int = DefaultWidth,
+) {
+  public companion object {
+    public const val DefaultWidth: Int = 420
+    public const val DefaultWideWidth: Int = 760
+
+    /** How far the docked panel can be dragged, in dp; the window can narrow it further. */
+    public const val MinWidth: Int = 360
+    public const val MaxWidth: Int = 1400
+  }
+}
 
 @Immutable
 public sealed interface DevicesContentModel {

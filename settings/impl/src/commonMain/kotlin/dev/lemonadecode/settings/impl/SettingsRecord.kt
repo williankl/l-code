@@ -12,6 +12,7 @@ import kotlinx.serialization.Serializable
 internal data class SettingsRecord(
   val theme: String? = null,
   val keepAwake: Boolean? = null,
+  val statusSounds: Boolean? = null,
   val subSessionLocation: String? = null,
   val sidebarExpanded: Boolean? = null,
   val sidebarWidth: Int? = null,
@@ -27,6 +28,7 @@ internal fun SettingsRecord.toDomain(): AppSettings {
   return AppSettings(
     theme = ThemePreference.entries.firstOrNull { it.name == theme } ?: defaults.theme,
     keepAwake = keepAwake ?: defaults.keepAwake,
+    statusSounds = statusSounds ?: defaults.statusSounds,
     subSessionLocation = SubSessionLocation.entries.firstOrNull { it.name == subSessionLocation } ?: defaults.subSessionLocation,
     sidebarExpanded = sidebarExpanded ?: defaults.sidebarExpanded,
     sidebarWidth = sidebarWidth?.takeIf { it > 0 } ?: defaults.sidebarWidth,
@@ -41,6 +43,7 @@ internal fun SettingsRecord.toDomain(): AppSettings {
 internal fun AppSettings.toRecord(): SettingsRecord = SettingsRecord(
   theme = theme.name,
   keepAwake = keepAwake,
+  statusSounds = statusSounds,
   subSessionLocation = subSessionLocation.name,
   sidebarExpanded = sidebarExpanded,
   sidebarWidth = sidebarWidth,

@@ -89,7 +89,7 @@ public enum class WorkspaceShowcase(
   SessionMenu("6a", "Menu on lua-script", "Right-click a session: the menu names it and its folder, and the row holds a ring."),
   RenamingSession("6b", "Renaming in place", "Rename swaps the menu’s actions for a name field."),
   NamingWorktree("6c", "Naming a new worktree", "New sub-session in new worktree swaps the menu’s actions for a branch field, filled with a suggestion."),
-  SettingsList("8a", "Settings list", "Five rows show their current value; the gear's dot says an update is out. Open one to change it."),
+  SettingsList("8a", "Settings list", "Six rows show their current value; the gear's dot says an update is out. Open one to change it."),
   SettingsLanguage("8b", "Language, Deutsch chosen", "Each language in its own name, with its flag. The whole app follows at once."),
   SettingsPlugins("8c", "Plugins › Mobile", "The Mobile plugin mirrors Android and iOS screens, pairs devices and reads their logs."),
   SettingsUpdates("8d", "Updates, 1.9.0 available", "What's new, then Update now. It downloads, then a restart finishes it."),
@@ -119,6 +119,7 @@ public enum class WorkspaceShowcase(
     "Comparing sound files",
     "A changed sound before and after, each with a player and its waveform, on one time scale; a new sound has one side.",
   ),
+  SettingsSounds("8q", "Settings › Sounds", "A ding when an agent finishes, two when it needs input, from any session. Play lets you hear each one."),
   ;
 
   public fun model(eventSink: (WorkspaceEvent) -> Unit = {}): WorkspaceModel = WorkspaceModelMapper.map(scene.input, eventSink)
@@ -408,6 +409,7 @@ private fun sceneFor(showcase: WorkspaceShowcase): Scene = when (showcase) {
     ),
   )
   WorkspaceShowcase.DiffSounds -> soundsScene()
+  WorkspaceShowcase.SettingsSounds -> settingsScene(SettingsPage.Sounds, update = UpdateState.None)
 }
 
 /** A notification sound that changed and an error sound that's new, both previewing. */

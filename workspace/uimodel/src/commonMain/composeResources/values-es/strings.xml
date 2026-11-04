@@ -36,6 +36,12 @@
   <string name="language_portuguese">Portugués</string>
   <string name="language_slovak">Eslovaco</string>
 
+  <!-- Settings › Sounds. Play uses preview_play. -->
+  <string name="settings_sounds">Sonidos</string>
+  <string name="sounds_description">Suena un tono cuando un agente de cualquier sesión termina, y un tono doble cuando te necesita.</string>
+  <string name="sounds_finished">El agente terminó</string>
+  <string name="sounds_needs_input">El agente te necesita</string>
+
   <!-- Settings › Plugins -->
   <string name="plugins_mobile">Móvil</string>
   <string name="plugins_mobile_description">Duplicar pantallas de Android e iOS, emparejar dispositivos por Wi‑Fi y leer sus registros.</string>

@@ -64,6 +64,11 @@ public sealed interface WorkspaceEvent {
   public data class SetTheme(val theme: ThemeOption) : WorkspaceEvent
   public data class SetLanguage(val language: LanguageOption) : WorkspaceEvent
   public data class SetKeepAwake(val enabled: Boolean) : WorkspaceEvent
+  public data class SetStatusSounds(val enabled: Boolean) : WorkspaceEvent
+
+  /** Settings › Sounds › Play: lets you hear [sound], whether status sounds are on or not. */
+  public data class PlayStatusSound(val sound: StatusSound) : WorkspaceEvent
+
   public data class SetMobilePlugin(val enabled: Boolean) : WorkspaceEvent
 
   public data object CheckForUpdates : WorkspaceEvent

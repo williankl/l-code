@@ -64,6 +64,10 @@ private fun SettingsLanguagePreview() = ShowcasePreview(WorkspaceShowcase.Settin
 
 @Preview
 @Composable
+private fun SettingsSoundsPreview() = ShowcasePreview(WorkspaceShowcase.SettingsSounds)
+
+@Preview
+@Composable
 private fun SettingsPluginsPreview() = ShowcasePreview(WorkspaceShowcase.SettingsPlugins)
 
 @Preview

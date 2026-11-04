@@ -22,6 +22,7 @@ import dev.lemonadecode.platform.presenter.testing.awaitItemWhere
 import dev.lemonadecode.platform.presenter.testing.test
 import dev.lemonadecode.platform.presenter.testing.yieldUntil
 import dev.lemonadecode.platform.process.HomeDirectory
+import dev.lemonadecode.platform.sound.testing.FakeSoundPlayer
 import dev.lemonadecode.review.api.ReviewError
 import dev.lemonadecode.review.fake.FakeReviewService
 import dev.lemonadecode.sessions.fake.FakeSessionService
@@ -58,6 +59,7 @@ class WorkspacePreviewTest {
     },
     FakeUpdateService(),
     FakeMobileService(),
+    FakeSoundPlayer(),
   ) { 0L }
 
   private val logo = FileDiff("art/logo.png", null, FileChange.Modified, "PNG", emptyList(), isBinary = true)

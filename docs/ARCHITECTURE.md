@@ -71,13 +71,14 @@ An `impl` never depends on another `impl`. Bindings are contributed with
 | `platform/process-core` | `ProcessRunner`, `UserShell`, `HomeDirectory`. |
 | `platform/terminal` | `TerminalSession` (pty4j and JediTerm's emulator) and `TerminalView`, a Compose renderer. |
 | `platform/syntax-core` | Lightweight code colouring for the diff. |
+| `platform/sound-core` / `-test` | `SoundPlayer` and its two chimes, a ding and a double ding, drawn in code and played through Java Sound on a background thread; a fake that records what played. |
 | `platform/power-core` | Keep-awake for the system and the screen: `caffeinate` on macOS, `systemd-inhibit` plus GNOME's `gnome-session-inhibit` on Linux, PowerShell calling `SetThreadExecutionState` on Windows. |
 | `platform/designsystem` | `LemonadeCodeTheme` over Lemonade, plus tooltips, popovers, a context menu and a slot segmented control. See [Design](DESIGN.md#what-lemonade-code-adds). |
 | `domainEntities` | Sessions, reviews, diffs, settings, updates. No dependencies. |
 | `data/git/{api,impl,fake}` | `GitDataSource` over the `git` command: merge-base diffs with whole-file context, untracked files, worktrees. |
 | `sessions/{api,impl,fake}` | `SessionService`: opens login shells in PTYs, follows each shell's folder and branch, infers working / needs input / idle / exited, plans and starts sub-sessions. `SessionTerminals` exposes the terminals to the UI. |
 | `review/{api,impl,fake}` | `ReviewService`: the diff and comments per checkout, the review text, pasting it into the session or into a review sub-session. |
-| `settings/{api,impl,fake}` | `SettingsService` (persisted) and the keep-awake coordinator. |
+| `settings/{api,impl,fake}` | `SettingsService` (persisted), the keep-awake coordinator, and the status sounds coordinator that dings when an agent finishes or needs input. |
 | `updates/{api,impl,fake}` | `UpdateService`: finds a newer GitHub release for this install, downloads and checks it, and, on Restart now, hands over to a helper that swaps it in after the app quits. See [RELEASING.md](../RELEASING.md). |
 | `mobile/{api,impl,fake}` | `MobileService`, the Mobile plugin: Android devices through `adb` (list, the screen as video from `screenrecord` decoded with FFmpeg, screenshots, input, `logcat`, pairing by QR code or code, mDNS discovery) and iOS devices through libimobiledevice (list, screenshots, `idevicesyslog`, trusting over a cable). Idle while the plugin is off. |
 | `workspace/uimodel` | `WorkspaceModel`, `WorkspaceEvent` and the localized strings (`composeResources`: English, German, Spanish, French, Portuguese and Slovak). |

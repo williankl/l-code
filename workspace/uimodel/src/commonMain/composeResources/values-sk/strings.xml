@@ -493,4 +493,18 @@
     <item quantity="many">Ďalších %1$d riadkov sa nezobrazuje</item>
     <item quantity="other">Ďalších %1$d riadkov sa nezobrazuje</item>
   </plurals>
+  <string name="preview_audio_waveform">Vlnový priebeh</string>
+  <string name="preview_audio_mono">Mono</string>
+  <string name="preview_audio_stereo">Stereo</string>
+  <plurals name="preview_audio_channels">
+    <item quantity="one">%1$d kanál</item>
+    <item quantity="few">%1$d kanály</item>
+    <item quantity="many">%1$d kanálov</item>
+    <item quantity="other">%1$d kanálov</item>
+  </plurals>
+  <string name="preview_audio_khz">%1$s kHz</string>
+  <string name="preview_audio_bits">%1$d bitov</string>
+  <string name="preview_audio_kbps">%1$s kb/s</string>
+  <string name="preview_audio_no_output">Tu sa nedá prehrať: chýba zvukový výstup.</string>
+  <string name="preview_audio_play_failed">Tento súbor sa nepodarilo prehrať: %1$s</string>
 </resources>

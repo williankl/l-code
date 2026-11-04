@@ -28,6 +28,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
@@ -249,23 +250,49 @@ internal fun MotionControls(
   modifier: Modifier = Modifier,
 ) {
   val duration = state.source.durationMicros
-  var resumeAfterScrub by remember(state) { mutableStateOf(false) }
+  PlaybackControls(
+    playing = state.playing,
+    fraction = if (duration > 0) (state.positionMicros.toFloat() / duration).coerceIn(0f, 1f) else 0f,
+    position = position,
+    onPlay = state::play,
+    onPause = state::pause,
+    onSeek = { fraction -> state.seekTo((fraction * duration).toLong()) },
+    seekable = duration > 0,
+    modifier = modifier,
+  )
+}
+
+/**
+ * Play or pause, a bar to scrub along filled up to [fraction], and where playback is. Scrubbing
+ * pauses, and playback carries on once it's let go. [playable] false greys the button out, for
+ * media that can't play here.
+ */
+@Composable
+internal fun PlaybackControls(
+  playing: Boolean,
+  fraction: Float,
+  position: String,
+  onPlay: () -> Unit,
+  onPause: () -> Unit,
+  onSeek: (Float) -> Unit,
+  modifier: Modifier = Modifier,
+  seekable: Boolean = true,
+  playable: Boolean = true,
+) {
+  val scrub = rememberScrub(playing, onPlay, onPause)
   Row(
     verticalAlignment = Alignment.CenterVertically,
     horizontalArrangement = Arrangement.spacedBy(LemonadeTheme.spaces.spacing200),
     modifier = modifier,
   ) {
-    PlayPauseButton(playing = state.playing, onClick = state::toggle)
+    PlayPauseButton(playing = playing, enabled = playable, onClick = if (playing) onPause else onPlay)
     SeekBar(
-      fraction = if (duration > 0) (state.positionMicros.toFloat() / duration).coerceIn(0f, 1f) else 0f,
-      enabled = duration > 0,
+      fraction = fraction,
+      enabled = seekable,
       description = stringResource(Res.string.preview_position),
-      onScrubStart = {
-        resumeAfterScrub = state.playing
-        state.pause()
-      },
-      onScrub = { fraction -> state.seekTo((fraction * duration).toLong()) },
-      onScrubEnd = { if (resumeAfterScrub) state.play() },
+      onScrubStart = scrub::start,
+      onScrub = onSeek,
+      onScrubEnd = scrub::end,
       modifier = Modifier.weight(1f),
     )
     LemonadeUi.Text(
@@ -279,10 +306,41 @@ internal fun MotionControls(
   }
 }
 
+/** Pauses playback while the user scrubs, and plays on once let go if it was playing. */
+internal class Scrub(
+  private val playing: () -> Boolean,
+  private val play: () -> Unit,
+  private val pause: () -> Unit,
+) {
+  private var resume = false
+
+  fun start() {
+    resume = playing()
+    pause()
+  }
+
+  fun end() {
+    if (resume) play()
+  }
+}
+
+@Composable
+internal fun rememberScrub(
+  playing: Boolean,
+  play: () -> Unit,
+  pause: () -> Unit,
+): Scrub {
+  val isPlaying by rememberUpdatedState(playing)
+  val currentPlay by rememberUpdatedState(play)
+  val currentPause by rememberUpdatedState(pause)
+  return remember { Scrub(playing = { isPlaying }, play = { currentPlay() }, pause = { currentPause() }) }
+}
+
 /** A round lime button with a drawn play or pause sign: Lemonade has no icons for them. */
 @Composable
 private fun PlayPauseButton(
   playing: Boolean,
+  enabled: Boolean,
   onClick: () -> Unit,
 ) {
   val colors = LemonadeTheme.colors
@@ -293,10 +351,11 @@ private fun PlayPauseButton(
   Box(
     modifier = Modifier
       .size(24.dp)
+      .alpha(if (enabled) 1f else LemonadeTheme.opacities.state.opacityDisabled)
       .clip(CircleShape)
-      .background(if (hovered) colors.interaction.bgBrandInteractive else colors.background.bgBrand)
-      .hoverable(interactionSource)
-      .clickable(interactionSource = interactionSource, indication = null, role = Role.Button, onClick = onClick)
+      .background(if (hovered && enabled) colors.interaction.bgBrandInteractive else colors.background.bgBrand)
+      .hoverable(interactionSource, enabled = enabled)
+      .clickable(interactionSource = interactionSource, indication = null, enabled = enabled, role = Role.Button, onClick = onClick)
       .semantics { contentDescription = label }
       .drawBehind {
         val unit = size.minDimension / 24f
@@ -335,9 +394,7 @@ private fun SeekBar(
   val colors = LemonadeTheme.colors
   val track = colors.border.borderNeutralMedium
   val fill = if (enabled) colors.background.bgBrand else colors.border.borderNeutralHigh
-  val currentStart by rememberUpdatedState(onScrubStart)
   val currentScrub by rememberUpdatedState(onScrub)
-  val currentEnd by rememberUpdatedState(onScrubEnd)
   Box(
     modifier = modifier
       .height(20.dp)
@@ -351,23 +408,7 @@ private fun SeekBar(
           }
         }
       }
-      .pointerInput(enabled) {
-        if (!enabled) return@pointerInput
-        awaitEachGesture {
-          val down = awaitFirstDown()
-          down.consume()
-          currentStart()
-          try {
-            currentScrub((down.position.x / size.width).coerceIn(0f, 1f))
-            drag(down.id) { change ->
-              change.consume()
-              currentScrub((change.position.x / size.width).coerceIn(0f, 1f))
-            }
-          } finally {
-            currentEnd()
-          }
-        }
-      }
+      .scrubbing(enabled, onScrubStart, onScrub, onScrubEnd)
       .drawBehind {
         val thickness = 4.dp.toPx()
         val thumb = 5.dp.toPx()
@@ -381,4 +422,43 @@ private fun SeekBar(
         if (enabled) drawCircle(fill, radius = thumb, center = Offset(left + filled, size.height / 2f))
       },
   )
+}
+
+/**
+ * Pressing or dragging along the element scrubs: [onScrub] hears where, as a fraction of [span] of
+ * its width (all of it by default), between [onStart] and [onEnd].
+ */
+@Composable
+internal fun Modifier.scrubbing(
+  enabled: Boolean,
+  onStart: () -> Unit,
+  onScrub: (Float) -> Unit,
+  onEnd: () -> Unit,
+  span: () -> Float = { 1f },
+): Modifier {
+  val currentStart by rememberUpdatedState(onStart)
+  val currentScrub by rememberUpdatedState(onScrub)
+  val currentEnd by rememberUpdatedState(onEnd)
+  val currentSpan by rememberUpdatedState(span)
+  return pointerInput(enabled) {
+    if (!enabled) return@pointerInput
+    fun fractionAt(x: Float): Float {
+      val width = size.width * currentSpan().coerceIn(0f, 1f)
+      return if (width <= 0f) 0f else (x / width).coerceIn(0f, 1f)
+    }
+    awaitEachGesture {
+      val down = awaitFirstDown()
+      down.consume()
+      currentStart()
+      try {
+        currentScrub(fractionAt(down.position.x))
+        drag(down.id) { change ->
+          change.consume()
+          currentScrub(fractionAt(change.position.x))
+        }
+      } finally {
+        currentEnd()
+      }
+    }
+  }
 }

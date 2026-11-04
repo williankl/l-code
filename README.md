@@ -108,8 +108,9 @@ where it started.
 
 ### Previews for more than code
 
-Images, SVGs, videos, 3D models, Markdown and CSV files show up as what they are, before and after,
-side by side. GIFs and videos play, and you can drag a 3D model to turn it around.
+Images, SVGs, videos, sounds, 3D models, Markdown and CSV files show up as what they are, before and
+after, side by side. GIFs, videos and sounds play, a sound shows its waveform, and you can drag a 3D
+model to turn it around.
 
 <table>
 <tr>

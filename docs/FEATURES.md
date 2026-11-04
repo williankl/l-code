@@ -179,12 +179,18 @@ chip in the file's header switches between the preview and the text diff.
 |---|---|---|
 | Images | PNG, JPEG, GIF, WebP, BMP, ICO | Before and after, side by side. Animated GIFs and WebPs play, with a pause button and a bar to scrub through their frames |
 | Videos | MP4, MOV, M4V, WebM, MKV, AVI, OGV, MPEG | Before and after, side by side, with play, pause and a seek bar. They loop and play without sound |
+| Sounds | WAV, MP3, M4A, AAC, Ogg, Opus, FLAC, AIFF, CAF, WMA and more | Before and after, side by side, each with its waveform, play, pause and a seek bar, and its length, codec, sample rate, channels and bitrate |
 | Vector art | SVG | Before and after, side by side |
 | 3D models | STL, OBJ, PLY, glTF, GLB | Before and after, side by side. Drag to turn, ⌘ or Ctrl + scroll to zoom, double-click to reset |
 | Documents | Markdown | Formatted, the way GitHub shows it: tables, task lists, quotes, alerts, code blocks, and the HTML READMEs use, like centered blocks, tables of screenshots and `<details>` |
 | Data | CSV, TSV | A table |
 
 Switch between **Before**, **After** and **Side by side** for any file that changed on both sides.
+
+Side by side, the two waveforms of a sound share one time scale, so a sound that got longer,
+shorter, louder or quieter shows it at a glance. Click or drag along a waveform to jump there. Only
+one sound plays at a time, and it stops when you scroll it away, fold it, or switch to another file
+or tab. On a computer with no sound output, the preview still draws and says it can't play there.
 
 Pictures in a Markdown file show too. Pictures from the repository are read from the same side of
 the change as the document, so the **Before** side shows the pictures as they were. Pictures from the

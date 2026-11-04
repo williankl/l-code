@@ -19,6 +19,9 @@ public enum class PreviewKind {
 
   /** MP4, M4V, MOV, WebM, MKV, AVI, OGV and MPEG, played without sound. */
   Video,
+
+  /** WAV, MP3, M4A, AAC, Ogg, Opus, FLAC, AIFF and other sound files, played with their waveform. */
+  Audio,
   ;
 
   public companion object {
@@ -30,6 +33,9 @@ public enum class PreviewKind {
       listOf("csv", "tsv").forEach { put(it, Table) }
       // Not `ts`: that's TypeScript far more often than an MPEG transport stream.
       listOf("mp4", "m4v", "mov", "webm", "mkv", "avi", "ogv", "mpg", "mpeg").forEach { put(it, Video) }
+      // Not `au` or `snd`: in a repository those name other things more often than Sun's sound files.
+      listOf("wav", "wave", "mp3", "m4a", "aac", "ogg", "oga", "opus", "flac", "aif", "aiff", "aifc", "caf", "wma", "mka", "weba", "amr", "ac3")
+        .forEach { put(it, Audio) }
     }
 
     /** The preview for [path], judged by its extension; null when Lemonade Code can't draw it. */

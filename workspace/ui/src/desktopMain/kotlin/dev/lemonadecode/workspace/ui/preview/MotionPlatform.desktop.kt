@@ -38,6 +38,18 @@ internal actual fun formatSeconds(millis: Long): String = NumberFormat.getNumber
   maximumFractionDigits = 1
 }.format(millis / 1000.0)
 
+/** Why FFmpeg's libraries didn't load, or null once they have. Loads them the first time it's read. */
+internal val ffmpegLoadFailure: Throwable? by lazy {
+  try {
+    FFmpegFrameGrabber.tryLoad()
+    // FFmpeg would otherwise print every oddity in a file to the app's error output.
+    avutil.av_log_set_level(avutil.AV_LOG_QUIET)
+    null
+  } catch (e: Throwable) {
+    e
+  }
+}
+
 /** Delays this short or shorter mean "as fast as you like"; browsers show such frames for 100 ms. */
 private const val MinFrameMillis = 10
 private const val DefaultFrameMillis = 100
@@ -138,19 +150,8 @@ private class FfmpegVideo private constructor(
   }
 
   companion object {
-    private val loaded: Throwable? by lazy {
-      try {
-        FFmpegFrameGrabber.tryLoad()
-        // FFmpeg would otherwise print every oddity in a file to the app's error output.
-        avutil.av_log_set_level(avutil.AV_LOG_QUIET)
-        null
-      } catch (e: Throwable) {
-        e
-      }
-    }
-
     fun open(bytes: ByteArray, maxWidth: Int, maxHeight: Int): FfmpegVideo {
-      loaded?.let { throw IllegalStateException("FFmpeg didn't load: ${reason(it)}", it) }
+      ffmpegLoadFailure?.let { throw IllegalStateException("FFmpeg didn't load: ${reason(it)}", it) }
       val grabber = FFmpegFrameGrabber(ByteArrayInputStream(bytes))
       try {
         grabber.pixelFormat = avutil.AV_PIX_FMT_BGRA

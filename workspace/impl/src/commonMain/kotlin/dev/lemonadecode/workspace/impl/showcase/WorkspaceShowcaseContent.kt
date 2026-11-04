@@ -7,11 +7,12 @@ import dev.lemonadecode.platform.localization.ProvideAppLanguage
 import dev.lemonadecode.workspace.ui.DevicesWindowContent
 import dev.lemonadecode.workspace.ui.TerminalTranscript
 import dev.lemonadecode.workspace.ui.WorkspaceContent
+import dev.lemonadecode.workspace.ui.preview.ShowcaseAudio
 import dev.lemonadecode.workspace.uimodel.WorkspaceEvent
 
 /**
- * Draws [showcase] with transcripts in place of live terminals, in the language its settings pick.
- * Theme is up to the caller.
+ * Draws [showcase] with transcripts in place of live terminals, and sound previews read at once,
+ * in the language its settings pick. Theme is up to the caller.
  */
 @Composable
 public fun WorkspaceShowcaseContent(
@@ -21,13 +22,15 @@ public fun WorkspaceShowcaseContent(
 ) {
   val model = remember(showcase, onEvent) { showcase.model(onEvent) }
   ProvideAppLanguage(model.settings.language.tag) {
-    when (showcase.part) {
-      ShowcasePart.Window -> WorkspaceContent(
-        model = model,
-        terminal = { sessionId, slotModifier -> TerminalTranscript(showcase.transcript(sessionId), slotModifier) },
-        modifier = modifier,
-      )
-      ShowcasePart.Devices -> model.devices?.let { panel -> DevicesWindowContent(panel = panel, onEvent = model.eventSink, modifier = modifier) }
+    ShowcaseAudio {
+      when (showcase.part) {
+        ShowcasePart.Window -> WorkspaceContent(
+          model = model,
+          terminal = { sessionId, slotModifier -> TerminalTranscript(showcase.transcript(sessionId), slotModifier) },
+          modifier = modifier,
+        )
+        ShowcasePart.Devices -> model.devices?.let { panel -> DevicesWindowContent(panel = panel, onEvent = model.eventSink, modifier = modifier) }
+      }
     }
   }
 }

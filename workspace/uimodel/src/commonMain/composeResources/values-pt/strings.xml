@@ -468,4 +468,17 @@
     <item quantity="many">Mais %1$d linhas não mostradas</item>
     <item quantity="other">Mais %1$d linhas não mostradas</item>
   </plurals>
+  <string name="preview_audio_waveform">Forma de onda</string>
+  <string name="preview_audio_mono">Mono</string>
+  <string name="preview_audio_stereo">Estéreo</string>
+  <plurals name="preview_audio_channels">
+    <item quantity="one">%1$d canal</item>
+    <item quantity="many">%1$d canais</item>
+    <item quantity="other">%1$d canais</item>
+  </plurals>
+  <string name="preview_audio_khz">%1$s kHz</string>
+  <string name="preview_audio_bits">%1$d bits</string>
+  <string name="preview_audio_kbps">%1$s kb/s</string>
+  <string name="preview_audio_no_output">Não é possível reproduzir aqui: não há saída de áudio.</string>
+  <string name="preview_audio_play_failed">Não foi possível reproduzir este arquivo: %1$s</string>
 </resources>

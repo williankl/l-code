@@ -157,9 +157,12 @@ internal object DiffMapper {
       .mapTo(HashSet()) { it.path }
   }
 
-  /** Pictures, models and videos compare best next to each other; documents and tables read best alone. */
+  /**
+   * Pictures, models, videos and sounds compare best next to each other (a sound by its waveform);
+   * documents and tables read best alone.
+   */
   fun defaultLayout(kind: PreviewKind): PreviewLayout = when (kind) {
-    PreviewKind.Image, PreviewKind.Vector, PreviewKind.Model, PreviewKind.Video -> PreviewLayout.SideBySide
+    PreviewKind.Image, PreviewKind.Vector, PreviewKind.Model, PreviewKind.Video, PreviewKind.Audio -> PreviewLayout.SideBySide
     PreviewKind.Markdown, PreviewKind.Table -> PreviewLayout.After
   }
 
@@ -275,6 +278,7 @@ internal object DiffMapper {
         PreviewKind.Markdown -> PreviewKindModel.Markdown
         PreviewKind.Table -> PreviewKindModel.Table
         PreviewKind.Video -> PreviewKindModel.Video
+        PreviewKind.Audio -> PreviewKindModel.Audio
       },
       showing = showing,
       layout = if (bothSides) view.previewLayouts[file.path] ?: defaultLayout(kind) else null,

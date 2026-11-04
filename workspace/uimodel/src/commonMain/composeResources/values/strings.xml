@@ -443,4 +443,16 @@
     <item quantity="one">%1$d more row not shown</item>
     <item quantity="other">%1$d more rows not shown</item>
   </plurals>
+  <string name="preview_audio_waveform">Waveform</string>
+  <string name="preview_audio_mono">Mono</string>
+  <string name="preview_audio_stereo">Stereo</string>
+  <plurals name="preview_audio_channels">
+    <item quantity="one">%1$d channel</item>
+    <item quantity="other">%1$d channels</item>
+  </plurals>
+  <string name="preview_audio_khz">%1$s kHz</string>
+  <string name="preview_audio_bits">%1$d-bit</string>
+  <string name="preview_audio_kbps">%1$s kb/s</string>
+  <string name="preview_audio_no_output">Can’t play here: there’s no sound output.</string>
+  <string name="preview_audio_play_failed">Couldn’t play this file: %1$s</string>
 </resources>

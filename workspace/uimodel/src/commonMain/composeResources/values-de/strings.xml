@@ -443,4 +443,16 @@
     <item quantity="one">%1$d weitere Zeile nicht angezeigt</item>
     <item quantity="other">%1$d weitere Zeilen nicht angezeigt</item>
   </plurals>
+  <string name="preview_audio_waveform">Wellenform</string>
+  <string name="preview_audio_mono">Mono</string>
+  <string name="preview_audio_stereo">Stereo</string>
+  <plurals name="preview_audio_channels">
+    <item quantity="one">%1$d Kanal</item>
+    <item quantity="other">%1$d Kanäle</item>
+  </plurals>
+  <string name="preview_audio_khz">%1$s kHz</string>
+  <string name="preview_audio_bits">%1$d Bit</string>
+  <string name="preview_audio_kbps">%1$s kbit/s</string>
+  <string name="preview_audio_no_output">Kann hier nicht abgespielt werden: Es gibt keine Audioausgabe.</string>
+  <string name="preview_audio_play_failed">Diese Datei konnte nicht abgespielt werden: %1$s</string>
 </resources>

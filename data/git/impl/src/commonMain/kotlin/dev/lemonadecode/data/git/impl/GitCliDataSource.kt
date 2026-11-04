@@ -64,9 +64,29 @@ internal class GitCliDataSource(
     ).flatMap { it.requireSuccess() }.map { it.stdout }
   }
 
-  override suspend fun mergeBase(repositoryRoot: String, baseRef: String): LemonadeCodeResult<String, GitError> = git(repositoryRoot, "merge-base", baseRef, "HEAD").flatMap { mergeBase ->
-    if (mergeBase.isSuccess) LemonadeCodeResult.success(mergeBase.stdout.trim()) else LemonadeCodeResult.failure(GitError.RefNotFound(baseRef))
+  /**
+   * Given more than one base, `git merge-base` finds the best common ancestor of HEAD and a merge of
+   * them all: here, the newer of HEAD's split points from [baseRef] and from its remote copy.
+   * `merge-base` without `--all` prints one commit, even when there are several equally good ones.
+   */
+  override suspend fun mergeBase(repositoryRoot: String, baseRef: String): LemonadeCodeResult<String, GitError> {
+    val bases = listOfNotNull(baseRef, remoteCopyOf(repositoryRoot, baseRef))
+    return git(repositoryRoot, "merge-base", "HEAD", *bases.toTypedArray()).flatMap { mergeBase ->
+      if (mergeBase.isSuccess) LemonadeCodeResult.success(mergeBase.stdout.trim().substringBefore('\n')) else LemonadeCodeResult.failure(GitError.RefNotFound(baseRef))
+    }
   }
+
+  /**
+   * The commit [baseRef] is at on the remote when it's a local branch: its upstream's, else that of
+   * `origin`'s branch of the same name. Null for `HEAD`, for any other ref, and when there's neither.
+   */
+  private suspend fun remoteCopyOf(repositoryRoot: String, baseRef: String): String? {
+    if (baseRef == "HEAD" || commitOf(repositoryRoot, "refs/heads/$baseRef") == null) return null
+    return commitOf(repositoryRoot, "$baseRef@{upstream}") ?: commitOf(repositoryRoot, "refs/remotes/origin/$baseRef")
+  }
+
+  private suspend fun commitOf(repositoryRoot: String, revision: String): String? = git(repositoryRoot, "rev-parse", "--verify", "--quiet", "$revision^{commit}")
+    .fold({ output -> output.stdout.trim().takeIf { output.isSuccess && it.isNotEmpty() } }, { null })
 
   override suspend fun readFileAt(
     repositoryRoot: String,

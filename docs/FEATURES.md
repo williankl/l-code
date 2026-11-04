@@ -89,7 +89,8 @@ Switch a session to the **Diff** tab to see what changed in its folder.
 <img src="images/review-diff.png" width="100%" alt="The diff with the changed files listed beside it">
 
 - **Against the right branch.** Changes are compared with `main` by default (or your repository's
-  default branch). A sub-session compares with its parent session's branch. Pick any other branch
+  default branch), and only what your branch changed shows, even when your local `main` is behind
+  `origin/main`. A sub-session compares with its parent session's branch. Pick any other branch
   from the list next to **vs**: type part of a name to find it, and each branch says when it last
   changed and who made the change. **HEAD** compares with the last commit, so you see only what
   isn't committed yet.

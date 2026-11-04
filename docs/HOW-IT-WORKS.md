@@ -80,6 +80,11 @@ Which branch is that?
 2. For a sub-session, its parent session's branch.
 3. Otherwise the repository's default branch: origin's `HEAD`, else `main`, else `master`.
 
+If that branch also has a copy on the remote (the branch it tracks, or else `origin`'s branch of the
+same name), the newer of the two split points counts. So when your local `main` is behind
+`origin/main`, what others merged since doesn't show up as yours, and when it's ahead, the commits
+you haven't pushed yet don't either.
+
 The list of branches starts with the default branch, then the parent session's, then the rest as
 git lists them. The diff reloads when you open it, when you press refresh, and when the agent in the
 terminal finishes working.

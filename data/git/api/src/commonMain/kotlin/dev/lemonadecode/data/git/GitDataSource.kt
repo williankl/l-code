@@ -50,12 +50,17 @@ public interface GitDataSource {
   public suspend fun branchTips(repositoryRoot: String): LemonadeCodeResult<Map<String, GitBranchTip>, GitError>
 
   /**
-   * Unified diff of the working tree, staged and unstaged, against the merge base of [baseRef]
-   * and HEAD. Every line of each changed file is included as context.
+   * Unified diff of the working tree, staged and unstaged, against [mergeBase] of [baseRef]. Every
+   * line of each changed file is included as context.
    */
   public suspend fun diffAgainst(repositoryRoot: String, baseRef: String): LemonadeCodeResult<String, GitError>
 
-  /** The commit HEAD and [baseRef] last had in common; the diff's "before" side. */
+  /**
+   * The commit HEAD and [baseRef] last had in common; the diff's "before" side. When [baseRef] is a
+   * local branch with a remote copy (its upstream, else `origin`'s branch of the same name), it is
+   * the newer of HEAD's split points from the two. So a local `main` that's behind or ahead of
+   * `origin/main` still gives only what HEAD's own commits changed.
+   */
   public suspend fun mergeBase(repositoryRoot: String, baseRef: String): LemonadeCodeResult<String, GitError>
 
   /**

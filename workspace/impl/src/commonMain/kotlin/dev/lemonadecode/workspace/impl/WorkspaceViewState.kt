@@ -118,6 +118,10 @@ internal data class DevicesViewState(
   val attempt: Int = 0,
 )
 
+/** The device page the Devices panel shows: at its Device step, unless that device is in a window of its own. */
+internal val WorkspaceViewState.panelPage: DevicePageState?
+  get() = devices?.takeIf { it.step == DevicesStep.Device }?.page?.takeIf { it.deviceId !in deviceWindows }
+
 /** One device's page, in the Devices panel or in a window of its own: its screen and its logs. */
 internal data class DevicePageState(
   val deviceId: DeviceId,

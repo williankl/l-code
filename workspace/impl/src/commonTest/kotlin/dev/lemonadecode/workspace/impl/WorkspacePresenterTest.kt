@@ -586,6 +586,46 @@ class WorkspacePresenterTest {
   }
 
   @Test
+  fun `disconnecting a device from its own window leaves the panel on the device it shows`() = runTest {
+    settings.update { it.copy(mobilePlugin = true) }
+    mobile.setDevices(ShowcaseDevices.connected)
+    val (pixel, galaxy) = ShowcaseDevices.pixel.id.value to ShowcaseDevices.galaxy.id.value
+    presenter.test {
+      val first = awaitItem()
+      first.eventSink(WorkspaceEvent.ToggleDeviceWindow(galaxy))
+      first.eventSink(WorkspaceEvent.ToggleDevices)
+      awaitItemWhere { it.devices != null }.eventSink(WorkspaceEvent.SelectDevice(pixel))
+      // Disconnect isn't a page event, so the window sends it as it is.
+      awaitItemWhere { it.devices?.content is DevicesContentModel.Device && it.deviceWindows.size == 1 }.eventSink(WorkspaceEvent.DisconnectDevice(galaxy))
+      val after = awaitItemWhere { it.toast != null }
+      assertEquals(emptyList(), after.deviceWindows)
+      assertEquals(pixel, (after.devices?.content as? DevicesContentModel.Device)?.id)
+    }
+  }
+
+  @Test
+  fun `opening a just-paired device that has its own window brings that window forward`() = runTest {
+    settings.update { it.copy(mobilePlugin = true) }
+    mobile.setDevices(ShowcaseDevices.connected)
+    mobile.nextPairResult = LemonadeCodeResult.Success(ShowcaseDevices.galaxy)
+    presenter.test {
+      val first = awaitItem()
+      first.eventSink(WorkspaceEvent.ToggleDeviceWindow(ShowcaseDevices.galaxy.id.value))
+      first.eventSink(WorkspaceEvent.ToggleDevices)
+      awaitItemWhere { it.devices != null }.eventSink(WorkspaceEvent.StartPairing)
+      awaitItemWhere { it.devices?.content == DevicesContentModel.ChoosePlatform }.eventSink(WorkspaceEvent.ChoosePairingPlatform(MobilePlatformModel.Android))
+      awaitItemWhere { it.devices?.content is DevicesContentModel.ChooseMethod }.eventSink(WorkspaceEvent.ChoosePairingMethod(PairingMethod.PairingCode))
+      val code = awaitItemWhere { it.devices?.content is DevicesContentModel.EnterCode }
+      code.eventSink(WorkspaceEvent.SetPairingAddress("192.168.1.42:37099"))
+      code.eventSink(WorkspaceEvent.SetPairingCode("482913"))
+      awaitItemWhere { (it.devices?.content as? DevicesContentModel.EnterCode)?.canPair == true }.eventSink(WorkspaceEvent.PairWithCode)
+      awaitItemWhere { it.devices?.content is DevicesContentModel.Paired }.eventSink(WorkspaceEvent.OpenPairedDevice)
+      val forward = awaitItemWhere { it.deviceWindows.singleOrNull()?.focusRequest == 1 }
+      assertIs<DevicesContentModel.Devices>(forward.devices?.content)
+    }
+  }
+
+  @Test
   fun `a device's window closes when the device goes, and every window closes with the plugin`() = runTest {
     settings.update { it.copy(mobilePlugin = true) }
     mobile.setDevices(ShowcaseDevices.connected)

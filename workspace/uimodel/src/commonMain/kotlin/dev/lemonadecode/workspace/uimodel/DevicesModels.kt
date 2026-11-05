@@ -214,7 +214,12 @@ public sealed interface DeviceScreenModel {
 public sealed interface ScreenPictureModel {
   /** An encoded image, e.g. a PNG. */
   @Immutable
-  public class Encoded(public val bytes: ByteArray) : ScreenPictureModel
+  public class Encoded(public val bytes: ByteArray) : ScreenPictureModel {
+    // The same picture while it wraps the same bytes, so a frame mapped again isn't decoded again.
+    override fun equals(other: Any?): Boolean = other is Encoded && other.bytes === bytes
+
+    override fun hashCode(): Int = bytes.hashCode()
+  }
 
   /** 4 bytes a pixel, blue, green, red and alpha, [rowBytes] to a row. */
   @Immutable
@@ -223,7 +228,12 @@ public sealed interface ScreenPictureModel {
     public val width: Int,
     public val height: Int,
     public val rowBytes: Int,
-  ) : ScreenPictureModel
+  ) : ScreenPictureModel {
+    // Each frame comes with pixels of its own, so the same array is the same picture.
+    override fun equals(other: Any?): Boolean = other is Bgra && other.pixels === pixels && other.width == width && other.height == height && other.rowBytes == rowBytes
+
+    override fun hashCode(): Int = pixels.hashCode()
+  }
 }
 
 /** The buttons under the mirrored screen; only what the device supports is there. */

@@ -47,6 +47,7 @@ import dev.lemonadecode.workspace.impl.PreviewLoad
 import dev.lemonadecode.workspace.impl.WorkspaceInput
 import dev.lemonadecode.workspace.impl.WorkspaceModelMapper
 import dev.lemonadecode.workspace.impl.WorkspaceViewState
+import dev.lemonadecode.workspace.impl.panelPage
 import dev.lemonadecode.workspace.impl.showcase.ShowcaseFixtures.Repo
 import dev.lemonadecode.workspace.impl.showcase.ShowcaseFixtures.comment
 import dev.lemonadecode.workspace.impl.showcase.ShowcaseFixtures.path
@@ -505,7 +506,7 @@ private fun devicesScene(
 )
 
 /** The device whose page the panel shows, if any. */
-private val DevicesViewState.shownDevice: DeviceId? get() = page?.deviceId?.takeIf { step == DevicesStep.Device }
+private val DevicesViewState.shownDevice: DeviceId? get() = WorkspaceViewState(devices = this).panelPage?.deviceId
 
 /** The moment the showcase is set at, so "2 h ago" reads the same in every render. */
 private const val Now: Long = 1_793_600_000_000

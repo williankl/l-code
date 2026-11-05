@@ -140,9 +140,7 @@ public class WorkspacePresenter internal constructor(
     // The Devices panel reads only what its step shows, and each device's page, in the panel or a
     // window of its own, only what it shows: one stream per device, however many pages show it.
     val devicesView = view.devices?.takeIf { settings.mobilePlugin }
-    val deviceWindows = view.deviceWindows.takeIf { settings.mobilePlugin }.orEmpty()
-    val panelPage = devicesView?.takeIf { it.step == DevicesStep.Device }?.page?.takeIf { it.deviceId !in deviceWindows }
-    val pages = listOfNotNull(panelPage) + deviceWindows.values.map { it.page }
+    val pages = if (settings.mobilePlugin) listOfNotNull(view.panelPage) + view.deviceWindows.values.map { it.page } else emptyList()
     val deviceLogs = remember { mutableStateMapOf<DeviceId, DeviceLogs>() }
     val deviceApps = remember { mutableStateMapOf<DeviceId, List<DeviceApp>>() }
     val deviceScreens = remember { mutableStateMapOf<DeviceId, DeviceScreen>() }
@@ -495,7 +493,7 @@ public class WorkspacePresenter internal constructor(
             if (id in state.deviceWindows) {
               state.copy(deviceWindows = state.deviceWindows - id)
             } else {
-              // Its page moves to the window, so a panel showing it goes back to the list.
+              // The window starts on a page of its own, and a panel showing the device goes back to the list.
               val panel = state.devices?.let { if (it.step == DevicesStep.Device && it.page?.deviceId == id) it.copy(step = DevicesStep.List) else it }
               state.copy(devices = panel, deviceWindows = state.deviceWindows + (id to DeviceWindowState(DevicePageState(id))))
             }
@@ -509,7 +507,8 @@ public class WorkspacePresenter internal constructor(
               scope.launch {
                 when (val dropped = mobileService.disconnect(device.id)) {
                   is LemonadeCodeResult.Success -> {
-                    updateDevices { it.copy(step = DevicesStep.List) }
+                    // Only a panel showing this device goes back to the list; it may have been dropped from its own window.
+                    update { state -> if (state.panelPage?.deviceId == device.id) state.copy(devices = state.devices?.copy(step = DevicesStep.List)) else state }
                     showToast(Res.string.devices_disconnected.asLemonadeCodeString(device.name))
                   }
                   is LemonadeCodeResult.Failure -> fail(DevicesMapper.errorText(dropped.error))
@@ -554,8 +553,19 @@ public class WorkspacePresenter internal constructor(
               }
             }
           }
-          WorkspaceEvent.OpenPairedDevice -> updateDevices { panel ->
-            panel.paired?.let { panel.copy(step = DevicesStep.Device, page = DevicePageState(it, logFilter = panel.page?.logFilter ?: LogFilter.All)) } ?: panel.copy(step = DevicesStep.List)
+          WorkspaceEvent.OpenPairedDevice -> update { state ->
+            val panel = state.devices ?: return@update state
+            val paired = panel.paired
+            val window = paired?.let { state.deviceWindows[it] }
+            when {
+              paired == null -> state.copy(devices = panel.copy(step = DevicesStep.List))
+              // Paired again while in a window of its own: that window comes forward, as picking it in the list does.
+              window != null -> state.copy(
+                devices = panel.copy(step = DevicesStep.List),
+                deviceWindows = state.deviceWindows + (paired to window.copy(focusRequest = window.focusRequest + 1)),
+              )
+              else -> state.copy(devices = panel.copy(step = DevicesStep.Device, page = DevicePageState(paired, logFilter = panel.page?.logFilter ?: LogFilter.All)))
+            }
           }
 
           WorkspaceEvent.OpenParentSession -> current?.parentId?.let { parent -> update { it.selecting(parent) } }
@@ -738,7 +748,11 @@ public class WorkspacePresenter internal constructor(
     LaunchedEffect(requests.keys) { (into.keys - requests.keys).forEach { into.remove(it) } }
     requests.forEach { (id, request) ->
       key(id) {
-        LaunchedEffect(request) { stream(id, request).collect { into[id] = it } }
+        LaunchedEffect(request) {
+          // What the old request read isn't this one's, e.g. the lines of apps no longer picked.
+          into.remove(id)
+          stream(id, request).collect { into[id] = it }
+        }
       }
     }
   }

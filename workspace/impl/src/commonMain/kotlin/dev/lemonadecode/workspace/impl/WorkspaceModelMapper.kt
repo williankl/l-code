@@ -83,6 +83,8 @@ internal object WorkspaceModelMapper {
     val parent = selected?.parentId?.let { id -> sessions.firstOrNull { it.id == id } }
     val working = sessions.count { it.status == SessionStatus.Working }
     val unsent = input.review?.comments.orEmpty().count { it.status == CommentStatus.Unsent }
+    // Who a device's errors go to, from the panel or a device's own window; null without a session.
+    val agent = selected?.let { it.agent ?: it.shell }
     val updates = SettingsMapper.updates(input.installation, input.update, input.updateChecks, input.nowMillis)
 
     return WorkspaceModel(
@@ -147,10 +149,10 @@ internal object WorkspaceModelMapper {
         input = input.mobile,
         view = view,
         layout = input.settings.devicesLayout,
-        agent = selected?.let { it.agent ?: it.shell },
+        agent = agent,
         widths = DevicesPanelWidths(narrow = input.settings.devicesPanelWidth, wide = input.settings.devicesPanelWideWidth),
       ),
-      deviceWindows = DevicesMapper.windows(input.mobile, view, input.settings.devicesLayout, agent = selected?.let { it.agent ?: it.shell }),
+      deviceWindows = DevicesMapper.windows(input.mobile, view, input.settings.devicesLayout, agent = agent),
       error = view.error,
       toast = view.toast,
       eventSink = eventSink,

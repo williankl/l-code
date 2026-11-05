@@ -124,9 +124,8 @@ internal data class DevicesPanelWidths(
 internal object DevicesMapper {
   /** Whether the panel shows a device's screen and logs together, which takes the wide width. */
   fun isWide(view: WorkspaceViewState, devices: List<MobileDevice>, layout: DevicesLayout): Boolean {
-    val state = view.devices ?: return false
-    val id = state.page?.deviceId?.takeIf { it !in view.deviceWindows } ?: return false
-    return state.step == DevicesStep.Device && layout == DevicesLayout.SideBySide && devices.any { it.id == id }
+    val id = view.panelPage?.deviceId ?: return false
+    return layout == DevicesLayout.SideBySide && devices.any { it.id == id }
   }
 
   fun clampPanelWidth(width: Int): Int = width.coerceIn(DevicesPanelModel.MinWidth, DevicesPanelModel.MaxWidth)
@@ -154,9 +153,9 @@ internal object DevicesMapper {
   ): DevicesPanelModel? {
     if (!input.enabled) return null
     val state = view.devices ?: return null
-    val page = state.page
     // A device in a window of its own isn't shown here as well.
-    val device = page?.deviceId?.takeIf { it !in view.deviceWindows }?.let { id -> input.devices.firstOrNull { it.id == id } }
+    val page = view.panelPage
+    val device = page?.deviceId?.let { id -> input.devices.firstOrNull { it.id == id } }
     val pairStep = Res.string.pair_title.asLemonadeCodeString()
     val width = clampPanelWidth(if (isWide(view, input.devices, layout)) widths.wide else widths.narrow)
     fun panel(title: LemonadeCodeString, subtitle: LemonadeCodeString?, back: Boolean, content: DevicesContentModel) = DevicesPanelModel(

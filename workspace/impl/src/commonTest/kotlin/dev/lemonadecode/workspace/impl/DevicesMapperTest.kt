@@ -3,8 +3,10 @@ package dev.lemonadecode.workspace.impl
 import dev.lemonadecode.domain.mobile.DeviceAvailability
 import dev.lemonadecode.domain.mobile.DeviceLogLine
 import dev.lemonadecode.domain.mobile.DeviceLogs
+import dev.lemonadecode.domain.mobile.DeviceScreen
 import dev.lemonadecode.domain.mobile.LogLevel
 import dev.lemonadecode.domain.mobile.LogPackages
+import dev.lemonadecode.domain.mobile.ScreenPicture
 import dev.lemonadecode.domain.settings.DevicesLayout
 import dev.lemonadecode.domain.update.AppInstallation
 import dev.lemonadecode.domain.update.AppVersion
@@ -34,6 +36,8 @@ import dev.lemonadecode.workspace.strings.time_minutes_ago
 import dev.lemonadecode.workspace.strings.time_yesterday
 import dev.lemonadecode.workspace.strings.updates_development
 import dev.lemonadecode.workspace.strings.updates_not_checked
+import dev.lemonadecode.workspace.uimodel.DeviceScreenModel
+import dev.lemonadecode.workspace.uimodel.DevicesContentModel
 import dev.lemonadecode.workspace.uimodel.LanguageOption
 import dev.lemonadecode.workspace.uimodel.LogFilter
 import dev.lemonadecode.workspace.uimodel.LogLevelModel
@@ -41,6 +45,7 @@ import dev.lemonadecode.workspace.uimodel.UpdatePhase
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -118,6 +123,16 @@ class DevicesMapperTest {
     assertEquals(listOf("Galaxy S23", "Pixel 8"), windows.map { it.name })
     assertTrue(windows.all { !it.panel.windowControls && !it.panel.canGoBack })
     assertEquals(emptyList(), DevicesMapper.windows(input.copy(enabled = false), view, DevicesLayout.SideBySide, agent = "claude"))
+  }
+
+  @Test
+  fun `a frame mapped again is the same picture, so it isn't decoded again`() {
+    val view = WorkspaceViewState(deviceWindows = mapOf(ShowcaseDevices.pixel.id to DeviceWindowState(DevicePageState(ShowcaseDevices.pixel.id))))
+    val input = MobileInput(enabled = true, devices = ShowcaseDevices.connected, screens = mapOf(ShowcaseDevices.pixel.id to ShowcaseDevices.screen()))
+    fun picture(from: MobileInput) = ((DevicesMapper.windows(from, view, DevicesLayout.SideBySide, "claude").single().panel.content as DevicesContentModel.Device).screen as DeviceScreenModel.Frame).picture
+    assertEquals(picture(input), picture(input))
+    val next = input.copy(screens = mapOf(ShowcaseDevices.pixel.id to DeviceScreen.Frame(ScreenPicture.Encoded(byteArrayOf(1, 2, 3)), 1080, 2400, 60f)))
+    assertNotEquals(picture(input), picture(next))
   }
 
   @Test

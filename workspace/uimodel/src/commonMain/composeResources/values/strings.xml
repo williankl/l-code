@@ -305,6 +305,8 @@
   <string name="devices_layout_tabs">Show screen and logs as tabs</string>
   <string name="devices_layout_split">Show screen and logs together</string>
   <string name="devices_disconnect">Disconnect %1$s</string>
+  <string name="device_window_open">Open %1$s in its own window</string>
+  <string name="device_window_close">Close %1$s’s window</string>
   <string name="devices_disconnected">%1$s disconnected</string>
   <string name="device_usb">USB</string>
   <string name="device_wifi">Wi‑Fi</string>

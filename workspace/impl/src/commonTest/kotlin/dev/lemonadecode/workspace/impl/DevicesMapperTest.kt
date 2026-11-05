@@ -5,6 +5,7 @@ import dev.lemonadecode.domain.mobile.DeviceLogLine
 import dev.lemonadecode.domain.mobile.DeviceLogs
 import dev.lemonadecode.domain.mobile.LogLevel
 import dev.lemonadecode.domain.mobile.LogPackages
+import dev.lemonadecode.domain.settings.DevicesLayout
 import dev.lemonadecode.domain.update.AppInstallation
 import dev.lemonadecode.domain.update.AppVersion
 import dev.lemonadecode.domain.update.UpdateChannel
@@ -98,31 +99,53 @@ class DevicesMapperTest {
   }
 
   @Test
+  fun `a ready device's row offers a window of its own, and says when one is open`() {
+    assertTrue(DevicesMapper.row(ShowcaseDevices.pixel).canOpenWindow)
+    assertFalse(DevicesMapper.row(ShowcaseDevices.pixel).windowOpen)
+    assertTrue(DevicesMapper.row(ShowcaseDevices.pixel, windowOpen = true).windowOpen)
+    val waiting = ShowcaseDevices.pixel.copy(availability = DeviceAvailability.Unauthorized)
+    assertFalse(DevicesMapper.row(waiting).canOpenWindow)
+    // A window already open can still be closed from its row.
+    assertTrue(DevicesMapper.row(waiting, windowOpen = true).canOpenWindow)
+  }
+
+  @Test
+  fun `device windows are mapped in the order they opened, for devices still connected`() {
+    val ids = listOf(ShowcaseDevices.galaxy.id, ShowcaseDevices.pixel7a.id, ShowcaseDevices.pixel.id)
+    val view = WorkspaceViewState(deviceWindows = ids.associateWith { DeviceWindowState(DevicePageState(it)) })
+    val input = MobileInput(enabled = true, devices = ShowcaseDevices.connected)
+    val windows = DevicesMapper.windows(input, view, DevicesLayout.SideBySide, agent = "claude")
+    assertEquals(listOf("Galaxy S23", "Pixel 8"), windows.map { it.name })
+    assertTrue(windows.all { !it.panel.windowControls && !it.panel.canGoBack })
+    assertEquals(emptyList(), DevicesMapper.windows(input.copy(enabled = false), view, DevicesLayout.SideBySide, agent = "claude"))
+  }
+
+  @Test
   fun `logs filter by level and text, and pausing stops at the line shown`() {
     val logs = ShowcaseDevices.androidLogs
-    val all = DevicesMapper.logs(logs, DevicesViewState(), "claude")
+    val all = DevicesMapper.logs(logs, DevicePageState(ShowcaseDevices.pixel.id), "claude")
     assertEquals(9, all.lines.size)
     assertEquals(2, all.warningCount)
     assertEquals(2, all.errorCount)
 
-    val warnings = DevicesMapper.logs(logs, DevicesViewState(logFilter = LogFilter.Warnings), "claude")
+    val warnings = DevicesMapper.logs(logs, DevicePageState(ShowcaseDevices.pixel.id, logFilter = LogFilter.Warnings), "claude")
     assertEquals(listOf("RateLimiter", "Choreographer"), warnings.lines.map { it.tag })
     assertEquals(setOf(LogLevelModel.Warning), warnings.lines.map { it.level }.toSet())
     assertNull(warnings.sendErrorsLabel, "no error is shown, so there are none to send")
 
-    val errors = DevicesMapper.logs(logs, DevicesViewState(logFilter = LogFilter.Errors), "claude")
+    val errors = DevicesMapper.logs(logs, DevicePageState(ShowcaseDevices.pixel.id, logFilter = LogFilter.Errors), "claude")
     assertEquals(listOf("RateLimiter", "CheckoutViewModel"), errors.lines.map { it.tag })
 
-    val searched = DevicesMapper.logs(logs, DevicesViewState(logQuery = "choreographer"), "claude")
+    val searched = DevicesMapper.logs(logs, DevicePageState(ShowcaseDevices.pixel.id, logQuery = "choreographer"), "claude")
     assertEquals(listOf("Choreographer"), searched.lines.map { it.tag })
     assertEquals(1, searched.warningCount)
     assertNull(searched.sendErrorsLabel)
 
-    val paused = DevicesMapper.logs(logs, DevicesViewState(pausedAt = 5), "claude")
+    val paused = DevicesMapper.logs(logs, DevicePageState(ShowcaseDevices.pixel.id, pausedAt = 5), "claude")
     assertTrue(paused.paused)
     assertEquals(4, paused.lines.size)
 
-    val none = DevicesMapper.logs(logs, DevicesViewState(logQuery = "nothing like it"), "claude")
+    val none = DevicesMapper.logs(logs, DevicePageState(ShowcaseDevices.pixel.id, logQuery = "nothing like it"), "claude")
     assertEquals(Res.string.logs_no_match.asLemonadeCodeString(), none.emptyText)
   }
 
@@ -132,31 +155,31 @@ class DevicesMapperTest {
     val levels = listOf(LogLevel.Verbose, LogLevel.Debug, LogLevel.Info, LogLevel.Warning, LogLevel.Error, LogLevel.Fatal)
     val logs = DeviceLogs(source = "logcat", lines = levels.mapIndexed { index, level -> line(index.toLong(), level) })
 
-    val all = DevicesMapper.logs(logs, DevicesViewState(), "claude")
+    val all = DevicesMapper.logs(logs, DevicePageState(ShowcaseDevices.pixel.id), "claude")
     assertEquals(6, all.lines.size)
     assertEquals(1, all.warningCount)
     assertEquals(2, all.errorCount)
 
-    val warnings = DevicesMapper.logs(logs, DevicesViewState(logFilter = LogFilter.Warnings), "claude")
+    val warnings = DevicesMapper.logs(logs, DevicePageState(ShowcaseDevices.pixel.id, logFilter = LogFilter.Warnings), "claude")
     assertEquals(listOf(LogLevelModel.Warning), warnings.lines.map { it.level })
     assertEquals(warnings.warningCount, warnings.lines.size)
 
-    val errors = DevicesMapper.logs(logs, DevicesViewState(logFilter = LogFilter.Errors), "claude")
+    val errors = DevicesMapper.logs(logs, DevicePageState(ShowcaseDevices.pixel.id, logFilter = LogFilter.Errors), "claude")
     assertEquals(listOf(LogLevelModel.Error, LogLevelModel.Fatal), errors.lines.map { it.level })
     assertEquals(errors.errorCount, errors.lines.size)
-    assertEquals(2, DevicesMapper.shownErrors(logs, DevicesViewState(logFilter = LogFilter.Errors)).size)
-    assertEquals(emptyList(), DevicesMapper.shownErrors(logs, DevicesViewState(logFilter = LogFilter.Warnings)))
+    assertEquals(2, DevicesMapper.shownErrors(logs, DevicePageState(ShowcaseDevices.pixel.id, logFilter = LogFilter.Errors)).size)
+    assertEquals(emptyList(), DevicesMapper.shownErrors(logs, DevicePageState(ShowcaseDevices.pixel.id, logFilter = LogFilter.Warnings)))
   }
 
   @Test
   fun `the choice of apps follows the app in front at first, ticks the ones picked and says which run`() {
     val pixel = ShowcaseDevices.pixel
-    val loading = assertNotNull(DevicesMapper.logApps(pixel, DevicesViewState(), apps = null))
+    val loading = assertNotNull(DevicesMapper.logApps(pixel, DevicePageState(ShowcaseDevices.pixel.id), apps = null))
     assertTrue(loading.followsAppInFront)
     assertFalse(loading.showsAll)
     assertEquals(Res.string.logs_apps_loading.asLemonadeCodeString(), loading.emptyText)
 
-    val picked = assertNotNull(DevicesMapper.logApps(pixel, DevicesViewState(logPackages = ShowcaseDevices.pickedApps, logAppsOpen = true), ShowcaseDevices.apps))
+    val picked = assertNotNull(DevicesMapper.logApps(pixel, DevicePageState(ShowcaseDevices.pixel.id, logPackages = ShowcaseDevices.pickedApps, logAppsOpen = true), ShowcaseDevices.apps))
     assertTrue(picked.open)
     assertFalse(picked.followsAppInFront)
     assertFalse(picked.showsAll)
@@ -167,26 +190,26 @@ class DevicesMapperTest {
     assertNull(picked.apps[2].detail)
 
     // A ticked app the device no longer lists, e.g. uninstalled, stays at the end to be unticked.
-    val gone = assertNotNull(DevicesMapper.logApps(pixel, DevicesViewState(logPackages = LogPackages.Only(setOf("com.teya.gone"))), ShowcaseDevices.apps.take(1)))
+    val gone = assertNotNull(DevicesMapper.logApps(pixel, DevicePageState(ShowcaseDevices.pixel.id, logPackages = LogPackages.Only(setOf("com.teya.gone"))), ShowcaseDevices.apps.take(1)))
     assertEquals(listOf("com.teya.storefront" to false, "com.teya.gone" to true), gone.apps.map { it.packageName to it.ticked })
 
-    val all = assertNotNull(DevicesMapper.logApps(pixel, DevicesViewState(logPackages = LogPackages.All), emptyList()))
+    val all = assertNotNull(DevicesMapper.logApps(pixel, DevicePageState(ShowcaseDevices.pixel.id, logPackages = LogPackages.All), emptyList()))
     assertTrue(all.showsAll)
     assertEquals(Res.string.logs_apps_none.asLemonadeCodeString(), all.emptyText)
 
-    assertNull(DevicesMapper.logApps(ShowcaseDevices.iphone, DevicesViewState(), ShowcaseDevices.apps), "an iPhone's log can't be narrowed")
+    assertNull(DevicesMapper.logApps(ShowcaseDevices.iphone, DevicePageState(ShowcaseDevices.pixel.id), ShowcaseDevices.apps), "an iPhone's log can't be narrowed")
   }
 
   @Test
   fun `an empty log says whether it was cleared or is still waiting`() {
     val empty = DeviceLogs(source = "logcat", lines = emptyList())
-    assertEquals(Res.string.logs_waiting.asLemonadeCodeString(), DevicesMapper.logs(empty, DevicesViewState(), "claude").emptyText)
-    assertEquals(Res.string.logs_cleared.asLemonadeCodeString(), DevicesMapper.logs(empty, DevicesViewState(logsCleared = true), "claude").emptyText)
+    assertEquals(Res.string.logs_waiting.asLemonadeCodeString(), DevicesMapper.logs(empty, DevicePageState(ShowcaseDevices.pixel.id), "claude").emptyText)
+    assertEquals(Res.string.logs_cleared.asLemonadeCodeString(), DevicesMapper.logs(empty, DevicePageState(ShowcaseDevices.pixel.id, logsCleared = true), "claude").emptyText)
   }
 
   @Test
   fun `errors can only be sent with a session to send them to`() {
-    assertNull(DevicesMapper.logs(ShowcaseDevices.androidLogs, DevicesViewState(), agent = null).sendErrorsLabel)
+    assertNull(DevicesMapper.logs(ShowcaseDevices.androidLogs, DevicePageState(ShowcaseDevices.pixel.id), agent = null).sendErrorsLabel)
   }
 
   @Test

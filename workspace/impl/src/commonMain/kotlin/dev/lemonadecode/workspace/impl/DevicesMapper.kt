@@ -5,6 +5,7 @@ import dev.lemonadecode.domain.mobile.DeviceApp
 import dev.lemonadecode.domain.mobile.DeviceAvailability
 import dev.lemonadecode.domain.mobile.DeviceCapability
 import dev.lemonadecode.domain.mobile.DeviceConnection
+import dev.lemonadecode.domain.mobile.DeviceId
 import dev.lemonadecode.domain.mobile.DeviceLogLine
 import dev.lemonadecode.domain.mobile.DeviceLogs
 import dev.lemonadecode.domain.mobile.DeviceScreen
@@ -80,6 +81,7 @@ import dev.lemonadecode.workspace.uimodel.DeviceGroupModel
 import dev.lemonadecode.workspace.uimodel.DeviceLogsModel
 import dev.lemonadecode.workspace.uimodel.DeviceRowModel
 import dev.lemonadecode.workspace.uimodel.DeviceScreenModel
+import dev.lemonadecode.workspace.uimodel.DeviceWindowModel
 import dev.lemonadecode.workspace.uimodel.DevicesButtonModel
 import dev.lemonadecode.workspace.uimodel.DevicesContentModel
 import dev.lemonadecode.workspace.uimodel.DevicesLayoutOption
@@ -102,11 +104,11 @@ internal data class MobileInput(
   val enabled: Boolean = false,
   val tools: MobileTools? = null,
   val devices: List<MobileDevice> = emptyList(),
-  /** The open device's logs and screen. */
-  val logs: DeviceLogs? = null,
-  /** The open device's apps while the choice of whose lines to show is open; null while they're being read. */
-  val apps: List<DeviceApp>? = null,
-  val screen: DeviceScreen? = null,
+  /** The logs and screens of the devices whose page is open, in the panel or a window of their own. */
+  val logs: Map<DeviceId, DeviceLogs> = emptyMap(),
+  /** The apps of those devices whose choice of whose lines to show is open; missing while they're being read. */
+  val apps: Map<DeviceId, List<DeviceApp>> = emptyMap(),
+  val screens: Map<DeviceId, DeviceScreen> = emptyMap(),
   /** Devices found on the network while pairing. */
   val nearby: List<NearbyDevice> = emptyList(),
   val qr: QrPairing? = null,
@@ -123,7 +125,8 @@ internal object DevicesMapper {
   /** Whether the panel shows a device's screen and logs together, which takes the wide width. */
   fun isWide(view: WorkspaceViewState, devices: List<MobileDevice>, layout: DevicesLayout): Boolean {
     val state = view.devices ?: return false
-    return state.step == DevicesStep.Device && layout == DevicesLayout.SideBySide && devices.any { it.id == state.deviceId }
+    val id = state.page?.deviceId?.takeIf { it !in view.deviceWindows } ?: return false
+    return state.step == DevicesStep.Device && layout == DevicesLayout.SideBySide && devices.any { it.id == id }
   }
 
   fun clampPanelWidth(width: Int): Int = width.coerceIn(DevicesPanelModel.MinWidth, DevicesPanelModel.MaxWidth)
@@ -151,7 +154,9 @@ internal object DevicesMapper {
   ): DevicesPanelModel? {
     if (!input.enabled) return null
     val state = view.devices ?: return null
-    val device = state.deviceId?.let { id -> input.devices.firstOrNull { it.id == id } }
+    val page = state.page
+    // A device in a window of its own isn't shown here as well.
+    val device = page?.deviceId?.takeIf { it !in view.deviceWindows }?.let { id -> input.devices.firstOrNull { it.id == id } }
     val pairStep = Res.string.pair_title.asLemonadeCodeString()
     val width = clampPanelWidth(if (isWide(view, input.devices, layout)) widths.wide else widths.narrow)
     fun panel(title: LemonadeCodeString, subtitle: LemonadeCodeString?, back: Boolean, content: DevicesContentModel) = DevicesPanelModel(
@@ -165,16 +170,11 @@ internal object DevicesMapper {
     )
     val platformName = (if (state.pairPlatform == MobilePlatform.Android) Res.string.devices_android else Res.string.devices_ios).asLemonadeCodeString()
     return when (state.step) {
-      DevicesStep.List -> list(input, ::panel)
-      DevicesStep.Device -> if (device == null) {
-        list(input, ::panel)
+      DevicesStep.List -> list(input, view, ::panel)
+      DevicesStep.Device -> if (device == null || page == null) {
+        list(input, view, ::panel)
       } else {
-        panel(
-          device.name.asLemonadeCodeString(),
-          joined(listOfNotNull(version(device), connection(device.connection), device.address.asLemonadeCodeString())),
-          true,
-          device(device, state, input, layout, agent),
-        )
+        panel(device.name.asLemonadeCodeString(), subtitle(device), true, device(device, page, input, layout, agent))
       }
       DevicesStep.PairPlatform -> panel(pairStep, Res.string.pair_step.asLemonadeCodeString(1), true, DevicesContentModel.ChoosePlatform)
       DevicesStep.PairMethod -> panel(
@@ -234,7 +234,7 @@ internal object DevicesMapper {
       DevicesStep.Paired -> {
         val added = state.paired?.let { id -> input.devices.firstOrNull { it.id == id } }
         if (added == null) {
-          list(input, ::panel)
+          list(input, view, ::panel)
         } else {
           panel(
             pairStep,
@@ -247,8 +247,30 @@ internal object DevicesMapper {
     }
   }
 
+  /** The devices mirrored in windows of their own that are still connected, in the order they were opened. */
+  fun windows(input: MobileInput, view: WorkspaceViewState, layout: DevicesLayout, agent: String?): List<DeviceWindowModel> {
+    if (!input.enabled) return emptyList()
+    return view.deviceWindows.values.mapNotNull { window ->
+      val device = input.devices.firstOrNull { it.id == window.page.deviceId } ?: return@mapNotNull null
+      DeviceWindowModel(
+        deviceId = device.id.value,
+        name = device.name,
+        panel = DevicesPanelModel(
+          window = DevicesWindow.Separate,
+          title = device.name.asLemonadeCodeString(),
+          subtitle = subtitle(device),
+          canGoBack = false,
+          content = device(device, window.page, input, layout, agent),
+          windowControls = false,
+        ),
+        focusRequest = window.focusRequest,
+      )
+    }
+  }
+
   private fun list(
     input: MobileInput,
+    view: WorkspaceViewState,
     panel: (LemonadeCodeString, LemonadeCodeString?, Boolean, DevicesContentModel) -> DevicesPanelModel,
   ): DevicesPanelModel {
     val groups = MobilePlatform.entries.map { platform ->
@@ -258,7 +280,7 @@ internal object DevicesMapper {
       }
       DeviceGroupModel(
         platform = platform.toModel(),
-        devices = input.devices.filter { it.platform == platform }.map(::row),
+        devices = input.devices.filter { it.platform == platform }.map { row(it, windowOpen = it.id in view.deviceWindows) },
         missingTool = missing?.asLemonadeCodeString(),
       )
     }
@@ -270,7 +292,8 @@ internal object DevicesMapper {
     )
   }
 
-  fun row(device: MobileDevice): DeviceRowModel {
+  /** [windowOpen]: a window of its own mirrors [device] now. */
+  fun row(device: MobileDevice, windowOpen: Boolean = false): DeviceRowModel {
     val detail = when (device.availability) {
       DeviceAvailability.Ready -> joined(
         listOfNotNull(
@@ -289,22 +312,28 @@ internal object DevicesMapper {
       connection = device.connection.toModel(),
       detail = detail,
       ready = device.availability == DeviceAvailability.Ready,
+      canOpenWindow = device.availability == DeviceAvailability.Ready || windowOpen,
+      windowOpen = windowOpen,
     )
   }
 
+  /** e.g. "Android 15 · USB · 37ff1a2c". */
+  private fun subtitle(device: MobileDevice): LemonadeCodeString = joined(listOfNotNull(version(device), connection(device.connection), device.address.asLemonadeCodeString()))
+
   private fun device(
     device: MobileDevice,
-    state: DevicesViewState,
+    state: DevicePageState,
     input: MobileInput,
     layout: DevicesLayout,
     agent: String?,
   ): DevicesContentModel.Device {
     val caps = device.capabilities
-    val frame = input.screen as? DeviceScreen.Frame
+    val captured = input.screens[device.id]
+    val frame = captured as? DeviceScreen.Frame
     val screen = when {
       DeviceCapability.Mirror !in caps -> unavailable(if (device.platform == MobilePlatform.Ios && device.connection == DeviceConnection.Wifi) ScreenUnavailable.CableOnly else ScreenUnavailable.NotSupported)
       frame != null -> DeviceScreenModel.Frame(picture(frame.picture), frame.width, frame.height)
-      input.screen is DeviceScreen.Unavailable -> unavailable((input.screen as DeviceScreen.Unavailable).reason)
+      captured is DeviceScreen.Unavailable -> unavailable(captured.reason)
       else -> DeviceScreenModel.Loading
     }
     val width = frame?.width ?: device.screenWidth
@@ -344,12 +373,12 @@ internal object DevicesMapper {
         touch = DeviceCapability.Touch in caps && frame != null,
       ),
       screenDetail = screenDetail,
-      logs = logs(input.logs, state, agent, apps = logApps(device, state, input.apps)),
+      logs = logs(input.logs[device.id], state, agent, apps = logApps(device, state, input.apps[device.id])),
     )
   }
 
   /** [apps] is the choice of whose lines are shown, where the device has one. */
-  fun logs(logs: DeviceLogs?, state: DevicesViewState, agent: String?, apps: LogAppsModel? = null): DeviceLogsModel {
+  fun logs(logs: DeviceLogs?, state: DevicePageState, agent: String?, apps: LogAppsModel? = null): DeviceLogsModel {
     val all = logs?.lines.orEmpty().let { lines -> state.pausedAt?.let { last -> lines.filter { it.sequence <= last } } ?: lines }
     val query = state.logQuery.trim()
     val matching = if (query.isEmpty()) all else all.filter { "${it.tag} ${it.message}".contains(query, ignoreCase = true) }
@@ -381,7 +410,7 @@ internal object DevicesMapper {
    * read); null for a device whose log can't be narrowed. Ticked apps it doesn't list, e.g. one
    * uninstalled since, stay so they can be unticked.
    */
-  fun logApps(device: MobileDevice, state: DevicesViewState, apps: List<DeviceApp>?): LogAppsModel? {
+  fun logApps(device: MobileDevice, state: DevicePageState, apps: List<DeviceApp>?): LogAppsModel? {
     if (DeviceCapability.LogsByApp !in device.capabilities) return null
     val ticked = (state.logPackages as? LogPackages.Only)?.packages.orEmpty()
     val listed = apps.orEmpty()
@@ -409,8 +438,8 @@ internal object DevicesMapper {
     )
   }
 
-  /** The error lines among [logs] as the panel shows them now, for handing to an agent. */
-  fun shownErrors(logs: DeviceLogs?, state: DevicesViewState): List<DeviceLogLine> {
+  /** The error lines among [logs] as the device's page shows them now, for handing to an agent. */
+  fun shownErrors(logs: DeviceLogs?, state: DevicePageState): List<DeviceLogLine> {
     val all = logs?.lines.orEmpty().let { lines -> state.pausedAt?.let { last -> lines.filter { it.sequence <= last } } ?: lines }
     val query = state.logQuery.trim()
     return all.filter { (query.isEmpty() || "${it.tag} ${it.message}".contains(query, ignoreCase = true)) && it.level.passes(state.logFilter) && it.level.isError }

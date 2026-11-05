@@ -38,6 +38,8 @@ public data class DevicesPanelModel(
   val focusRequest: Int = 0,
   /** Its width in dp while docked, as last dragged; a device's screen and logs together have their own. */
   val width: Int = DefaultWidth,
+  /** The ↗/↙ and × buttons; a device's own window has neither, its frame closes it. */
+  val windowControls: Boolean = true,
 ) {
   public companion object {
     public const val DefaultWidth: Int = 420
@@ -148,6 +150,22 @@ public data class DeviceRowModel(
   val detail: LemonadeCodeString,
   /** False while the device still has to allow this computer; [detail] says so. */
   val ready: Boolean = true,
+  /** The row's ↗ can mirror the device in a window of its own. */
+  val canOpenWindow: Boolean = false,
+  /** A window of its own mirrors the device now; the ↗ closes it and the row brings it forward. */
+  val windowOpen: Boolean = false,
+)
+
+/** A device mirrored in a window of its own: its page, the same as in the Devices panel. */
+@Immutable
+public data class DeviceWindowModel(
+  val deviceId: String,
+  /** For the window's title. */
+  val name: String,
+  /** The device's page; its header has no back, move or close buttons. */
+  val panel: DevicesPanelModel,
+  /** Goes up by one each time the window should come to the front. */
+  val focusRequest: Int = 0,
 )
 
 @Immutable

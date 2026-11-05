@@ -3,6 +3,7 @@ package dev.lemonadecode.app
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.painter.BitmapPainter
@@ -78,6 +79,31 @@ public fun main(args: Array<String>) {
           }
         }
         graph.workspaceScreen.Devices(model = model, onBackground = { window.paintBehind(it) }, onDarkTheme = { window.matchTitleBar(it) })
+      }
+    }
+    // Devices mirrored in windows of their own, after a device's ↗. Each keeps its place while others open and close.
+    model.deviceWindows.forEach { deviceWindow ->
+      key(deviceWindow.deviceId) {
+        Window(
+          title = "${deviceWindow.name} · Lemonade Code",
+          icon = icon,
+          state = rememberWindowState(size = DpSize(760.dp, 880.dp)),
+          onCloseRequest = { model.eventSink(WorkspaceEvent.CloseDeviceWindow(deviceWindow.deviceId)) },
+        ) {
+          // Picking the device in the list again brings its window forward.
+          LaunchedEffect(deviceWindow.focusRequest) {
+            if (deviceWindow.focusRequest > 0) {
+              window.toFront()
+              window.requestFocus()
+            }
+          }
+          graph.workspaceScreen.DeviceWindow(
+            model = model,
+            deviceId = deviceWindow.deviceId,
+            onBackground = { window.paintBehind(it) },
+            onDarkTheme = { window.matchTitleBar(it) },
+          )
+        }
       }
     }
   }

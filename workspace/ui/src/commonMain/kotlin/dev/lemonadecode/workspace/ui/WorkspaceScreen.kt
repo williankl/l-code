@@ -62,6 +62,8 @@ import dev.lemonadecode.workspace.strings.action_new_terminal
 import dev.lemonadecode.workspace.strings.devices_resize
 import dev.lemonadecode.workspace.strings.no_sessions_detail
 import dev.lemonadecode.workspace.strings.no_sessions_title
+import dev.lemonadecode.workspace.uimodel.DevicePageEvent
+import dev.lemonadecode.workspace.uimodel.DeviceWindowModel
 import dev.lemonadecode.workspace.uimodel.DevicesPanelModel
 import dev.lemonadecode.workspace.uimodel.DevicesWindow
 import dev.lemonadecode.workspace.uimodel.SessionsPanelModel
@@ -406,4 +408,21 @@ public fun DevicesWindowContent(
   modifier: Modifier = Modifier,
 ) {
   DevicesPanel(panel = panel, onEvent = onEvent, modifier = modifier.fillMaxSize())
+}
+
+/**
+ * One device mirrored in a window of its own: its screen and logs, as on its page in the Devices
+ * panel. What happens on the page is said to be in this window, so it reaches this device.
+ */
+@Composable
+public fun DeviceWindowContent(
+  window: DeviceWindowModel,
+  onEvent: (WorkspaceEvent) -> Unit,
+  modifier: Modifier = Modifier,
+) {
+  val deviceId = window.deviceId
+  val inWindow = remember(deviceId, onEvent) {
+    { event: WorkspaceEvent -> onEvent(if (event is DevicePageEvent) WorkspaceEvent.InDeviceWindow(deviceId, event) else event) }
+  }
+  DevicesPanel(panel = window.panel, onEvent = inWindow, modifier = modifier.fillMaxSize())
 }

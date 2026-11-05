@@ -150,6 +150,7 @@ internal object WorkspaceModelMapper {
         agent = selected?.let { it.agent ?: it.shell },
         widths = DevicesPanelWidths(narrow = input.settings.devicesPanelWidth, wide = input.settings.devicesPanelWideWidth),
       ),
+      deviceWindows = DevicesMapper.windows(input.mobile, view, input.settings.devicesLayout, agent = selected?.let { it.agent ?: it.shell }),
       error = view.error,
       toast = view.toast,
       eventSink = eventSink,

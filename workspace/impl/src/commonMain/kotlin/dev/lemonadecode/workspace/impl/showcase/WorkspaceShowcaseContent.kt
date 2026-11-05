@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import dev.lemonadecode.platform.localization.ProvideAppLanguage
+import dev.lemonadecode.workspace.ui.DeviceWindowContent
 import dev.lemonadecode.workspace.ui.DevicesWindowContent
 import dev.lemonadecode.workspace.ui.TerminalTranscript
 import dev.lemonadecode.workspace.ui.WorkspaceContent
@@ -30,6 +31,7 @@ public fun WorkspaceShowcaseContent(
           modifier = modifier,
         )
         ShowcasePart.Devices -> model.devices?.let { panel -> DevicesWindowContent(panel = panel, onEvent = model.eventSink, modifier = modifier) }
+        ShowcasePart.DeviceWindow -> model.deviceWindows.firstOrNull()?.let { window -> DeviceWindowContent(window = window, onEvent = model.eventSink, modifier = modifier) }
       }
     }
   }

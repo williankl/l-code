@@ -267,6 +267,12 @@ Lemonade Code finds them on your `PATH`, in the Android SDK and in Homebrew's fo
 - **On another display.** The ↗ button moves the panel into a window of its own, and the main window
   gets its space back. The phone button gets a small ↗ mark and brings that window forward. ↙ puts
   the panel back.
+- **Several at once.** The ↗ on a device in the list mirrors it in a window of its own, with its
+  screen and logs, so two emulators can run side by side. Each window has its own tab, filter and
+  keyboard, and clicks and typing reach that device only. The same ↗, lit while the window is open,
+  closes it, and so does the window's own close button. Picking the device in the list brings its
+  window forward. The window stays open when the panel closes, and closes by itself when the device
+  disconnects.
 
 <img src="images/pairing.png" width="100%" alt="Pairing an Android phone in three steps: the platform, the method, then the code">
 

@@ -324,6 +324,8 @@
   <string name="devices_layout_tabs">Afficher l’écran et les journaux en onglets</string>
   <string name="devices_layout_split">Afficher l’écran et les journaux ensemble</string>
   <string name="devices_disconnect">Déconnecter %1$s</string>
+  <string name="device_window_open">Ouvrir %1$s dans sa propre fenêtre</string>
+  <string name="device_window_close">Fermer la fenêtre de %1$s</string>
   <string name="devices_disconnected">%1$s déconnecté</string>
   <string name="device_usb">USB</string>
   <string name="device_wifi">Wi‑Fi</string>

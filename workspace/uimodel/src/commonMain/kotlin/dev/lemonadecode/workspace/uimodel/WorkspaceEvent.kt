@@ -97,49 +97,58 @@ public sealed interface WorkspaceEvent {
   public data class MoveDevices(val window: DevicesWindow) : WorkspaceEvent
   public data class SetDevicesLayout(val layout: DevicesLayoutOption) : WorkspaceEvent
   public data class SelectDevice(val deviceId: String) : WorkspaceEvent
-  public data class SetDeviceTab(val tab: DeviceTab) : WorkspaceEvent
+  public data class SetDeviceTab(val tab: DeviceTab) : DevicePageEvent
   public data class DisconnectDevice(val deviceId: String) : WorkspaceEvent
 
+  /** A device's ↗ in the list: mirrors it in a window of its own, or closes that window. */
+  public data class ToggleDeviceWindow(val deviceId: String) : WorkspaceEvent
+
+  /** The device window's own close button. */
+  public data class CloseDeviceWindow(val deviceId: String) : WorkspaceEvent
+
+  /** [event] happened in the window mirroring [deviceId], not in the Devices panel. */
+  public data class InDeviceWindow(val deviceId: String, val event: DevicePageEvent) : WorkspaceEvent
+
   /** A click on the mirrored screen, in the device's pixels. */
-  public data class TapDevice(val x: Int, val y: Int) : WorkspaceEvent
+  public data class TapDevice(val x: Int, val y: Int) : DevicePageEvent
 
   /** A drag on the mirrored screen, in the device's pixels. */
-  public data class SwipeDevice(val fromX: Int, val fromY: Int, val toX: Int, val toY: Int, val durationMillis: Long) : WorkspaceEvent
-  public data object PressDeviceBack : WorkspaceEvent
-  public data object PressDeviceHome : WorkspaceEvent
-  public data object RotateDevice : WorkspaceEvent
+  public data class SwipeDevice(val fromX: Int, val fromY: Int, val toX: Int, val toY: Int, val durationMillis: Long) : DevicePageEvent
+  public data object PressDeviceBack : DevicePageEvent
+  public data object PressDeviceHome : DevicePageEvent
+  public data object RotateDevice : DevicePageEvent
 
   /** Saves the device's screen and hands the picture to the selected session. */
-  public data object ScreenshotToSession : WorkspaceEvent
+  public data object ScreenshotToSession : DevicePageEvent
 
   /** Typing goes to the device, or stops going there. */
-  public data object ToggleDeviceKeyboard : WorkspaceEvent
-  public data class TypeOnDevice(val text: String) : WorkspaceEvent
-  public data class PressDeviceKey(val key: DeviceKeyModel) : WorkspaceEvent
+  public data object ToggleDeviceKeyboard : DevicePageEvent
+  public data class TypeOnDevice(val text: String) : DevicePageEvent
+  public data class PressDeviceKey(val key: DeviceKeyModel) : DevicePageEvent
 
-  public data class SetLogFilter(val filter: LogFilter) : WorkspaceEvent
-  public data object ToggleLogSearch : WorkspaceEvent
-  public data class SetLogQuery(val query: String) : WorkspaceEvent
-  public data object ClearLogs : WorkspaceEvent
+  public data class SetLogFilter(val filter: LogFilter) : DevicePageEvent
+  public data object ToggleLogSearch : DevicePageEvent
+  public data class SetLogQuery(val query: String) : DevicePageEvent
+  public data object ClearLogs : DevicePageEvent
 
   /** Live ↔ paused: paused, the list stops moving while lines keep arriving underneath. */
-  public data object ToggleLogsPaused : WorkspaceEvent
+  public data object ToggleLogsPaused : DevicePageEvent
 
   /** Hands the error lines shown to the selected session's agent. */
-  public data object SendLogErrors : WorkspaceEvent
+  public data object SendLogErrors : DevicePageEvent
 
   /** Opens or closes the choice of whose lines the device's log shows. */
-  public data object ToggleLogApps : WorkspaceEvent
-  public data object DismissLogApps : WorkspaceEvent
+  public data object ToggleLogApps : DevicePageEvent
+  public data object DismissLogApps : DevicePageEvent
 
   /** The log follows whichever app is in front, as it does until another choice is made. */
-  public data object FollowAppInFront : WorkspaceEvent
+  public data object FollowAppInFront : DevicePageEvent
 
   /** The log shows every line, from every app and the system. */
-  public data object ShowAllApps : WorkspaceEvent
+  public data object ShowAllApps : DevicePageEvent
 
   /** Adds the app's lines to the log, or takes them out; with no app left, every line shows. */
-  public data class ToggleLogApp(val packageName: String) : WorkspaceEvent
+  public data class ToggleLogApp(val packageName: String) : DevicePageEvent
 
   public data object StartPairing : WorkspaceEvent
   public data class ChoosePairingPlatform(val platform: MobilePlatformModel) : WorkspaceEvent
@@ -211,6 +220,9 @@ public sealed interface WorkspaceEvent {
 
   public data object DismissError : WorkspaceEvent
 }
+
+/** What happens on one device's page: its screen, its controls and its logs. */
+public sealed interface DevicePageEvent : WorkspaceEvent
 
 /** How to pair, at step 2. */
 public enum class PairingMethod { QrCode, PairingCode, Nearby, Cable }

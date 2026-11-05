@@ -165,7 +165,8 @@ second, and you can tap, swipe and type on them from your desk.
 
 Pick which apps the logs come from, filter down to the errors, and press **Send errors** to hand
 them to the agent, or snap a screenshot it can look at. Pair a phone over Wi-Fi in three quick
-steps, and pop the panel out onto another display when you want the room.
+steps, and pop the panel out onto another display when you want the room. Testing on more than
+one? Give each device a window of its own and watch them side by side.
 
 <img src="docs/images/devices-logs-pairing.png" width="100%" alt="Picking two of the phone's apps to show logs from, then pairing a phone: scan a QR code, type a pairing code or pick one from the network, and it's connected">
 

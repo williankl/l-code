@@ -1,5 +1,6 @@
 package dev.lemonadecode.workspace.impl
 
+import dev.lemonadecode.domain.mobile.DeviceApp
 import dev.lemonadecode.domain.mobile.LogPackages
 import dev.lemonadecode.domain.mobile.MobileError
 import dev.lemonadecode.domain.review.DiffState
@@ -44,7 +45,9 @@ import dev.lemonadecode.workspace.strings.worktree_branch_taken
 import dev.lemonadecode.workspace.strings.worktree_deleted
 import dev.lemonadecode.workspace.uimodel.CloseSessionDialogModel
 import dev.lemonadecode.workspace.uimodel.ClosingWorktreeModel
+import dev.lemonadecode.workspace.uimodel.DeviceRowModel
 import dev.lemonadecode.workspace.uimodel.DeviceScreenModel
+import dev.lemonadecode.workspace.uimodel.DeviceWindowModel
 import dev.lemonadecode.workspace.uimodel.DevicesButtonModel
 import dev.lemonadecode.workspace.uimodel.DevicesContentModel
 import dev.lemonadecode.workspace.uimodel.DevicesLayoutOption
@@ -493,6 +496,119 @@ class WorkspacePresenterTest {
       awaitItemWhere { (it.devices?.focusRequest ?: 0) > before }.eventSink(WorkspaceEvent.MoveDevices(DevicesWindow.Docked))
       awaitItemWhere { it.devices?.window == DevicesWindow.Docked }.eventSink(WorkspaceEvent.CloseDevices)
       awaitItemWhere { it.devices == null }
+    }
+  }
+
+  @Test
+  fun `a device opens in a window of its own, and its button or the window's close closes it`() = runTest {
+    settings.update { it.copy(mobilePlugin = true) }
+    mobile.setDevices(ShowcaseDevices.connected)
+    val pixel = ShowcaseDevices.pixel.id.value
+    presenter.test {
+      awaitItem().eventSink(WorkspaceEvent.ToggleDevices)
+      awaitItemWhere { it.devices != null }.eventSink(WorkspaceEvent.ToggleDeviceWindow(pixel))
+      val open = awaitItemWhere { it.deviceWindows.isNotEmpty() }
+      val window = open.deviceWindows.single()
+      assertEquals("Pixel 8", window.name)
+      assertIs<DevicesContentModel.Device>(window.panel.content)
+      assertEquals(false, window.panel.canGoBack)
+      assertEquals(false, window.panel.windowControls)
+      assertEquals(true, open.rowOf(pixel)?.windowOpen)
+
+      open.eventSink(WorkspaceEvent.ToggleDeviceWindow(pixel))
+      val closed = awaitItemWhere { it.deviceWindows.isEmpty() }
+      assertEquals(false, closed.rowOf(pixel)?.windowOpen)
+      closed.eventSink(WorkspaceEvent.ToggleDeviceWindow(pixel))
+      awaitItemWhere { it.deviceWindows.isNotEmpty() }.eventSink(WorkspaceEvent.CloseDeviceWindow(pixel))
+      awaitItemWhere { it.deviceWindows.isEmpty() }
+    }
+  }
+
+  @Test
+  fun `each device window reaches its own device and keeps its own page`() = runTest {
+    settings.update { it.copy(mobilePlugin = true) }
+    val (pixel, galaxy, iphone) = Triple(ShowcaseDevices.pixel.id, ShowcaseDevices.galaxy.id, ShowcaseDevices.iphone.id)
+    mobile.setDevices(ShowcaseDevices.connected)
+    mobile.logs.value = listOf(pixel, galaxy, iphone).associateWith { ShowcaseDevices.androidLogs }
+    mobile.screens.value = listOf(pixel, galaxy, iphone).associateWith { ShowcaseDevices.screen() }
+    mobile.apps.value = mapOf(pixel to listOf(DeviceApp("com.teya.pixel")), galaxy to listOf(DeviceApp("com.teya.galaxy")))
+    presenter.test {
+      val first = awaitItem()
+      first.eventSink(WorkspaceEvent.ToggleDeviceWindow(pixel.value))
+      first.eventSink(WorkspaceEvent.ToggleDeviceWindow(galaxy.value))
+      first.eventSink(WorkspaceEvent.ToggleDevices)
+      awaitItemWhere { it.devices != null }.eventSink(WorkspaceEvent.SelectDevice(iphone.value))
+      val all = awaitItemWhere { model ->
+        model.devices?.content is DevicesContentModel.Device && model.deviceWindows.size == 2 && model.deviceWindows.all { it.page().screen is DeviceScreenModel.Frame }
+      }
+      assertEquals(listOf("Pixel 8", "Galaxy S23"), all.deviceWindows.map { it.name })
+
+      all.eventSink(WorkspaceEvent.InDeviceWindow(pixel.value, WorkspaceEvent.TapDevice(10, 20)))
+      all.eventSink(WorkspaceEvent.InDeviceWindow(galaxy.value, WorkspaceEvent.PressDeviceHome))
+      all.eventSink(WorkspaceEvent.PressDeviceHome)
+      yieldUntil { mobile.actions.size >= 3 }
+      assertEquals(listOf("tap ${pixel.value} 10,20", "press ${galaxy.value} Home", "press ${iphone.value} Home"), mobile.actions)
+
+      all.eventSink(WorkspaceEvent.InDeviceWindow(pixel.value, WorkspaceEvent.SetLogFilter(LogFilter.Errors)))
+      val filtered = awaitItemWhere { it.deviceWindows.first().page().logs.filter == LogFilter.Errors }
+      assertEquals(LogFilter.All, filtered.deviceWindows.last().page().logs.filter)
+      assertEquals(LogFilter.All, (filtered.devices?.content as DevicesContentModel.Device).logs.filter)
+
+      // Whose lines the log shows is picked per window too, from that device's own apps.
+      filtered.eventSink(WorkspaceEvent.InDeviceWindow(galaxy.value, WorkspaceEvent.ToggleLogApps))
+      val picking = awaitItemWhere { it.deviceWindows.last().page().logs.apps?.apps?.isNotEmpty() == true }
+      assertEquals(listOf("com.teya.galaxy"), picking.deviceWindows.last().page().logs.apps?.apps?.map { it.packageName })
+      assertEquals(false, picking.deviceWindows.first().page().logs.apps?.open)
+    }
+  }
+
+  @Test
+  fun `picking a device that has its own window brings that window forward, and it outlives the panel`() = runTest {
+    settings.update { it.copy(mobilePlugin = true) }
+    mobile.setDevices(ShowcaseDevices.connected)
+    val pixel = ShowcaseDevices.pixel.id.value
+    presenter.test {
+      awaitItem().eventSink(WorkspaceEvent.ToggleDevices)
+      // The panel's own device moves into the window, and the panel goes back to the list.
+      awaitItemWhere { it.devices != null }.eventSink(WorkspaceEvent.SelectDevice(pixel))
+      awaitItemWhere { it.devices?.content is DevicesContentModel.Device }.eventSink(WorkspaceEvent.ToggleDeviceWindow(pixel))
+      val open = awaitItemWhere { it.deviceWindows.isNotEmpty() }
+      assertIs<DevicesContentModel.Devices>(open.devices?.content)
+      assertEquals(0, open.deviceWindows.single().focusRequest)
+
+      open.eventSink(WorkspaceEvent.SelectDevice(pixel))
+      val forward = awaitItemWhere { it.deviceWindows.single().focusRequest == 1 }
+      assertIs<DevicesContentModel.Devices>(forward.devices?.content)
+
+      forward.eventSink(WorkspaceEvent.CloseDevices)
+      assertEquals(1, awaitItemWhere { it.devices == null }.deviceWindows.size)
+    }
+  }
+
+  @Test
+  fun `a device's window closes when the device goes, and every window closes with the plugin`() = runTest {
+    settings.update { it.copy(mobilePlugin = true) }
+    mobile.setDevices(ShowcaseDevices.connected)
+    val (pixel, galaxy) = ShowcaseDevices.pixel.id.value to ShowcaseDevices.galaxy.id.value
+    presenter.test {
+      val first = awaitItem()
+      first.eventSink(WorkspaceEvent.ToggleDevices)
+      first.eventSink(WorkspaceEvent.ToggleDeviceWindow(pixel))
+      first.eventSink(WorkspaceEvent.ToggleDeviceWindow(galaxy))
+      awaitItemWhere { it.deviceWindows.size == 2 }
+
+      mobile.setDevices(ShowcaseDevices.connected - ShowcaseDevices.pixel)
+      assertEquals(listOf(galaxy), awaitItemWhere { it.deviceWindows.size == 1 }.deviceWindows.map { it.deviceId })
+      testScheduler.runCurrent()
+      // Plugged back in, it's in the list again but not in a window.
+      mobile.setDevices(ShowcaseDevices.connected)
+      val back = awaitItemWhere { it.rowOf(pixel) != null }
+      assertEquals(false, back.rowOf(pixel)?.windowOpen)
+      assertEquals(listOf(galaxy), back.deviceWindows.map { it.deviceId })
+
+      back.eventSink(WorkspaceEvent.SetMobilePlugin(false))
+      awaitItemWhere { it.topBar.devices == null && it.deviceWindows.isEmpty() }.eventSink(WorkspaceEvent.SetMobilePlugin(true))
+      assertEquals(emptyList(), awaitItemWhere { it.topBar.devices != null }.deviceWindows)
     }
   }
 
@@ -966,4 +1082,8 @@ class WorkspacePresenterTest {
   private companion object {
     const val Now: Long = 1_793_600_000_000
   }
+
+  private fun WorkspaceModel.rowOf(deviceId: String): DeviceRowModel? = (devices?.content as? DevicesContentModel.Devices)?.groups?.flatMap { it.devices }?.firstOrNull { it.id == deviceId }
+
+  private fun DeviceWindowModel.page(): DevicesContentModel.Device = panel.content as DevicesContentModel.Device
 }

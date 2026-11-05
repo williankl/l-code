@@ -23,6 +23,7 @@ import dev.lemonadecode.platform.terminal.TerminalColors
 import dev.lemonadecode.platform.terminal.TerminalView
 import dev.lemonadecode.platform.terminal.openInBrowser
 import dev.lemonadecode.sessions.api.SessionTerminals
+import dev.lemonadecode.workspace.ui.DeviceWindowContent
 import dev.lemonadecode.workspace.ui.DevicesWindowContent
 import dev.lemonadecode.workspace.ui.WorkspaceContent
 import dev.lemonadecode.workspace.ui.toThemeMode
@@ -78,6 +79,21 @@ public class WorkspaceScreen internal constructor(
     val panel = model.devices?.takeIf { it.window == DevicesWindow.Separate } ?: return
     Themed(model, onBackground, onDarkTheme) {
       DevicesWindowContent(panel = panel, onEvent = model.eventSink, modifier = modifier)
+    }
+  }
+
+  /** The device [deviceId] mirrored in a window of its own; draws nothing once that window closes. */
+  @Composable
+  public fun DeviceWindow(
+    model: WorkspaceModel,
+    deviceId: String,
+    modifier: Modifier = Modifier,
+    onBackground: (Color) -> Unit = {},
+    onDarkTheme: (Boolean) -> Unit = {},
+  ) {
+    val window = model.deviceWindows.firstOrNull { it.deviceId == deviceId } ?: return
+    Themed(model, onBackground, onDarkTheme) {
+      DeviceWindowContent(window = window, onEvent = model.eventSink, modifier = modifier)
     }
   }
 

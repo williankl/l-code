@@ -84,7 +84,7 @@ An `impl` never depends on another `impl`. Bindings are contributed with
 | `workspace/uimodel` | `WorkspaceModel`, `WorkspaceEvent` and the localized strings (`composeResources`: English, German, Spanish, French, Portuguese and Slovak). |
 | `workspace/ui` | The composables: `WorkspaceContent(model, terminal)` and its parts, including the file previews. Pure rendering. |
 | `workspace/impl` | `WorkspacePresenter`, the Model mapper, `WorkspaceScreen` (presenter plus live terminals), and the showcase built from fixtures through the same mapper. |
-| `apps/desktop` | The Metro `AppGraph`, `main` (the main window and the Devices panel's own window, sharing one presenter), and packaging. |
+| `apps/desktop` | The Metro `AppGraph`, `main` (the main window, the Devices panel's own window and one window per device mirrored on its own, all sharing one presenter), and packaging. |
 | `sample` | The showcase app and the screenshot renderer. |
 
 ---

@@ -305,6 +305,8 @@
   <string name="devices_layout_tabs">Bildschirm und Logs als Tabs zeigen</string>
   <string name="devices_layout_split">Bildschirm und Logs zusammen zeigen</string>
   <string name="devices_disconnect">%1$s trennen</string>
+  <string name="device_window_open">%1$s in eigenem Fenster öffnen</string>
+  <string name="device_window_close">Fenster von %1$s schließen</string>
   <string name="devices_disconnected">%1$s getrennt</string>
   <string name="device_usb">USB</string>
   <string name="device_wifi">WLAN</string>

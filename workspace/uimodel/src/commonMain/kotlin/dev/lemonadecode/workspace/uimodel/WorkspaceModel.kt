@@ -21,6 +21,8 @@ public data class WorkspaceModel(
   val closeSession: CloseSessionDialogModel? = null,
   /** The Devices panel while it's open; null when closed or the Mobile plugin is off. */
   val devices: DevicesPanelModel? = null,
+  /** Devices mirrored in windows of their own, in the order they were opened. */
+  val deviceWindows: List<DeviceWindowModel> = emptyList(),
   /** Brief problem report, e.g. a worktree that couldn't be created. */
   val error: LemonadeCodeString? = null,
   /** A short confirmation shown at the bottom for a moment, e.g. after copying a path. */

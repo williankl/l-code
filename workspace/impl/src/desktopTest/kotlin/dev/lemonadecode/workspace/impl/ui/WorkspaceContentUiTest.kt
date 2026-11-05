@@ -445,6 +445,25 @@ class WorkspaceContentUiTest {
   }
 
   @Test
+  fun `a device's ↗ opens or closes its own window without opening its page`() = show(WorkspaceShowcase.DeviceList) {
+    expect(WorkspaceEvent.ToggleDeviceWindow(ShowcaseDevicesIds.Pixel)) { onNodeWithContentDescription("Open Pixel 8 in its own window").performClick() }
+    assertEquals(listOf<WorkspaceEvent>(WorkspaceEvent.ToggleDeviceWindow(ShowcaseDevicesIds.Pixel)), events)
+    expect(WorkspaceEvent.ToggleDeviceWindow(ShowcaseDevicesIds.Galaxy)) { onNodeWithContentDescription("Close Galaxy S23’s window").performClick() }
+    assertEquals(listOf<WorkspaceEvent>(WorkspaceEvent.ToggleDeviceWindow(ShowcaseDevicesIds.Galaxy)), events)
+  }
+
+  @Test
+  fun `a device's own window says its page's events are in that window`() = show(WorkspaceShowcase.DeviceWindow) {
+    onNodeWithText("Pixel 8").assertExists()
+    onNodeWithContentDescription("Close devices").assertDoesNotExist()
+    onNodeWithContentDescription("Open in a separate window").assertDoesNotExist()
+    expect(WorkspaceEvent.InDeviceWindow(ShowcaseDevicesIds.Pixel, WorkspaceEvent.PressDeviceHome)) { onNodeWithContentDescription("Home").performClick() }
+    expect(WorkspaceEvent.InDeviceWindow(ShowcaseDevicesIds.Pixel, WorkspaceEvent.SetLogFilter(LogFilter.Errors))) { onNodeWithText("Errors").performClick() }
+    // The layout is a setting, the same for every device.
+    expect(WorkspaceEvent.SetDevicesLayout(DevicesLayoutOption.Tabs)) { onNodeWithContentDescription("Show screen and logs as tabs").performClick() }
+  }
+
+  @Test
   fun `a device's screen and logs raise their events`() = show(WorkspaceShowcase.DeviceSideBySide) {
     expect(WorkspaceEvent.PressDeviceHome) { onNodeWithContentDescription("Home").performClick() }
     expect(WorkspaceEvent.ScreenshotToSession) { onNodeWithContentDescription("Screenshot to session").performClick() }
@@ -969,4 +988,5 @@ private fun WorkspaceModel.withLogLines(lines: List<LogLineModel>): WorkspaceMod
 /** The serials of the showcase's devices, as the panel raises them. */
 private object ShowcaseDevicesIds {
   const val Pixel = "38021FDH2000AB"
+  const val Galaxy = "192.168.1.42:41235"
 }

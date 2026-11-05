@@ -13,10 +13,13 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.SnapshotStateMap
 import dev.lemonadecode.domain.mobile.CablePairing
+import dev.lemonadecode.domain.mobile.DeviceApp
 import dev.lemonadecode.domain.mobile.DeviceButton
 import dev.lemonadecode.domain.mobile.DeviceId
 import dev.lemonadecode.domain.mobile.DeviceKey
 import dev.lemonadecode.domain.mobile.DeviceLogLine
+import dev.lemonadecode.domain.mobile.DeviceLogs
+import dev.lemonadecode.domain.mobile.DeviceScreen
 import dev.lemonadecode.domain.mobile.LogLevel
 import dev.lemonadecode.domain.mobile.LogPackages
 import dev.lemonadecode.domain.mobile.MobileDevice
@@ -66,9 +69,11 @@ import dev.lemonadecode.workspace.strings.session_path_copied
 import dev.lemonadecode.workspace.strings.worktree_deleted
 import dev.lemonadecode.workspace.strings.worktrees_deleted
 import dev.lemonadecode.workspace.uimodel.DeviceKeyModel
+import dev.lemonadecode.workspace.uimodel.DevicePageEvent
 import dev.lemonadecode.workspace.uimodel.DeviceTab
 import dev.lemonadecode.workspace.uimodel.DevicesLayoutOption
 import dev.lemonadecode.workspace.uimodel.DevicesWindow
+import dev.lemonadecode.workspace.uimodel.LogFilter
 import dev.lemonadecode.workspace.uimodel.PairingMethod
 import dev.lemonadecode.workspace.uimodel.PreviewAssetLoader
 import dev.lemonadecode.workspace.uimodel.SettingsPage
@@ -82,6 +87,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 
@@ -131,15 +137,24 @@ public class WorkspacePresenter internal constructor(
     RefreshWhenTerminalSettles(selected, onRefresh = { previewGeneration++ })
 
     val diffRows = remember { DiffRowCache() }
-    // The Devices panel reads only what its step shows.
+    // The Devices panel reads only what its step shows, and each device's page, in the panel or a
+    // window of its own, only what it shows: one stream per device, however many pages show it.
     val devicesView = view.devices?.takeIf { settings.mobilePlugin }
-    val openDevice = devicesView?.takeIf { it.step == DevicesStep.Device }?.deviceId
-    val screenShown = openDevice != null && (settings.devicesLayout == DevicesLayout.SideBySide || devicesView.tab == DeviceTab.Screen)
-    val logPackages = devicesView?.logPackages ?: LogPackages.AppInFront
-    val deviceLogs by remember(openDevice, logPackages) { openDevice?.let { mobileService.logs(it, logPackages) } ?: flowOf(null) }.collectAsState(initial = null)
-    val appsShown = openDevice != null && devicesView?.logAppsOpen == true
-    val deviceApps by remember(openDevice, appsShown) { if (appsShown && openDevice != null) mobileService.apps(openDevice) else flowOf(null) }.collectAsState(initial = null)
-    val deviceScreen by remember(openDevice, screenShown) { if (screenShown && openDevice != null) mobileService.screen(openDevice) else flowOf(null) }.collectAsState(initial = null)
+    val pages = if (settings.mobilePlugin) listOfNotNull(view.panelPage) + view.deviceWindows.values.map { it.page } else emptyList()
+    val deviceLogs = remember { mutableStateMapOf<DeviceId, DeviceLogs>() }
+    val deviceApps = remember { mutableStateMapOf<DeviceId, List<DeviceApp>>() }
+    val deviceScreens = remember { mutableStateMapOf<DeviceId, DeviceScreen>() }
+    CollectEach(pages.associate { it.deviceId to it.logPackages }, deviceLogs) { id, packages -> mobileService.logs(id, packages) }
+    CollectEach(pages.filter { it.logAppsOpen }.associate { it.deviceId to Unit }, deviceApps) { id, _ -> mobileService.apps(id) }
+    CollectEach(
+      pages.filter { settings.devicesLayout == DevicesLayout.SideBySide || it.tab == DeviceTab.Screen }.associate { it.deviceId to Unit },
+      deviceScreens,
+    ) { id, _ -> mobileService.screen(id) }
+    // A device's window closes when the device goes: unplugged, its emulator closed, or disconnected.
+    LaunchedEffect(mobileDevices) {
+      val gone = view.deviceWindows.keys.filter { id -> mobileDevices.none { it.id == id } }
+      if (gone.isNotEmpty()) view = view.copy(deviceWindows = view.deviceWindows - gone.toSet())
+    }
     val nearbyPlatform = devicesView?.takeIf { it.step == DevicesStep.PairMethod || it.step == DevicesStep.PairNearby }?.pairPlatform
     val nearby by remember(nearbyPlatform) { nearbyPlatform?.let(mobileService::nearby) ?: flowOf(emptyList()) }.collectAsState(initial = emptyList())
     val pairingAttempt = devicesView?.attempt ?: 0
@@ -167,9 +182,78 @@ public class WorkspacePresenter internal constructor(
           update { it.copy(toast = message) }
           toastTimer.restart(scope) { update { state -> if (state.toast === message) state.copy(toast = null) else state } }
         }
-        fun onDevice(action: suspend (DeviceId) -> LemonadeCodeResult<Unit, *>) {
-          val device = view.devices?.deviceId ?: return
-          scope.launch { val _ = action(device) }
+
+        /** The page of [window]'s device, or the Devices panel's when [window] is null. */
+        fun pageOf(window: DeviceId?): DevicePageState? = if (window == null) view.devices?.page else view.deviceWindows[window]?.page
+        fun updatePage(window: DeviceId?, transform: (DevicePageState) -> DevicePageState) = update { state ->
+          if (window == null) {
+            val panel = state.devices
+            val page = panel?.page
+            if (panel == null || page == null) state else state.copy(devices = panel.copy(page = transform(page)))
+          } else {
+            val open = state.deviceWindows[window]
+            if (open == null) state else state.copy(deviceWindows = state.deviceWindows + (window to open.copy(page = transform(open.page))))
+          }
+        }
+
+        /** [event] on a device's page: in [window], the device's own window, or in the Devices panel when null. */
+        fun onPage(window: DeviceId?, event: DevicePageEvent) {
+          val page = pageOf(window) ?: return
+          val device = page.deviceId
+          fun send(action: suspend (DeviceId) -> LemonadeCodeResult<Unit, *>) {
+            scope.launch { val _ = action(device) }
+          }
+          when (event) {
+            is WorkspaceEvent.SetDeviceTab -> updatePage(window) { it.copy(tab = event.tab) }
+            is WorkspaceEvent.TapDevice -> send { mobileService.tap(it, event.x, event.y) }
+            is WorkspaceEvent.SwipeDevice -> send { mobileService.swipe(it, event.fromX, event.fromY, event.toX, event.toY, event.durationMillis) }
+            WorkspaceEvent.PressDeviceBack -> send { mobileService.press(it, DeviceButton.Back) }
+            WorkspaceEvent.PressDeviceHome -> send { mobileService.press(it, DeviceButton.Home) }
+            WorkspaceEvent.RotateDevice -> send { mobileService.rotate(it) }
+            is WorkspaceEvent.TypeOnDevice -> send { mobileService.type(it, event.text) }
+            is WorkspaceEvent.PressDeviceKey -> send { mobileService.key(it, event.key.toDomain()) }
+            WorkspaceEvent.ToggleDeviceKeyboard -> updatePage(window) { it.copy(keyboard = !it.keyboard) }
+            WorkspaceEvent.ScreenshotToSession -> if (current != null) {
+              scope.launch {
+                when (val shot = mobileService.screenshot(device)) {
+                  is LemonadeCodeResult.Success -> when (val pasted = sessionService.paste(current.id, quotedPath(shot.value) + " ")) {
+                    is LemonadeCodeResult.Success -> showToast(Res.string.screenshot_attached.asLemonadeCodeString(current.displayName))
+                    is LemonadeCodeResult.Failure -> fail(ErrorMessages.of(pasted.error))
+                  }
+                  is LemonadeCodeResult.Failure -> fail(Res.string.screenshot_failed.asLemonadeCodeString(DevicesMapper.errorText(shot.error)))
+                }
+              }
+            }
+            is WorkspaceEvent.SetLogFilter -> updatePage(window) { it.copy(logFilter = event.filter) }
+            WorkspaceEvent.ToggleLogSearch -> updatePage(window) { it.copy(logSearch = !it.logSearch, logQuery = if (it.logSearch) "" else it.logQuery) }
+            is WorkspaceEvent.SetLogQuery -> updatePage(window) { it.copy(logQuery = event.query) }
+            WorkspaceEvent.ClearLogs -> {
+              mobileService.clearLogs(device)
+              updatePage(window) { it.copy(logsCleared = true, pausedAt = null) }
+            }
+            WorkspaceEvent.ToggleLogsPaused -> updatePage(window) { shown ->
+              if (shown.pausedAt != null) shown.copy(pausedAt = null) else shown.copy(pausedAt = deviceLogs[device]?.lines?.lastOrNull()?.sequence ?: -1L)
+            }
+            WorkspaceEvent.SendLogErrors -> {
+              val logs = deviceLogs[device]
+              val named = mobileService.devices.value.firstOrNull { it.id == device }
+              val errors = DevicesMapper.shownErrors(logs, page)
+              if (named != null && current != null && errors.isNotEmpty()) {
+                when (val pasted = sessionService.paste(current.id, errorReport(named.name, logs?.source.orEmpty(), errors))) {
+                  is LemonadeCodeResult.Success -> showToast(Res.plurals.logs_errors_sent.asLemonadeCodeString(errors.size, errors.size, current.displayName))
+                  is LemonadeCodeResult.Failure -> fail(ErrorMessages.of(pasted.error))
+                }
+              }
+            }
+            WorkspaceEvent.ToggleLogApps -> updatePage(window) { it.copy(logAppsOpen = !it.logAppsOpen) }
+            WorkspaceEvent.DismissLogApps -> updatePage(window) { it.copy(logAppsOpen = false) }
+            WorkspaceEvent.FollowAppInFront -> updatePage(window) { it.showingLogsOf(LogPackages.AppInFront).copy(logAppsOpen = false) }
+            WorkspaceEvent.ShowAllApps -> updatePage(window) { it.showingLogsOf(LogPackages.All).copy(logAppsOpen = false) }
+            is WorkspaceEvent.ToggleLogApp -> updatePage(window) { shown ->
+              val ticked = (shown.logPackages as? LogPackages.Only)?.packages.orEmpty()
+              shown.showingLogsOf(LogPackages.Only(if (event.packageName in ticked) ticked - event.packageName else ticked + event.packageName))
+            }
+          }
         }
         fun fileOf(path: String?): FileDiff? = (review?.diff as? DiffState.Ready)?.snapshot?.files?.firstOrNull { it.path == path }
         fun commented(path: String): Boolean = review?.comments.orEmpty().any { it.filePath == path }
@@ -357,7 +441,7 @@ public class WorkspacePresenter internal constructor(
             },
           )
           is WorkspaceEvent.SetMobilePlugin -> {
-            if (!event.enabled) update { it.copy(devices = null) }
+            if (!event.enabled) update { it.copy(devices = null, deviceWindows = emptyMap()) }
             scope.launch { settingsService.update { it.copy(mobilePlugin = event.enabled) } }
           }
 
@@ -384,90 +468,53 @@ public class WorkspacePresenter internal constructor(
               DevicesStep.PairMethod -> DevicesStep.PairPlatform
               DevicesStep.PairQr, DevicesStep.PairCode, DevicesStep.PairNearby, DevicesStep.PairCable -> DevicesStep.PairMethod
             }
-            panel.copy(step = back, pairError = null, pairing = false, connecting = null, keyboard = false)
+            panel.copy(step = back, page = panel.page?.copy(keyboard = false), pairError = null, pairing = false, connecting = null)
           }
           is WorkspaceEvent.MoveDevices -> update { it.copy(devicesWindow = event.window) }
           is WorkspaceEvent.SetDevicesLayout -> scope.launch {
             settingsService.update { it.copy(devicesLayout = if (event.layout == DevicesLayoutOption.Tabs) DevicesLayout.Tabs else DevicesLayout.SideBySide) }
           }
-          is WorkspaceEvent.SelectDevice -> updateDevices {
-            it.copy(
-              step = DevicesStep.Device,
-              deviceId = DeviceId(event.deviceId),
-              keyboard = false,
-              logSearch = false,
-              logQuery = "",
-              pausedAt = null,
-              logsCleared = false,
-              logPackages = LogPackages.AppInFront,
-              logAppsOpen = false,
-            )
+          is WorkspaceEvent.SelectDevice -> {
+            val id = DeviceId(event.deviceId)
+            val window = view.deviceWindows[id]
+            if (window != null) {
+              // Already in a window of its own: that window comes forward and the panel stays put.
+              update { it.copy(deviceWindows = it.deviceWindows + (id to window.copy(focusRequest = window.focusRequest + 1))) }
+            } else {
+              // The tab and the level filter carry over from the last device; the rest starts over.
+              updateDevices { panel ->
+                val last = panel.page
+                panel.copy(step = DevicesStep.Device, page = DevicePageState(id, tab = last?.tab ?: DeviceTab.Screen, logFilter = last?.logFilter ?: LogFilter.All))
+              }
+            }
           }
-          is WorkspaceEvent.SetDeviceTab -> updateDevices { it.copy(tab = event.tab) }
+          is WorkspaceEvent.ToggleDeviceWindow -> update { state ->
+            val id = DeviceId(event.deviceId)
+            if (id in state.deviceWindows) {
+              state.copy(deviceWindows = state.deviceWindows - id)
+            } else {
+              // The window starts on a page of its own, and a panel showing the device goes back to the list.
+              val panel = state.devices?.let { if (it.step == DevicesStep.Device && it.page?.deviceId == id) it.copy(step = DevicesStep.List) else it }
+              state.copy(devices = panel, deviceWindows = state.deviceWindows + (id to DeviceWindowState(DevicePageState(id))))
+            }
+          }
+          is WorkspaceEvent.CloseDeviceWindow -> update { it.copy(deviceWindows = it.deviceWindows - DeviceId(event.deviceId)) }
+          is WorkspaceEvent.InDeviceWindow -> onPage(DeviceId(event.deviceId), event.event)
+          is DevicePageEvent -> onPage(window = null, event = event)
           is WorkspaceEvent.DisconnectDevice -> {
             val device = mobileService.devices.value.firstOrNull { it.id.value == event.deviceId }
             if (device != null) {
               scope.launch {
                 when (val dropped = mobileService.disconnect(device.id)) {
                   is LemonadeCodeResult.Success -> {
-                    updateDevices { it.copy(step = DevicesStep.List) }
+                    // Only a panel showing this device goes back to the list; it may have been dropped from its own window.
+                    update { state -> if (state.panelPage?.deviceId == device.id) state.copy(devices = state.devices?.copy(step = DevicesStep.List)) else state }
                     showToast(Res.string.devices_disconnected.asLemonadeCodeString(device.name))
                   }
                   is LemonadeCodeResult.Failure -> fail(DevicesMapper.errorText(dropped.error))
                 }
               }
             }
-          }
-          is WorkspaceEvent.TapDevice -> onDevice { mobileService.tap(it, event.x, event.y) }
-          is WorkspaceEvent.SwipeDevice -> onDevice { mobileService.swipe(it, event.fromX, event.fromY, event.toX, event.toY, event.durationMillis) }
-          WorkspaceEvent.PressDeviceBack -> onDevice { mobileService.press(it, DeviceButton.Back) }
-          WorkspaceEvent.PressDeviceHome -> onDevice { mobileService.press(it, DeviceButton.Home) }
-          WorkspaceEvent.RotateDevice -> onDevice { mobileService.rotate(it) }
-          is WorkspaceEvent.TypeOnDevice -> onDevice { mobileService.type(it, event.text) }
-          is WorkspaceEvent.PressDeviceKey -> onDevice { mobileService.key(it, event.key.toDomain()) }
-          WorkspaceEvent.ToggleDeviceKeyboard -> updateDevices { it.copy(keyboard = !it.keyboard) }
-          WorkspaceEvent.ScreenshotToSession -> {
-            val device = view.devices?.deviceId
-            if (device != null && current != null) {
-              scope.launch {
-                when (val shot = mobileService.screenshot(device)) {
-                  is LemonadeCodeResult.Success -> when (val pasted = sessionService.paste(current.id, quotedPath(shot.value) + " ")) {
-                    is LemonadeCodeResult.Success -> showToast(Res.string.screenshot_attached.asLemonadeCodeString(current.displayName))
-                    is LemonadeCodeResult.Failure -> fail(ErrorMessages.of(pasted.error))
-                  }
-                  is LemonadeCodeResult.Failure -> fail(Res.string.screenshot_failed.asLemonadeCodeString(DevicesMapper.errorText(shot.error)))
-                }
-              }
-            }
-          }
-          is WorkspaceEvent.SetLogFilter -> updateDevices { it.copy(logFilter = event.filter) }
-          WorkspaceEvent.ToggleLogSearch -> updateDevices { it.copy(logSearch = !it.logSearch, logQuery = if (it.logSearch) "" else it.logQuery) }
-          is WorkspaceEvent.SetLogQuery -> updateDevices { it.copy(logQuery = event.query) }
-          WorkspaceEvent.ClearLogs -> view.devices?.deviceId?.let { device ->
-            mobileService.clearLogs(device)
-            updateDevices { it.copy(logsCleared = true, pausedAt = null) }
-          }
-          WorkspaceEvent.ToggleLogsPaused -> updateDevices { panel ->
-            if (panel.pausedAt != null) panel.copy(pausedAt = null) else panel.copy(pausedAt = deviceLogs?.lines?.lastOrNull()?.sequence ?: -1L)
-          }
-          WorkspaceEvent.SendLogErrors -> {
-            val panel = view.devices
-            val device = panel?.deviceId?.let { id -> mobileService.devices.value.firstOrNull { it.id == id } }
-            val errors = panel?.let { DevicesMapper.shownErrors(deviceLogs, it) }.orEmpty()
-            if (device != null && current != null && errors.isNotEmpty()) {
-              when (val pasted = sessionService.paste(current.id, errorReport(device.name, deviceLogs?.source.orEmpty(), errors))) {
-                is LemonadeCodeResult.Success -> showToast(Res.plurals.logs_errors_sent.asLemonadeCodeString(errors.size, errors.size, current.displayName))
-                is LemonadeCodeResult.Failure -> fail(ErrorMessages.of(pasted.error))
-              }
-            }
-          }
-          WorkspaceEvent.ToggleLogApps -> updateDevices { it.copy(logAppsOpen = !it.logAppsOpen) }
-          WorkspaceEvent.DismissLogApps -> updateDevices { it.copy(logAppsOpen = false) }
-          WorkspaceEvent.FollowAppInFront -> updateDevices { it.showingLogsOf(LogPackages.AppInFront).copy(logAppsOpen = false) }
-          WorkspaceEvent.ShowAllApps -> updateDevices { it.showingLogsOf(LogPackages.All).copy(logAppsOpen = false) }
-          is WorkspaceEvent.ToggleLogApp -> updateDevices { panel ->
-            val ticked = (panel.logPackages as? LogPackages.Only)?.packages.orEmpty()
-            panel.showingLogsOf(LogPackages.Only(if (event.packageName in ticked) ticked - event.packageName else ticked + event.packageName))
           }
           WorkspaceEvent.StartPairing -> updateDevices { DevicesViewState(step = DevicesStep.PairPlatform, attempt = it.attempt) }
           is WorkspaceEvent.ChoosePairingPlatform -> updateDevices { it.copy(step = DevicesStep.PairMethod, pairPlatform = event.platform.toDomain(), pairError = null) }
@@ -506,8 +553,19 @@ public class WorkspacePresenter internal constructor(
               }
             }
           }
-          WorkspaceEvent.OpenPairedDevice -> updateDevices { panel ->
-            panel.paired?.let { panel.copy(step = DevicesStep.Device, deviceId = it, tab = DeviceTab.Screen) } ?: panel.copy(step = DevicesStep.List)
+          WorkspaceEvent.OpenPairedDevice -> update { state ->
+            val panel = state.devices ?: return@update state
+            val paired = panel.paired
+            val window = paired?.let { state.deviceWindows[it] }
+            when {
+              paired == null -> state.copy(devices = panel.copy(step = DevicesStep.List))
+              // Paired again while in a window of its own: that window comes forward, as picking it in the list does.
+              window != null -> state.copy(
+                devices = panel.copy(step = DevicesStep.List),
+                deviceWindows = state.deviceWindows + (paired to window.copy(focusRequest = window.focusRequest + 1)),
+              )
+              else -> state.copy(devices = panel.copy(step = DevicesStep.Device, page = DevicePageState(paired, logFilter = panel.page?.logFilter ?: LogFilter.All)))
+            }
           }
 
           WorkspaceEvent.OpenParentSession -> current?.parentId?.let { parent -> update { it.selecting(parent) } }
@@ -670,7 +728,7 @@ public class WorkspacePresenter internal constructor(
         devices = mobileDevices,
         logs = deviceLogs,
         apps = deviceApps,
-        screen = deviceScreen,
+        screens = deviceScreens,
         nearby = nearby,
         qr = qrPairing,
         cable = cablePairing,
@@ -679,6 +737,24 @@ public class WorkspacePresenter internal constructor(
       systemLanguage = SettingsMapper.languageFor(systemLanguageTag()),
     )
     return WorkspaceModelMapper.map(input, eventSink)
+  }
+
+  /**
+   * Collects [stream] into [into] for each device in [requests], with what it asks for: one collector
+   * per device, kept while the device stays in [requests] and started over when what it asks for changes.
+   */
+  @Composable
+  private fun <K, T : Any> CollectEach(requests: Map<DeviceId, K>, into: SnapshotStateMap<DeviceId, T>, stream: (DeviceId, K) -> Flow<T>) {
+    LaunchedEffect(requests.keys) { (into.keys - requests.keys).forEach { into.remove(it) } }
+    requests.forEach { (id, request) ->
+      key(id) {
+        LaunchedEffect(request) {
+          // What the old request read isn't this one's, e.g. the lines of apps no longer picked.
+          into.remove(id)
+          stream(id, request).collect { into[id] = it }
+        }
+      }
+    }
   }
 
   /**
@@ -760,7 +836,7 @@ private fun WorkspaceViewState.closingPopovers(): WorkspaceViewState = copy(
 )
 
 /** The log showing [packages]' lines; a new choice starts it over, so it's live and not cleared by hand. */
-private fun DevicesViewState.showingLogsOf(packages: LogPackages): DevicesViewState = if (packages == logPackages) this else copy(logPackages = packages, pausedAt = null, logsCleared = false)
+private fun DevicePageState.showingLogsOf(packages: LogPackages): DevicePageState = if (packages == logPackages) this else copy(logPackages = packages, pausedAt = null, logsCleared = false)
 
 /** Where a pairing or connection leaves the panel: on the device it added, or back with what went wrong. */
 private fun DevicesViewState.afterPairing(result: LemonadeCodeResult<MobileDevice, MobileError>): DevicesViewState = when (result) {

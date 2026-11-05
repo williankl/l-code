@@ -132,6 +132,8 @@ import dev.lemonadecode.platform.localization.resolve
 import dev.lemonadecode.workspace.strings.Res
 import dev.lemonadecode.workspace.strings.device_tab_logs
 import dev.lemonadecode.workspace.strings.device_tab_screen
+import dev.lemonadecode.workspace.strings.device_window_close
+import dev.lemonadecode.workspace.strings.device_window_open
 import dev.lemonadecode.workspace.strings.devices_android
 import dev.lemonadecode.workspace.strings.devices_close
 import dev.lemonadecode.workspace.strings.devices_dock
@@ -319,12 +321,14 @@ private fun DevicesHeader(
         label = stringResource(if (split) Res.string.devices_layout_tabs else Res.string.devices_layout_split),
       ) { onEvent(WorkspaceEvent.SetDevicesLayout(if (split) DevicesLayoutOption.Tabs else DevicesLayoutOption.SideBySide)) }
     }
-    val separate = panel.window == DevicesWindow.Separate
-    HeaderButton(
-      icon = if (separate) LemonadeIcons.ArrowDownLeft else LemonadeIcons.ArrowUpRight,
-      label = stringResource(if (separate) Res.string.devices_dock else Res.string.devices_separate),
-    ) { onEvent(WorkspaceEvent.MoveDevices(if (separate) DevicesWindow.Docked else DevicesWindow.Separate)) }
-    HeaderButton(LemonadeIcons.Times, stringResource(Res.string.devices_close)) { onEvent(WorkspaceEvent.CloseDevices) }
+    if (panel.windowControls) {
+      val separate = panel.window == DevicesWindow.Separate
+      HeaderButton(
+        icon = if (separate) LemonadeIcons.ArrowDownLeft else LemonadeIcons.ArrowUpRight,
+        label = stringResource(if (separate) Res.string.devices_dock else Res.string.devices_separate),
+      ) { onEvent(WorkspaceEvent.MoveDevices(if (separate) DevicesWindow.Docked else DevicesWindow.Separate)) }
+      HeaderButton(LemonadeIcons.Times, stringResource(Res.string.devices_close)) { onEvent(WorkspaceEvent.CloseDevices) }
+    }
   }
 }
 
@@ -410,14 +414,22 @@ private fun DeviceGroup(
         modifier = Modifier.padding(horizontal = spaces.spacing300, vertical = spaces.spacing100),
       )
     }
-    group.devices.forEach { device -> DeviceRow(device = device, onClick = { onEvent(WorkspaceEvent.SelectDevice(device.id)) }) }
+    group.devices.forEach { device ->
+      DeviceRow(
+        device = device,
+        onClick = { onEvent(WorkspaceEvent.SelectDevice(device.id)) },
+        onToggleWindow = { onEvent(WorkspaceEvent.ToggleDeviceWindow(device.id)) },
+      )
+    }
   }
 }
 
+/** A device in the list: opens its page here, or brings its own window forward; ↗ opens or closes that window. */
 @Composable
 private fun DeviceRow(
   device: DeviceRowModel,
   onClick: () -> Unit,
+  onToggleWindow: () -> Unit,
 ) {
   val colors = LemonadeTheme.colors
   val spaces = LemonadeTheme.spaces
@@ -438,6 +450,19 @@ private fun DeviceRow(
           color = if (device.ready) colors.content.contentSecondary else colors.content.contentCaution,
           maxLines = 1,
           overflow = TextOverflow.Ellipsis,
+        )
+      }
+    }
+    if (device.canOpenWindow) {
+      val label = stringResource(if (device.windowOpen) Res.string.device_window_close else Res.string.device_window_open, device.name)
+      HoverTooltip(text = label, placement = TooltipPlacement.BelowEnd) {
+        LemonadeUi.IconButton(
+          icon = LemonadeIcons.ArrowUpRight,
+          contentDescription = label,
+          onClick = onToggleWindow,
+          variant = LemonadeButtonVariant.Neutral,
+          type = if (device.windowOpen) LemonadeButtonType.Solid else LemonadeButtonType.Ghost,
+          size = LemonadeButtonSize.Small,
         )
       }
     }

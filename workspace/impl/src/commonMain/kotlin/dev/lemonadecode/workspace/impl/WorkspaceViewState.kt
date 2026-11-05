@@ -61,6 +61,8 @@ internal data class WorkspaceViewState(
   val devicesWindow: DevicesWindow = DevicesWindow.Docked,
   /** Counts the times the Devices window was asked to come forward. */
   val devicesFocusRequest: Int = 0,
+  /** Devices mirrored in windows of their own, in the order they were opened. */
+  val deviceWindows: Map<DeviceId, DeviceWindowState> = emptyMap(),
   /** The changed files beside the diff, picked by hand; null follows the window's width. */
   val fileList: Boolean? = null,
   val subSessionMenu: SubSessionLocation? = null,
@@ -100,7 +102,29 @@ internal enum class DevicesStep { List, Device, PairPlatform, PairMethod, PairQr
 /** The Devices panel's own state; the devices themselves come from the mobile service. */
 internal data class DevicesViewState(
   val step: DevicesStep = DevicesStep.List,
-  val deviceId: DeviceId? = null,
+  /** The device shown at [DevicesStep.Device]; kept after going back, so its tab and filter carry over. */
+  val page: DevicePageState? = null,
+  val pairPlatform: MobilePlatform = MobilePlatform.Android,
+  val pairAddress: String = "",
+  val pairCode: String = "",
+  /** A pairing or connection is under way. */
+  val pairing: Boolean = false,
+  /** The nearby device being connected to. */
+  val connecting: String? = null,
+  val pairError: MobileError? = null,
+  /** The device the last pairing added. */
+  val paired: DeviceId? = null,
+  /** Goes up by one to start a QR or cable pairing over. */
+  val attempt: Int = 0,
+)
+
+/** The device page the Devices panel shows: at its Device step, unless that device is in a window of its own. */
+internal val WorkspaceViewState.panelPage: DevicePageState?
+  get() = devices?.takeIf { it.step == DevicesStep.Device }?.page?.takeIf { it.deviceId !in deviceWindows }
+
+/** One device's page, in the Devices panel or in a window of its own: its screen and its logs. */
+internal data class DevicePageState(
+  val deviceId: DeviceId,
   val tab: DeviceTab = DeviceTab.Screen,
   /** Typing goes to the device. */
   val keyboard: Boolean = false,
@@ -115,16 +139,11 @@ internal data class DevicesViewState(
   val logPackages: LogPackages = LogPackages.AppInFront,
   /** The choice of whose lines the log shows is open. */
   val logAppsOpen: Boolean = false,
-  val pairPlatform: MobilePlatform = MobilePlatform.Android,
-  val pairAddress: String = "",
-  val pairCode: String = "",
-  /** A pairing or connection is under way. */
-  val pairing: Boolean = false,
-  /** The nearby device being connected to. */
-  val connecting: String? = null,
-  val pairError: MobileError? = null,
-  /** The device the last pairing added. */
-  val paired: DeviceId? = null,
-  /** Goes up by one to start a QR or cable pairing over. */
-  val attempt: Int = 0,
+)
+
+/** A device mirrored in a window of its own. */
+internal data class DeviceWindowState(
+  val page: DevicePageState,
+  /** Counts the times the window was asked to come forward. */
+  val focusRequest: Int = 0,
 )

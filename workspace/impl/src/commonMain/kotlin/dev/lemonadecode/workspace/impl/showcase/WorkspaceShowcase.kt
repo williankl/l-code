@@ -1,6 +1,7 @@
 package dev.lemonadecode.workspace.impl.showcase
 
 import dev.lemonadecode.domain.mobile.DeviceApp
+import dev.lemonadecode.domain.mobile.DeviceId
 import dev.lemonadecode.domain.mobile.DeviceLogs
 import dev.lemonadecode.domain.mobile.DeviceScreen
 import dev.lemonadecode.domain.mobile.MobileDevice
@@ -35,6 +36,8 @@ import dev.lemonadecode.domain.update.UpdateState
 import dev.lemonadecode.platform.syntax.SyntaxHighlighter
 import dev.lemonadecode.workspace.impl.ClosingSession
 import dev.lemonadecode.workspace.impl.Composer
+import dev.lemonadecode.workspace.impl.DevicePageState
+import dev.lemonadecode.workspace.impl.DeviceWindowState
 import dev.lemonadecode.workspace.impl.DevicesStep
 import dev.lemonadecode.workspace.impl.DevicesViewState
 import dev.lemonadecode.workspace.impl.LineRange
@@ -44,6 +47,7 @@ import dev.lemonadecode.workspace.impl.PreviewLoad
 import dev.lemonadecode.workspace.impl.WorkspaceInput
 import dev.lemonadecode.workspace.impl.WorkspaceModelMapper
 import dev.lemonadecode.workspace.impl.WorkspaceViewState
+import dev.lemonadecode.workspace.impl.panelPage
 import dev.lemonadecode.workspace.impl.showcase.ShowcaseFixtures.Repo
 import dev.lemonadecode.workspace.impl.showcase.ShowcaseFixtures.comment
 import dev.lemonadecode.workspace.impl.showcase.ShowcaseFixtures.path
@@ -100,7 +104,7 @@ public enum class WorkspaceShowcase(
   SettingsLanguage("8b", "Language, Deutsch chosen", "Each language in its own name, with its flag. The whole app follows at once."),
   SettingsPlugins("8c", "Plugins › Mobile", "The Mobile plugin mirrors Android and iOS screens, pairs devices and reads their logs."),
   SettingsUpdates("8d", "Updates, 1.9.0 available", "What's new, then Update now. It downloads, then a restart finishes it."),
-  DeviceList("8e", "Devices · list", "Connected devices, Android and iOS apart. Pairing starts at the bottom.", widthDp = 420, heightDp = 800, part = ShowcasePart.Devices),
+  DeviceList("8e", "Devices · list", "Connected devices, Android and iOS apart. Pairing starts at the bottom. The Galaxy is in a window of its own.", widthDp = 420, heightDp = 800, part = ShowcasePart.Devices),
   DeviceSideBySide("8f", "Device · side by side", "The screen and its logs side by side, the default.", widthDp = 760, heightDp = 800, part = ShowcasePart.Devices),
   DeviceLandscape("8f·wide", "Device · landscape", "A screen on its side goes above its logs, as wide as the panel.", widthDp = 760, heightDp = 800, part = ShowcasePart.Devices),
   DeviceStacked("8f·narrow", "Device · together, narrow", "Without room beside the logs, a portrait screen goes above them.", widthDp = 420, heightDp = 800, part = ShowcasePart.Devices),
@@ -127,6 +131,7 @@ public enum class WorkspaceShowcase(
     "A changed sound before and after, each with a player and its waveform, on one time scale; a new sound has one side.",
   ),
   SettingsSounds("8q", "Settings › Sounds", "A ding when an agent finishes, two when it needs input, from any session. Play lets you hear each one."),
+  DeviceWindow("8r", "Device · a window of its own", "A device's ↗ in the list mirrors it in its own window, screen and logs, beside others. Its frame closes it.", widthDp = 760, heightDp = 880, part = ShowcasePart.DeviceWindow),
   ;
 
   public fun model(eventSink: (WorkspaceEvent) -> Unit = {}): WorkspaceModel = WorkspaceModelMapper.map(scene.input, eventSink)
@@ -160,7 +165,7 @@ private data class Scene(
 )
 
 /** Whole window, or only the Devices panel. */
-public enum class ShowcasePart { Window, Devices }
+public enum class ShowcasePart { Window, Devices, DeviceWindow }
 
 private val firstReview: List<ReviewComment> get() = listOf(comment("rl", 17), comment("rl", 19), comment("app", 20))
 
@@ -379,17 +384,17 @@ private fun sceneFor(showcase: WorkspaceShowcase): Scene = when (showcase) {
   WorkspaceShowcase.SettingsLanguage -> settingsScene(SettingsPage.Language, language = AppLanguage.German, update = UpdateState.None)
   WorkspaceShowcase.SettingsPlugins -> settingsScene(SettingsPage.Plugins, update = UpdateState.None)
   WorkspaceShowcase.SettingsUpdates -> settingsScene(SettingsPage.Updates)
-  WorkspaceShowcase.DeviceList -> devicesScene(DevicesViewState())
-  WorkspaceShowcase.DeviceSideBySide -> devicesScene(DevicesViewState(step = DevicesStep.Device, deviceId = ShowcaseDevices.pixel.id))
-  WorkspaceShowcase.DeviceLandscape -> devicesScene(DevicesViewState(step = DevicesStep.Device, deviceId = ShowcaseDevices.pixel.id), screen = ShowcaseDevices.screen(2400, 1080))
-  WorkspaceShowcase.DeviceStacked -> devicesScene(DevicesViewState(step = DevicesStep.Device, deviceId = ShowcaseDevices.pixel.id))
+  WorkspaceShowcase.DeviceList -> devicesScene(DevicesViewState(), windows = listOf(ShowcaseDevices.galaxy.id))
+  WorkspaceShowcase.DeviceSideBySide -> devicesScene(DevicesViewState(step = DevicesStep.Device, page = DevicePageState(ShowcaseDevices.pixel.id)))
+  WorkspaceShowcase.DeviceLandscape -> devicesScene(DevicesViewState(step = DevicesStep.Device, page = DevicePageState(ShowcaseDevices.pixel.id)), screen = ShowcaseDevices.screen(2400, 1080))
+  WorkspaceShowcase.DeviceStacked -> devicesScene(DevicesViewState(step = DevicesStep.Device, page = DevicePageState(ShowcaseDevices.pixel.id)))
   WorkspaceShowcase.DeviceLogApps -> devicesScene(
-    DevicesViewState(step = DevicesStep.Device, deviceId = ShowcaseDevices.pixel.id, logPackages = ShowcaseDevices.pickedApps, logAppsOpen = true),
+    DevicesViewState(step = DevicesStep.Device, page = DevicePageState(ShowcaseDevices.pixel.id, logPackages = ShowcaseDevices.pickedApps, logAppsOpen = true)),
     logs = ShowcaseDevices.androidLogs.copy(source = "logcat · 2 apps"),
     apps = ShowcaseDevices.apps,
   )
   WorkspaceShowcase.DeviceTabs -> devicesScene(
-    DevicesViewState(step = DevicesStep.Device, deviceId = ShowcaseDevices.iphone.id, tab = DeviceTab.Logs),
+    DevicesViewState(step = DevicesStep.Device, page = DevicePageState(ShowcaseDevices.iphone.id, tab = DeviceTab.Logs)),
     layout = DevicesLayout.Tabs,
     logs = ShowcaseDevices.iosLogs,
     screen = ShowcaseDevices.screen(1179, 2556, framesPerSecond = 4f),
@@ -403,13 +408,14 @@ private fun sceneFor(showcase: WorkspaceShowcase): Scene = when (showcase) {
   )
   WorkspaceShowcase.DisplayMain -> scene(
     settings = AppSettings(mobilePlugin = true),
-    view = { copy(devices = DevicesViewState(step = DevicesStep.Device, deviceId = ShowcaseDevices.pixel.id), devicesWindow = DevicesWindow.Separate) },
+    view = { copy(devices = DevicesViewState(step = DevicesStep.Device, page = DevicePageState(ShowcaseDevices.pixel.id)), devicesWindow = DevicesWindow.Separate) },
     mobile = MobileInput(tools = ShowcaseDevices.tools, devices = ShowcaseDevices.connected),
   )
   WorkspaceShowcase.DisplayDevices -> devicesScene(
-    DevicesViewState(step = DevicesStep.Device, deviceId = ShowcaseDevices.pixel.id),
+    DevicesViewState(step = DevicesStep.Device, page = DevicePageState(ShowcaseDevices.pixel.id)),
     window = DevicesWindow.Separate,
   )
+  WorkspaceShowcase.DeviceWindow -> devicesScene(DevicesViewState(), windows = listOf(ShowcaseDevices.pixel.id, ShowcaseDevices.galaxy.id))
   WorkspaceShowcase.DiffFileList -> diffScene()
   WorkspaceShowcase.DiffBasePicker -> scene(
     comments = listOf(comment("rl", 17), comment("app", 20)),
@@ -484,18 +490,23 @@ private fun devicesScene(
   screen: DeviceScreen = ShowcaseDevices.screen(),
   nearby: List<NearbyDevice> = emptyList(),
   apps: List<DeviceApp>? = null,
+  /** Devices mirrored in windows of their own; each shows [logs] and [screen] too. */
+  windows: List<DeviceId> = emptyList(),
 ) = scene(
   settings = AppSettings(mobilePlugin = true, devicesLayout = layout),
-  view = { copy(devices = panel, devicesWindow = window) },
+  view = { copy(devices = panel, devicesWindow = window, deviceWindows = windows.associateWith { DeviceWindowState(DevicePageState(it)) }) },
   mobile = MobileInput(
     tools = ShowcaseDevices.tools,
     devices = devices,
-    logs = logs.takeIf { panel.step == DevicesStep.Device },
-    screen = screen.takeIf { panel.step == DevicesStep.Device },
+    logs = (listOfNotNull(panel.shownDevice) + windows).associateWith { logs },
+    apps = listOfNotNull(panel.shownDevice).mapNotNull { id -> apps?.let { id to it } }.toMap(),
+    screens = (listOfNotNull(panel.shownDevice) + windows).associateWith { screen },
     nearby = nearby,
-    apps = apps,
   ),
 )
+
+/** The device whose page the panel shows, if any. */
+private val DevicesViewState.shownDevice: DeviceId? get() = WorkspaceViewState(devices = this).panelPage?.deviceId
 
 /** The moment the showcase is set at, so "2 h ago" reads the same in every render. */
 private const val Now: Long = 1_793_600_000_000

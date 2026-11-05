@@ -75,6 +75,9 @@ public sealed interface WorkspaceEvent {
   /** Settings › Sounds › Play: lets you hear [sound], whether status sounds are on or not. */
   public data class PlayStatusSound(val sound: StatusSound) : WorkspaceEvent
 
+  /** Settings › Appearance › Animations. */
+  public data class SetAnimations(val enabled: Boolean) : WorkspaceEvent
+
   public data class SetMobilePlugin(val enabled: Boolean) : WorkspaceEvent
 
   public data object CheckForUpdates : WorkspaceEvent

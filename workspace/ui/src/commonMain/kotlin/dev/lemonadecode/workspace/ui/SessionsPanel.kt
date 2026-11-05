@@ -53,6 +53,7 @@ import com.teya.lemonade.core.LemonadeButtonSize
 import com.teya.lemonade.core.LemonadeButtonType
 import com.teya.lemonade.core.LemonadeButtonVariant
 import com.teya.lemonade.core.LemonadeIcons
+import dev.lemonadecode.platform.designsystem.AnimatedItems
 import dev.lemonadecode.platform.designsystem.DotLabel
 import dev.lemonadecode.platform.designsystem.Hairline
 import dev.lemonadecode.platform.designsystem.HoverTooltip
@@ -116,19 +117,23 @@ internal fun SessionsSidebar(
         size = LemonadeButtonSize.XSmall,
       )
     }
+    // New sessions open into place and closed or folded ones close up, moving the rest along.
     when (navigation) {
-      is SessionNavigationModel.Flat -> Column(verticalArrangement = Arrangement.spacedBy(spaces.spacing50)) {
-        navigation.rows.forEach { row ->
-          FlatSessionRow(
-            row = row,
-            menu = menu?.takeIf { it.sessionId == row.id },
-            labels = labels,
-            onEvent = onEvent,
-          )
+      is SessionNavigationModel.Flat -> Column {
+        AnimatedItems(items = navigation.rows, key = { it.id }) { index, row ->
+          // The gap is inside the row, so it closes up along with it.
+          Box(modifier = Modifier.padding(top = if (index > 0) spaces.spacing50 else 0.dp)) {
+            FlatSessionRow(
+              row = row,
+              menu = menu?.takeIf { it.sessionId == row.id },
+              labels = labels,
+              onEvent = onEvent,
+            )
+          }
         }
       }
       is SessionNavigationModel.Tree -> Column {
-        navigation.rows.forEachIndexed { index, row ->
+        AnimatedItems(items = navigation.rows, key = { it.id }) { index, row ->
           TreeSessionRow(
             row = row,
             topGap = if (row.depth == 0 && index > 0) spaces.spacing100 else 0.dp,
@@ -198,7 +203,7 @@ private fun FlatSessionRow(
           modifier = Modifier.weight(1f),
         )
       }
-      if (menu != null) SessionMenu(menu = menu, offset = menuAt.value, onEvent = onEvent)
+      SessionMenu(open = menu, offset = menuAt.value, onEvent = onEvent)
     }
   }
 }
@@ -293,7 +298,7 @@ private fun TreeSessionRow(
           },
         )
       }
-      if (menu != null) SessionMenu(menu = menu, offset = menuAt.value, onEvent = onEvent)
+      SessionMenu(open = menu, offset = menuAt.value, onEvent = onEvent)
     }
   }
 }
@@ -419,10 +424,14 @@ internal fun SessionRail(
       size = LemonadeButtonSize.Small,
     )
     Hairline(width = 28.dp, height = 1.dp)
-    tiles.forEach { tile ->
-      val tileMenu = menu?.takeIf { it.sessionId == tile.id }
-      HoverTooltip(text = tile.name, placement = TooltipPlacement.End, enabled = tileMenu == null) {
-        SessionTile(tile = tile, menu = tileMenu, labels = labels, onEvent = onEvent)
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+      AnimatedItems(items = tiles, key = { it.id }) { index, tile ->
+        val tileMenu = menu?.takeIf { it.sessionId == tile.id }
+        Box(modifier = Modifier.padding(top = if (index > 0) LemonadeTheme.spaces.spacing200 else 0.dp)) {
+          HoverTooltip(text = tile.name, placement = TooltipPlacement.End, enabled = tileMenu == null) {
+            SessionTile(tile = tile, menu = tileMenu, labels = labels, onEvent = onEvent)
+          }
+        }
       }
     }
   }
@@ -468,7 +477,7 @@ private fun SessionTile(
         modifier = Modifier.align(Alignment.BottomEnd).offset(x = 5.dp, y = 5.dp),
       )
     }
-    if (menu != null) SessionMenu(menu = menu, offset = menuAt.value, onEvent = onEvent)
+    SessionMenu(open = menu, offset = menuAt.value, onEvent = onEvent)
   }
 }
 

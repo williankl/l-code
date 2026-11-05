@@ -221,6 +221,18 @@ class WorkspacePresenterTest {
   }
 
   @Test
+  fun `animations are on at first, and turning them off is saved`() = runTest {
+    withSession()
+    presenter.test {
+      val model = awaitItem()
+      assertTrue(model.settings.animations)
+      model.eventSink(WorkspaceEvent.SetAnimations(false))
+      awaitItemWhere { !it.settings.animations }
+      assertEquals(false, settings.settings.value.animations)
+    }
+  }
+
+  @Test
   fun `an update puts a dot on the gear, and its page downloads it and then restarts`() = runTest {
     val available = UpdateState.Available(
       current = AppVersion(1, 2, 0),

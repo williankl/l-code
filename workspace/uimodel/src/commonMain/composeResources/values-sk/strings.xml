@@ -9,6 +9,8 @@
   <string name="theme_dark">Tmavý</string>
   <string name="theme_light">Svetlý</string>
   <string name="theme_system">Systémový</string>
+  <string name="animations_title">Animácie</string>
+  <string name="animations_description">Panely, ponuky a zoznamy sa otvárajú a pohybujú plynulo. Po vypnutí sa každá zmena prejaví okamžite.</string>
   <string name="keep_awake_title">Nedovoliť spánok, kým relácie pracujú</string>
   <string name="keep_awake_description">Zabráni tomu, aby počítač prešiel do režimu spánku a obrazovka stmavla alebo sa uzamkla, kým niektorá relácia pracuje.</string>
   <string name="keep_awake_tag">Bez spánku · aktívne: %1$d</string>

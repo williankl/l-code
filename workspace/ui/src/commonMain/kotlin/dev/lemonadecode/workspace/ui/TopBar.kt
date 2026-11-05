@@ -133,9 +133,7 @@ internal fun TopBar(
             modifier = Modifier.align(Alignment.TopEnd).offset(x = (-2).dp, y = 2.dp),
           )
         }
-        if (settings.open) {
-          SettingsPopover(settings = settings, onEvent = onEvent)
-        }
+        SettingsPopover(settings = settings, onEvent = onEvent)
       }
     }
   }

@@ -51,6 +51,7 @@ import dev.lemonadecode.platform.designsystem.ContextMenuHeader
 import dev.lemonadecode.platform.designsystem.ContextMenuItem
 import dev.lemonadecode.platform.designsystem.ContextMenuPopover
 import dev.lemonadecode.platform.designsystem.LemonadeCodeTheme
+import dev.lemonadecode.platform.designsystem.rememberLastNonNull
 import dev.lemonadecode.workspace.strings.Res
 import dev.lemonadecode.workspace.strings.action_cancel
 import dev.lemonadecode.workspace.strings.action_create_sub_session
@@ -151,18 +152,23 @@ internal fun Modifier.sessionActions(
  * The right-click menu of a session, opened at [offset] inside its row or tile; just under the top
  * when it was opened without the pointer. It names the session and its folder, then offers its
  * actions; Rename swaps the actions for a name field in the same panel, and a new worktree for a
- * field naming its branch.
+ * field naming its branch. Keep it composed: with [open] null it fades out showing the last menu.
  */
 @Composable
 internal fun SessionMenu(
-  menu: SessionMenuModel,
+  open: SessionMenuModel?,
   offset: IntOffset?,
   onEvent: (WorkspaceEvent) -> Unit,
 ) {
+  val menu = rememberLastNonNull(open) ?: return
   val fallback = with(LocalDensity.current) { IntOffset(0, 40.dp.roundToPx()) }
   // Read out here: inside the popup it would be the popup's own, which tests can't stand in for.
   val clipboard = LocalClipboard.current
-  ContextMenuPopover(offset = offset ?: fallback, onDismissRequest = { onEvent(WorkspaceEvent.DismissSessionMenu) }) {
+  ContextMenuPopover(
+    visible = open != null,
+    offset = offset ?: fallback,
+    onDismissRequest = { onEvent(WorkspaceEvent.DismissSessionMenu) },
+  ) {
     ContextMenuHeader(title = menu.title, detail = menu.location)
     val rename = menu.rename
     val newWorktree = menu.newWorktree

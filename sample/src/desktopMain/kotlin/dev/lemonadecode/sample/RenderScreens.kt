@@ -43,7 +43,8 @@ public fun main(args: Array<String>) {
       height = (sample.heightDp * Scale).toInt(),
       density = Density(Scale),
     ) {
-      LemonadeCodeTheme(mode = forced ?: sample.model().settings.theme.toThemeMode()) {
+      // Still pictures: everything at rest from the first frame.
+      LemonadeCodeTheme(mode = forced ?: sample.model().settings.theme.toThemeMode(), animations = false) {
         WorkspaceShowcaseContent(sample)
       }
     }.use { scene ->

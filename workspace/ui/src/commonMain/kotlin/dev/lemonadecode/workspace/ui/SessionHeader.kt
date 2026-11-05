@@ -131,9 +131,7 @@ internal fun SessionHeaderBar(
               size = LemonadeButtonSize.Small,
             )
           }
-          if (newSubSession.open) {
-            NewSubSessionPopover(menu = newSubSession, onEvent = onEvent)
-          }
+          NewSubSessionPopover(menu = newSubSession, onEvent = onEvent)
         }
       }
       ViewSwitcher(
@@ -208,7 +206,7 @@ private fun NewSubSessionPopover(
   val colors = LemonadeTheme.colors
   val mono = LemonadeCodeTheme.typography.codeSmall
   val code = LemonadeCodeTheme.code
-  AnchoredPopover(onDismissRequest = { onEvent(WorkspaceEvent.DismissNewSubSessionMenu) }) {
+  AnchoredPopover(visible = menu.open, onDismissRequest = { onEvent(WorkspaceEvent.DismissNewSubSessionMenu) }) {
     Column {
       LemonadeUi.Text(text = stringResource(Res.string.sub_session_title), textStyle = LemonadeTheme.typography.headingXXSmall)
       LemonadeUi.Text(

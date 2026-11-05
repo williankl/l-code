@@ -9,6 +9,7 @@ import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.hasScrollToIndexAction
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performMouseInput
@@ -91,6 +92,19 @@ class LongDiffUiTest {
     onNode(hasScrollToIndexAction()).performScrollToIndex(lineCount)
     onNodeWithText("val line$lineCount = $lineCount").assertIsDisplayed()
     assertTrue(composedLines() in 1..100, "composed ${composedLines()} of $lineCount lines")
+  }
+
+  @Test
+  fun `the file's header stays pinned at the top while the diff scrolls`() = show {
+    val header = onNodeWithContentDescription("Collapse file")
+    val top = header.fetchSemanticsNode().boundsInRoot.top
+    mainClock.autoAdvance = false
+    onNode(hasScrollToIndexAction()).performScrollToIndex(40)
+    mainClock.advanceTimeByFrame()
+    onNodeWithText("val line40 = 40").assertIsDisplayed()
+    assertEquals(top, header.fetchSemanticsNode().boundsInRoot.top, "the header moved as the diff scrolled")
+    mainClock.advanceTimeBy(500)
+    assertEquals(top, header.fetchSemanticsNode().boundsInRoot.top, "the header moved after the diff scrolled")
   }
 
   @Test

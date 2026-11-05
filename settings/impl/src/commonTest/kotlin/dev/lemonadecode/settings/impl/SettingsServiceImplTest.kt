@@ -64,8 +64,20 @@ class SettingsServiceImplTest {
 
   @Test
   fun `a record keeps every setting as it was`() {
-    val settings = AppSettings(keepAwake = true, statusSounds = false, theme = ThemePreference.System, mobilePlugin = true)
+    val settings = AppSettings(keepAwake = true, statusSounds = false, theme = ThemePreference.System, mobilePlugin = true, animations = false)
     assertEquals(settings, settings.toRecord().toDomain())
     assertEquals(AppSettings(), SettingsRecord().toDomain())
+  }
+
+  @Test
+  fun `animations are on until turned off, and stay off`() = runTest {
+    val store = FakePreferenceStore(mapOf("settings" to buildJsonObject { put("keepAwake", JsonPrimitive(true)) }))
+    val service = SettingsServiceImpl(store, backgroundScope)
+    // Saved before the setting existed: on.
+    assertTrue(service.settings.first { it.keepAwake }.animations)
+
+    service.update { it.copy(animations = false) }
+    val reloaded = SettingsServiceImpl(store, backgroundScope)
+    assertFalse(reloaded.settings.first { it.keepAwake }.animations)
   }
 }

@@ -285,7 +285,10 @@ change it on its own page; the back arrow or Esc returns to the list.
 
 <img src="images/settings.png" width="100%" alt="The settings list: Appearance, Language, Keep awake, Sounds, Plugins and Updates">
 
-- **Appearance:** Dark, Light, or follow the System. The window's title bar follows it on macOS and Windows.
+- **Appearance:** Dark, Light, or follow the System. The window's title bar follows it on macOS and
+  Windows. **Animations** is on by default: menus and panels open with a short fade, the sidebar
+  glides to the rail, new sessions ease into the list and opened files push the diff along. Turn
+  it off and every change happens at once.
 - **Language:** English, Deutsch, Español, Français, Português or Slovenčina, or match the computer's
   own. The whole app changes at once.
 - **Keep awake while sessions work:** while any session is working, your computer won't go to

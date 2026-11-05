@@ -3,7 +3,6 @@ package dev.lemonadecode.platform.designsystem
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.snap
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -54,7 +53,7 @@ public fun SlotSegmentedControl(
   val offsets = remember { mutableStateMapOf<Int, Dp>() }
   val widths = remember { mutableStateMapOf<Int, Dp>() }
   val measured = offsets.containsKey(selectedIndex) && widths.containsKey(selectedIndex)
-  val spec = if (measured) tween<Dp>(durationMillis = 150) else snap()
+  val spec = if (measured) LemonadeCodeAnimation.spec<Dp>(durationMillis = 150) else snap()
   val indicatorOffset by animateDpAsState(offsets[selectedIndex] ?: 0.dp, spec)
   val indicatorWidth by animateDpAsState(widths[selectedIndex] ?: 0.dp, spec)
 
@@ -82,7 +81,8 @@ public fun SlotSegmentedControl(
         val hovered by interactionSource.collectIsHoveredAsState()
         val pressed by interactionSource.collectIsPressedAsState()
         val tint by animateColorAsState(
-          when {
+          animationSpec = LemonadeCodeAnimation.spec(durationMillis = LemonadeCodeAnimation.FadeMillis),
+          targetValue = when {
             selected -> LemonadeTheme.colors.background.bgDefault.copy(alpha = 0f)
             pressed -> LemonadeTheme.colors.interaction.bgDefaultPressed
             hovered -> LemonadeTheme.colors.interaction.bgDefaultInteractive

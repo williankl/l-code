@@ -9,6 +9,8 @@
   <string name="theme_dark">Dunkel</string>
   <string name="theme_light">Hell</string>
   <string name="theme_system">System</string>
+  <string name="animations_title">Animationen</string>
+  <string name="animations_description">Panels, Menüs und Listen öffnen und bewegen sich fließend. Ausgeschaltet geschieht jede Änderung sofort.</string>
   <string name="keep_awake_title">Wach halten, solange Sitzungen arbeiten</string>
   <string name="keep_awake_description">Verhindert, dass dieser Computer in den Ruhezustand wechselt und der Bildschirm sich abdunkelt oder sperrt, solange eine Sitzung arbeitet.</string>
   <string name="keep_awake_tag">Bleibt wach · %1$d aktiv</string>

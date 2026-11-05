@@ -9,6 +9,8 @@
   <string name="theme_dark">Escuro</string>
   <string name="theme_light">Claro</string>
   <string name="theme_system">Sistema</string>
+  <string name="animations_title">Animações</string>
+  <string name="animations_description">Os painéis, menus e listas abrem e movem-se suavemente. Desative para que cada mudança seja imediata.</string>
   <string name="keep_awake_title">Manter acordado enquanto as sessões trabalham</string>
   <string name="keep_awake_description">Impede este computador de adormecer, e o ecrã de escurecer ou bloquear, enquanto alguma sessão está a trabalhar.</string>
   <string name="keep_awake_tag">A manter acordado · %1$d a trabalhar</string>

@@ -392,7 +392,7 @@ private fun sceneFor(showcase: WorkspaceShowcase): Scene = when (showcase) {
     DevicesViewState(step = DevicesStep.Device, deviceId = ShowcaseDevices.iphone.id, tab = DeviceTab.Logs),
     layout = DevicesLayout.Tabs,
     logs = ShowcaseDevices.iosLogs,
-    screen = ShowcaseDevices.screen(1179, 2556),
+    screen = ShowcaseDevices.screen(1179, 2556, framesPerSecond = 4f),
   )
   WorkspaceShowcase.PairPlatform -> devicesScene(DevicesViewState(step = DevicesStep.PairPlatform))
   WorkspaceShowcase.PairMethod -> devicesScene(DevicesViewState(step = DevicesStep.PairMethod), nearby = ShowcaseDevices.nearby)

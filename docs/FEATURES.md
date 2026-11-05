@@ -277,7 +277,7 @@ Lemonade Code finds them on your `PATH`, in the Android SDK and in Homebrew's fo
 The gear at the top right opens settings: a short list where every item shows its value. Open one to
 change it on its own page; the back arrow or Esc returns to the list.
 
-<img src="images/settings.png" width="100%" alt="The settings list: Appearance, Language, Keep awake, Plugins and Updates">
+<img src="images/settings.png" width="100%" alt="The settings list: Appearance, Language, Keep awake, Sounds, Plugins and Updates">
 
 - **Appearance:** Dark, Light, or follow the System. The window's title bar follows it on macOS and Windows.
 - **Language:** English, Deutsch, Español, Français, Português or Slovenčina, or match the computer's

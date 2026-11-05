@@ -119,7 +119,7 @@ lost.
 <td width="50%"><img src="docs/images/close-worktree.png" alt="Closing sub-2 asks whether to delete its worktree too, warning that it has uncommitted changes"></td>
 </tr>
 <tr>
-<td align="center"><sub><b>Branch out</b>, and see the folder and branch before they exist</sub></td>
+<td align="center"><sub><b>Branch out</b>, in the same folder or a fresh worktree</sub></td>
 <td align="center"><sub><b>Clean up</b>, and the worktree goes when its session does</sub></td>
 </tr>
 </table>
@@ -147,6 +147,12 @@ model to turn it around.
 <td align="center"><sub><b>Markdown</b>, drawn the way GitHub shows it</sub></td>
 <td align="center"><sub><b>CSV and TSV</b>, as a proper table</sub></td>
 </tr>
+<tr>
+<td colspan="2"><img src="docs/images/grid-preview-sound.png" alt="A sound file before and after, side by side, each with its waveform, a play button and its length, sample rate and channels"></td>
+</tr>
+<tr>
+<td colspan="2" align="center"><sub><b>Sounds</b>, with waveforms on one time scale: WAV, MP3, M4A, Ogg, FLAC, AIFF and more</sub></td>
+</tr>
 </table>
 
 ### Your phone, right beside the code
@@ -155,11 +161,13 @@ Building an app? Turn on the **Mobile** plugin and your Android or iOS device si
 session, screen and logs together. Android screens stream as smooth video, up to 60 frames a
 second, and you can tap, swipe and type on them from your desk.
 
-Pick which apps the logs come from, filter down to the errors, and press **Send errors** to hand
-them to the agent, or snap a screenshot it can look at. Pair a phone over Wi-Fi with a QR code, and
-pop the panel out onto another display when you want the room.
+<img src="docs/images/devices.png" width="100%" alt="The Devices panel three ways: the list of connected phones, a Pixel 8's screen beside its logs at 60 fps, and an iPhone's logs, each with two errors ready to send to claude">
 
-<img src="docs/images/devices.png" width="100%" alt="The Devices panel three ways: the list of connected phones, a Pixel 8's screen beside its logs, and an iPhone's logs, each with two errors ready to send to claude">
+Pick which apps the logs come from, filter down to the errors, and press **Send errors** to hand
+them to the agent, or snap a screenshot it can look at. Pair a phone over Wi-Fi in three quick
+steps, and pop the panel out onto another display when you want the room.
+
+<img src="docs/images/devices-logs-pairing.png" width="100%" alt="Picking two of the phone's apps to show logs from, then pairing a phone: scan a QR code, type a pairing code or pick one from the network, and it's connected">
 
 ### Dark or light
 
@@ -181,6 +189,11 @@ macOS and Windows even the window's title bar follows along.
 <td width="33%" valign="top"><img src="docs/images/touch-rename.png" alt="Renaming a session in place"><br><b>Rename in place</b><br><sub>No dialogs. Type the new name right where the old one was.</sub></td>
 <td width="33%" valign="top"><img src="docs/images/touch-worktree.png" alt="The worktree folder and branch shown before creating them"><br><b>No surprises</b><br><sub>See the folder and branch a worktree will get before it exists.</sub></td>
 </tr>
+<tr>
+<td width="33%" valign="top"><img src="docs/images/touch-sounds.png" alt="Settings › Sounds, switched on, with a Play button for each ding"><br><b>Dings, your way</b><br><sub>Press Play to hear each one, or switch them off.</sub></td>
+<td width="33%" valign="top"><img src="docs/images/touch-branch.png" alt="The branch picker in the diff, listing main, develop, release/2.4, a feature branch and HEAD"><br><b>Any branch</b><br><sub>Compare with any branch, or just what isn't committed yet.</sub></td>
+<td width="33%" valign="top"><img src="docs/images/touch-language.png" alt="The language page in German, listing all six languages with their flags"><br><b>Speaks your language</b><br><sub>English, German, Spanish, French, Portuguese and Slovak.</sub></td>
+</tr>
 </table>
 
 And a few more:
@@ -190,9 +203,6 @@ And a few more:
 - 🔗 **Clickable links.** Ctrl-click (or ⌘-click) any web address in the terminal to open it.
 - ⌨️ **Every keyboard works.** Accents, dead keys and input methods type just like anywhere else.
 - 📋 **Paths to go.** Select a file's path right in the diff, or copy it with one click.
-- 🔕 **Quiet when you want it.** Turn the dings off in Settings, or press Play to hear them first.
-- 🌍 **Speaks your language.** English, German, Spanish, French, Portuguese and Slovak. It follows
-  your system, or pick one in Settings.
 
 See everything in the **[feature guide](docs/FEATURES.md)**.
 

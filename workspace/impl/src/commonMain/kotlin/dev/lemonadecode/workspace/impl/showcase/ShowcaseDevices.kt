@@ -111,7 +111,7 @@ internal object ShowcaseDevices {
   )
 
   /** The store's cart with its rate-limit error, as the design's phone shows it. */
-  fun screen(width: Int = 1080, height: Int = 2400, framesPerSecond: Float = 4f): DeviceScreen.Frame = DeviceScreen.Frame(ScreenPicture.Encoded(cartScreen(width, height)), width, height, framesPerSecond)
+  fun screen(width: Int = 1080, height: Int = 2400, framesPerSecond: Float = 60f): DeviceScreen.Frame = DeviceScreen.Frame(ScreenPicture.Encoded(cartScreen(width, height)), width, height, framesPerSecond)
 
   private val cache = mutableMapOf<Pair<Int, Int>, ByteArray>()
 

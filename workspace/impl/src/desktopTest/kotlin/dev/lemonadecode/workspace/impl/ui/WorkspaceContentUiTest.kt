@@ -356,6 +356,11 @@ class WorkspaceContentUiTest {
   }
 
   @Test
+  fun `the appearance page turns animations off`() = show(WorkspaceShowcase.SettingsList, edit = { it.copy(settings = it.settings.copy(page = SettingsPage.Appearance)) }) {
+    expect(WorkspaceEvent.SetAnimations(false)) { onNode(isToggleable()).performClick() }
+  }
+
+  @Test
   fun `the keep awake page turns it off`() = show(WorkspaceShowcase.SettingsOpen, edit = { it.copy(settings = it.settings.copy(page = SettingsPage.KeepAwake)) }) {
     expect(WorkspaceEvent.SetKeepAwake(false)) { onNode(isToggleable()).performClick() }
   }

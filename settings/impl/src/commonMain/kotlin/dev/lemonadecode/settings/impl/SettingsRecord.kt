@@ -21,6 +21,7 @@ internal data class SettingsRecord(
   val devicesLayout: String? = null,
   val devicesPanelWidth: Int? = null,
   val devicesPanelWideWidth: Int? = null,
+  val animations: Boolean? = null,
 )
 
 internal fun SettingsRecord.toDomain(): AppSettings {
@@ -37,6 +38,7 @@ internal fun SettingsRecord.toDomain(): AppSettings {
     devicesLayout = DevicesLayout.entries.firstOrNull { it.name == devicesLayout } ?: defaults.devicesLayout,
     devicesPanelWidth = devicesPanelWidth?.takeIf { it > 0 } ?: defaults.devicesPanelWidth,
     devicesPanelWideWidth = devicesPanelWideWidth?.takeIf { it > 0 } ?: defaults.devicesPanelWideWidth,
+    animations = animations ?: defaults.animations,
   )
 }
 
@@ -52,4 +54,5 @@ internal fun AppSettings.toRecord(): SettingsRecord = SettingsRecord(
   devicesLayout = devicesLayout.name,
   devicesPanelWidth = devicesPanelWidth,
   devicesPanelWideWidth = devicesPanelWideWidth,
+  animations = animations,
 )

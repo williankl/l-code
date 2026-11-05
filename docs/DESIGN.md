@@ -111,9 +111,10 @@ fits right in.
 | `KeyHint` | The little `⌘↵` inside the *Paste into terminal* button. |
 | `Hairline` | A thin rule for toolbars; Lemonade's dividers only come in the low-contrast border colour. |
 | `LemonadeCodeMark` | The app's logo at small sizes, in the top bar. |
+| `LemonadeCodeAnimation`, `AnimatedPresence`, `AnimatedItems` | Lemonade has no motion tokens. These set the app's few durations and easings, and the ways things open, close and move: popovers that grow from their button, panels that slide, list rows that open into place. All of it follows Settings › Appearance › Animations. |
 
-`LemonadeCodeTheme` wraps Lemonade's theme and adds the three roles Lemonade has no token for: code
-colours, monospace type (13 sp on 20 sp lines for code) and the scrim.
+`LemonadeCodeTheme` wraps Lemonade's theme and adds the roles Lemonade has no token for: code
+colours, monospace type (13 sp on 20 sp lines for code), the scrim and whether things animate.
 
 ---
 
@@ -193,6 +194,9 @@ A few rules the interface follows everywhere.
 - **Scrims are flat, never blurred**, following Lemonade.
 - **The mark keeps its colours** in both themes, like the app icon.
 - **Edit in place.** Renaming happens right in the session menu, with no dialog.
+- **Motion is quick and optional.** Things move to show where they came from and where they went,
+  never for show: popovers grow from their button in 150 ms, panels slide in 220 ms, and nothing
+  bounces. Settings › Appearance › Animations turns it all off.
 
 ---
 

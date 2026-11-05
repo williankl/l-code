@@ -142,6 +142,7 @@ internal object WorkspaceModelMapper {
         systemLanguage = input.systemLanguage,
         mobile = SettingsMapper.mobile(input.settings.mobilePlugin, input.mobile.devices),
         updates = updates,
+        animations = input.settings.animations,
       ),
       newSubSession = newSubSession(selected, view.subSessionMenu ?: input.settings.subSessionLocation, view.subSessionMenu != null, input),
       closeSession = view.closing?.let { ClosingSessions.dialog(it, input.homeDirectory) },

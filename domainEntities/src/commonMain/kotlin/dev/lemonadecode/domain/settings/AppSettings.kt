@@ -36,4 +36,6 @@ public data class AppSettings(
   val devicesPanelWidth: Int = 420,
   /** The same for a device's screen and logs together, which want more room. */
   val devicesPanelWideWidth: Int = 760,
+  /** Panels, menus and lists open and move with motion; off, every change is instant. */
+  val animations: Boolean = true,
 )

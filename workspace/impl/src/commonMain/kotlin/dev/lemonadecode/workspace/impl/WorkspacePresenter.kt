@@ -440,6 +440,7 @@ public class WorkspacePresenter internal constructor(
               StatusSound.NeedsInput -> Chime.DoubleDing
             },
           )
+          is WorkspaceEvent.SetAnimations -> scope.launch { settingsService.update { it.copy(animations = event.enabled) } }
           is WorkspaceEvent.SetMobilePlugin -> {
             if (!event.enabled) update { it.copy(devices = null, deviceWindows = emptyMap()) }
             scope.launch { settingsService.update { it.copy(mobilePlugin = event.enabled) } }

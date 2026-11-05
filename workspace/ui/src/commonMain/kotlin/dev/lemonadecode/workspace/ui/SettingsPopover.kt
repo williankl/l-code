@@ -1,5 +1,21 @@
 package dev.lemonadecode.workspace.ui
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.ContentTransform
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.hoverable
@@ -29,6 +45,7 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.teya.lemonade.Button
 import com.teya.lemonade.CountryFlag
@@ -56,9 +73,13 @@ import com.teya.lemonade.core.SymbolContainerVoice
 import com.teya.lemonade.core.TabButtonProperties
 import dev.lemonadecode.platform.designsystem.AnchoredPopover
 import dev.lemonadecode.platform.designsystem.DotLabel
+import dev.lemonadecode.platform.designsystem.LemonadeCodeAnimation
+import dev.lemonadecode.platform.designsystem.LemonadeCodeTheme
 import dev.lemonadecode.platform.designsystem.StatusDot
 import dev.lemonadecode.platform.localization.resolve
 import dev.lemonadecode.workspace.strings.Res
+import dev.lemonadecode.workspace.strings.animations_description
+import dev.lemonadecode.workspace.strings.animations_title
 import dev.lemonadecode.workspace.strings.keep_awake_description
 import dev.lemonadecode.workspace.strings.keep_awake_title
 import dev.lemonadecode.workspace.strings.language_english
@@ -121,40 +142,69 @@ private val ThemeTabs = listOf(
 
 /**
  * Settings, one step at a time: a short list where each item shows its value, and a page of its
- * own for changing it. Escape goes back to the list, then closes.
+ * own for changing it. Escape goes back to the list, then closes. A page slides in from the right
+ * and the list comes back from the left, as the panel's height follows.
  */
 @Composable
 internal fun SettingsPopover(
   settings: SettingsModel,
   onEvent: (WorkspaceEvent) -> Unit,
 ) {
+  val spacing = LemonadeTheme.spaces.spacing300
+  val animate = LemonadeCodeTheme.animations
   AnchoredPopover(
+    visible = settings.open,
     onDismissRequest = { onEvent(WorkspaceEvent.DismissSettings) },
     width = SettingsWidth,
-    padding = LemonadeTheme.spaces.spacing300,
-    spacing = LemonadeTheme.spaces.spacing300,
+    padding = spacing,
+    spacing = spacing,
     onEscape = { onEvent(WorkspaceEvent.SettingsBack) },
   ) {
-    if (settings.page == SettingsPage.List) {
-      SettingsList(settings = settings, onEvent = onEvent)
-    } else {
-      SettingsPageHeader(page = settings.page, onBack = { onEvent(WorkspaceEvent.SettingsBack) })
-      Column(
-        verticalArrangement = Arrangement.spacedBy(LemonadeTheme.spaces.spacing300),
-        modifier = Modifier.padding(start = LemonadeTheme.spaces.spacing200, end = LemonadeTheme.spaces.spacing200, bottom = LemonadeTheme.spaces.spacing200),
-      ) {
-        when (settings.page) {
-          SettingsPage.List -> Unit
-          SettingsPage.Appearance -> AppearancePage(settings = settings, onEvent = onEvent)
-          SettingsPage.Language -> LanguagePage(settings = settings, onEvent = onEvent)
-          SettingsPage.KeepAwake -> KeepAwakePage(settings = settings, onEvent = onEvent)
-          SettingsPage.Sounds -> SoundsPage(settings = settings, onEvent = onEvent)
-          SettingsPage.Plugins -> PluginsPage(settings = settings, onEvent = onEvent)
-          SettingsPage.Updates -> UpdatesPage(updates = settings.updates, onEvent = onEvent)
+    AnimatedContent(
+      targetState = settings.page,
+      transitionSpec = { settingsPageTransition(forward = targetState != SettingsPage.List, animate = animate) },
+      label = "settings page",
+    ) { page ->
+      Column(verticalArrangement = Arrangement.spacedBy(spacing)) {
+        if (page == SettingsPage.List) {
+          SettingsList(settings = settings, onEvent = onEvent)
+        } else {
+          SettingsPageHeader(page = page, onBack = { onEvent(WorkspaceEvent.SettingsBack) })
+          Column(
+            verticalArrangement = Arrangement.spacedBy(spacing),
+            modifier = Modifier.padding(start = LemonadeTheme.spaces.spacing200, end = LemonadeTheme.spaces.spacing200, bottom = LemonadeTheme.spaces.spacing200),
+          ) {
+            when (page) {
+              SettingsPage.List -> Unit
+              SettingsPage.Appearance -> AppearancePage(settings = settings, onEvent = onEvent)
+              SettingsPage.Language -> LanguagePage(settings = settings, onEvent = onEvent)
+              SettingsPage.KeepAwake -> KeepAwakePage(settings = settings, onEvent = onEvent)
+              SettingsPage.Sounds -> SoundsPage(settings = settings, onEvent = onEvent)
+              SettingsPage.Plugins -> PluginsPage(settings = settings, onEvent = onEvent)
+              SettingsPage.Updates -> UpdatesPage(updates = settings.updates, onEvent = onEvent)
+            }
+          }
         }
       }
     }
   }
+}
+
+/** Deeper pages come in from the right and the list comes back from the left, a quarter-width away. */
+private fun AnimatedContentTransitionScope<SettingsPage>.settingsPageTransition(
+  forward: Boolean,
+  animate: Boolean,
+): ContentTransform {
+  if (!animate) return (EnterTransition.None togetherWith ExitTransition.None).using(SizeTransform(clip = true) { _, _ -> snap() })
+  val direction = if (forward) 1 else -1
+  val slide = tween<IntOffset>(LemonadeCodeAnimation.PanelMillis, easing = FastOutSlowInEasing)
+  val enter = slideInHorizontally(slide) { direction * it / 4 } +
+    fadeIn(tween(LemonadeCodeAnimation.FadeMillis, delayMillis = 50, easing = LinearOutSlowInEasing))
+  val exit = slideOutHorizontally(slide) { -direction * it / 4 } +
+    fadeOut(tween(LemonadeCodeAnimation.PopoverOutMillis, easing = FastOutLinearInEasing))
+  return (enter togetherWith exit).using(
+    SizeTransform(clip = true) { _, _ -> tween(LemonadeCodeAnimation.PanelMillis, easing = FastOutSlowInEasing) },
+  )
 }
 
 @Composable
@@ -283,6 +333,26 @@ private fun AppearancePage(
     size = LemonadeSegmentedControlSize.Medium,
     modifier = Modifier.fillMaxWidth(),
   )
+  Row(
+    horizontalArrangement = Arrangement.spacedBy(LemonadeTheme.spaces.spacing300),
+    modifier = Modifier
+      .padding(top = LemonadeTheme.spaces.spacing100)
+      .toggleable(value = settings.animations, role = Role.Switch, onValueChange = { onEvent(WorkspaceEvent.SetAnimations(it)) }),
+  ) {
+    Column(verticalArrangement = Arrangement.spacedBy(LemonadeTheme.spaces.spacing50), modifier = Modifier.weight(1f)) {
+      LemonadeUi.Text(text = stringResource(Res.string.animations_title), textStyle = LemonadeTheme.typography.bodySmallSemiBold)
+      LemonadeUi.Text(
+        text = stringResource(Res.string.animations_description),
+        textStyle = LemonadeTheme.typography.bodyXSmallRegular,
+        color = LemonadeTheme.colors.content.contentSecondary,
+      )
+    }
+    LemonadeUi.Switch(
+      checked = settings.animations,
+      onCheckedChange = { onEvent(WorkspaceEvent.SetAnimations(it)) },
+      modifier = Modifier.padding(top = 2.dp),
+    )
+  }
 }
 
 @Composable

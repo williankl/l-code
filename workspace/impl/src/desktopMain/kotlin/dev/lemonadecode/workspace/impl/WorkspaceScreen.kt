@@ -109,7 +109,7 @@ public class WorkspaceScreen internal constructor(
       val mode = model.settings.theme.toThemeMode()
       val dark = mode.isDark()
       LaunchedEffect(dark) { onDarkTheme(dark) }
-      LemonadeCodeTheme(mode = mode) {
+      LemonadeCodeTheme(mode = mode, animations = model.settings.animations) {
         val background = LemonadeTheme.colors.background.bgSubtle
         LaunchedEffect(background) { onBackground(background) }
         // Links in the UI open the way terminal links do, which works on Linux desktops too.

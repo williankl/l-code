@@ -1146,11 +1146,14 @@ private fun LogAppsPicker(
         LemonadeUi.Icon(icon = LemonadeIcons.ChevronUpDown, contentDescription = null, size = LemonadeAssetSize.XSmall, tint = colors.content.contentSecondary)
       }
     }
-    if (apps.open) LogAppsPopover(apps = apps, onEvent = onEvent)
+    LogAppsPopover(apps = apps, onEvent = onEvent)
   }
 }
 
-/** The choice of whose lines the log shows: the app in front or every app, then the apps to tick, found by name. */
+/**
+ * The choice of whose lines the log shows: the app in front or every app, then the apps to tick,
+ * found by name. Stays composed while it fades out; each opening starts with an empty search.
+ */
 @OptIn(ExperimentalLemonadeComponent::class)
 @Composable
 private fun LogAppsPopover(
@@ -1159,9 +1162,8 @@ private fun LogAppsPopover(
 ) {
   val colors = LemonadeTheme.colors
   val spaces = LemonadeTheme.spaces
-  var query by remember { mutableStateOf("") }
-  val shown = apps.apps.filter { query.isBlank() || it.packageName.contains(query.trim(), ignoreCase = true) }
   AnchoredPopover(
+    visible = apps.open,
     onDismissRequest = { onEvent(WorkspaceEvent.DismissLogApps) },
     width = LogAppsWidth,
     placement = TooltipPlacement.AboveStart,
@@ -1170,6 +1172,8 @@ private fun LogAppsPopover(
     // Escape closes it even from the find field, which would take the key otherwise.
     onEscape = { onEvent(WorkspaceEvent.DismissLogApps) },
   ) {
+    var query by remember { mutableStateOf("") }
+    val shown = apps.apps.filter { query.isBlank() || it.packageName.contains(query.trim(), ignoreCase = true) }
     LemonadeUi.Text(
       text = stringResource(Res.string.logs_apps_title),
       textStyle = LemonadeTheme.typography.bodySmallSemiBold,

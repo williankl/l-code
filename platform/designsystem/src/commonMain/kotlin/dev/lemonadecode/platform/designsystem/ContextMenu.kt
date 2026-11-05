@@ -23,6 +23,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
@@ -33,9 +34,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
-import androidx.compose.ui.window.PopupProperties
 import com.teya.lemonade.Icon
 import com.teya.lemonade.LemonadeTheme
 import com.teya.lemonade.LemonadeUi
@@ -49,21 +48,24 @@ import com.teya.lemonade.lemonadeShadow
  * A right-click menu, styled like [AnchoredPopover]. It opens at [offset] from the top-left of the
  * layout it is placed in (where the pointer was) and flips to stay in the window. Clicking outside
  * or pressing Escape calls [onDismissRequest]. Lemonade's list items are sized for touch lists, so
- * the rows are drawn here: start with a [ContextMenuHeader], then [ContextMenuItem]s.
+ * the rows are drawn here: start with a [ContextMenuHeader], then [ContextMenuItem]s. Keep it
+ * composed and set [visible] to have it grow out of the pointer as it opens and fade as it closes.
  */
 @Composable
 public fun ContextMenuPopover(
   offset: IntOffset,
   onDismissRequest: () -> Unit,
   modifier: Modifier = Modifier,
+  visible: Boolean = true,
   width: Dp = 296.dp,
   content: @Composable ColumnScope.() -> Unit,
 ) {
   val inset = with(LocalDensity.current) { PopoverShadowRoom.roundToPx() }
-  Popup(
+  AnimatedPopup(
+    visible = visible,
     popupPositionProvider = remember(offset, inset) { PointerPositionProvider(offset, inset) },
     onDismissRequest = onDismissRequest,
-    properties = PopupProperties(focusable = true, dismissOnClickOutside = true, dismissOnBackPress = true),
+    origin = TransformOrigin(0f, 0f),
   ) {
     val shape = LemonadeTheme.shapes.radius400
     Column(

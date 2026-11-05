@@ -62,6 +62,7 @@ import com.jediterm.terminal.HyperlinkStyle
 import com.jediterm.terminal.TerminalColor
 import com.jediterm.terminal.model.TerminalLine
 import com.jediterm.terminal.util.CharUtils
+import kotlinx.coroutines.delay
 import java.awt.Toolkit
 import java.awt.datatransfer.DataFlavor
 import java.awt.datatransfer.StringSelection
@@ -281,7 +282,14 @@ public fun TerminalView(
   ) {
     val columns = max(2, (maxWidth / cell.width).toInt())
     val rows = max(2, (maxHeight / cell.height).toInt())
-    LaunchedEffect(session, columns, rows) { session.resize(columns, rows) }
+    // The first size goes to the program at once; later ones once the size has held still, so a
+    // panel gliding open or an edge being dragged sends the program one resize, not one per frame.
+    val sized = remember(session) { booleanArrayOf(false) }
+    LaunchedEffect(session, columns, rows) {
+      if (sized[0]) delay(ResizeSettleMillis)
+      sized[0] = true
+      session.resize(columns, rows)
+    }
 
     val screen = remember(version, scrollBack, colors, rows, columns, selection, glyphs) {
       readScreen(session, rows, columns, scrollBack, colors, selection, glyphs::fits)
@@ -466,6 +474,9 @@ private fun Cursor(
 }
 
 private const val BlinkPeriodMillis = 1100
+
+/** How long a new size must hold before the program is told about it. */
+private const val ResizeSettleMillis = 100L
 
 /**
  * Text an input method is still composing (a dead key's accent, a CJK reading), drawn underlined

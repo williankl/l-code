@@ -1,5 +1,6 @@
 package dev.lemonadecode.workspace.ui
 
+import androidx.compose.animation.ExitTransition
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.Orientation
@@ -25,6 +26,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.foundation.lazy.LazyItemScope
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
@@ -94,6 +96,9 @@ import com.teya.lemonade.core.LemonadeIcons
 import com.teya.lemonade.core.LemonadeLinkSize
 import com.teya.lemonade.core.SymbolContainerSize
 import com.teya.lemonade.core.TagVoice
+import dev.lemonadecode.platform.designsystem.AnimatedItems
+import dev.lemonadecode.platform.designsystem.AnimatedPresence
+import dev.lemonadecode.platform.designsystem.LemonadeCodeAnimation
 import dev.lemonadecode.platform.designsystem.LemonadeCodeCodeColors
 import dev.lemonadecode.platform.designsystem.LemonadeCodeTheme
 import dev.lemonadecode.platform.localization.resolve
@@ -144,6 +149,19 @@ internal val DiffFileModel.bodyItemCount: Int
   }
 
 /**
+ * How the diff's items move: lines that come, like those of a file being opened, are there at once
+ * and what's below glides down off them; lines that go leave at once and what's below glides up.
+ * Nothing fades: a fading item kept composed off screen, like the composer while it holds focus,
+ * never finishes fading in, so the list never comes to rest.
+ */
+@Composable
+internal fun LazyItemScope.diffItemMotion(): Modifier = Modifier.animateItem(
+  fadeInSpec = null,
+  placementSpec = LemonadeCodeAnimation.specOrNull(LemonadeCodeAnimation.PanelMillis),
+  fadeOutSpec = null,
+)
+
+/**
  * Rows of one file, each an item of the diff's list, so only the lines on screen are composed.
  * Code scrolls sideways as one block through [state]; comment cards and the composer stay pinned
  * to the left edge while it does, like `position: sticky` in the design.
@@ -171,6 +189,7 @@ internal fun LazyListScope.diffFileRows(
     // The item gets only what it draws, not the file: comparing a file's rows to skip an
     // unchanged item would cost as much as the file is long.
     DiffRowItem(
+      modifier = diffItemMotion(),
       fileId = file.id,
       fileName = file.fileName,
       row = row,
@@ -286,6 +305,7 @@ internal fun rememberCodeMeasure(): CodeMeasure {
 
 @Composable
 private fun DiffRowItem(
+  modifier: Modifier,
   fileId: String,
   fileName: String,
   row: DiffRowModel?,
@@ -300,15 +320,17 @@ private fun DiffRowItem(
   val codeWidth = with(LocalDensity.current) { codeWidthPx.toDp() }
   // The last item closes the file's card, as its header opens it.
   Column(
-    modifier = if (last) {
-      Modifier
-        .fillMaxWidth()
-        .clip(RoundedCornerShape(bottomStart = radius, bottomEnd = radius))
-        .background(background)
-        .padding(bottom = LemonadeTheme.spaces.spacing200)
-    } else {
-      Modifier.fillMaxWidth().background(background)
-    },
+    modifier = modifier.then(
+      if (last) {
+        Modifier
+          .fillMaxWidth()
+          .clip(RoundedCornerShape(bottomStart = radius, bottomEnd = radius))
+          .background(background)
+          .padding(bottom = LemonadeTheme.spaces.spacing200)
+      } else {
+        Modifier.fillMaxWidth().background(background)
+      },
+    ),
   ) {
     when (row) {
       is DiffRowModel.Hunk -> HunkRow(
@@ -329,12 +351,20 @@ private fun DiffRowItem(
           lineBounds = state.lineBounds,
           onEvent = onEvent,
         )
-        row.comments.forEach { comment ->
+        // Cards fade in where they open, and the lines below glide down to make room. Ones already
+        // there as the line scrolls into view just show.
+        AnimatedItems(
+          items = row.comments,
+          key = { it.id },
+          enter = LemonadeCodeAnimation.fadeIn(),
+          exit = LemonadeCodeAnimation.fadeOut(LemonadeCodeAnimation.PopoverOutMillis),
+        ) { _, comment ->
           PinnedSlot(scroll = state.scroll) {
             ReviewCommentCard(comment = comment, onEvent = onEvent)
           }
         }
-        row.composer?.let { composer ->
+        // Gone at once when it closes: as a comment it's sent, the card takes its place.
+        AnimatedPresence(value = row.composer, enter = LemonadeCodeAnimation.fadeIn(), exit = ExitTransition.None) { composer ->
           PinnedSlot(scroll = state.scroll) {
             CommentComposerCard(composer = composer, onEvent = onEvent)
           }

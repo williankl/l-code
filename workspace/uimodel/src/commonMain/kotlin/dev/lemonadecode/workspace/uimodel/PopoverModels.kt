@@ -36,6 +36,8 @@ public data class SettingsModel(
   val systemLanguage: LanguageOption = LanguageOption.English,
   val mobile: MobilePluginModel = MobilePluginModel(enabled = false),
   val updates: UpdatesModel = UpdatesModel.Unknown,
+  /** Panels, menus and lists open and move with motion. */
+  val animations: Boolean = true,
 )
 
 /** Plugins › Mobile. */

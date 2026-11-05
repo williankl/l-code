@@ -2,6 +2,7 @@ package dev.lemonadecode.platform.designsystem
 
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.ui.graphics.Color
@@ -19,16 +20,21 @@ public enum class LemonadeCodeThemeMode { Dark, Light, System }
 /**
  * Root theme for Lemonade Code: Lemonade with the dark or light semantic palette, plus the few
  * Lemonade Code-only roles (code syntax, monospace type, scrim) that Lemonade has no token for.
+ * With [animations] off, everything that would open, close or move with [LemonadeCodeAnimation]
+ * changes at once.
  */
 @Composable
 public fun LemonadeCodeTheme(
   mode: LemonadeCodeThemeMode = LemonadeCodeThemeMode.Dark,
+  animations: Boolean = true,
   content: @Composable () -> Unit,
 ) {
-  LemonadeTheme(
-    colors = if (mode.isDark()) LemonadeDarkTheme else LemonadeLightTheme,
-    content = content,
-  )
+  CompositionLocalProvider(LocalAnimations provides animations) {
+    LemonadeTheme(
+      colors = if (mode.isDark()) LemonadeDarkTheme else LemonadeLightTheme,
+      content = content,
+    )
+  }
 }
 
 /** Whether [LemonadeCodeTheme] draws this mode dark, following the system for [LemonadeCodeThemeMode.System]. */
@@ -70,6 +76,12 @@ public object LemonadeCodeTheme {
         codeSmall = base.copy(fontSize = 12.sp, lineHeight = 18.sp),
       )
     }
+
+  /** Whether things open, close and move with motion: Settings › Appearance › Animations. */
+  public val animations: Boolean
+    @Composable
+    @ReadOnlyComposable
+    get() = LocalAnimations.current
 
   /** Flat 40% black behind drawers, per Lemonade's "scrims are flat, never blurred". */
   public val scrim: Color

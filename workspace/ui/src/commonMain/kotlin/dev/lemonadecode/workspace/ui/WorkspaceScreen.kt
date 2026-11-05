@@ -1,5 +1,16 @@
 package dev.lemonadecode.workspace.ui
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.VectorConverter
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
@@ -16,6 +27,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -26,6 +38,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.key.Key
@@ -52,6 +65,9 @@ import com.teya.lemonade.core.LemonadeIcons
 import com.teya.lemonade.core.LemonadeLinkSize
 import com.teya.lemonade.core.LemonadeShadow
 import com.teya.lemonade.lemonadeShadow
+import dev.lemonadecode.platform.designsystem.AnimatedPresence
+import dev.lemonadecode.platform.designsystem.AnimationEdge
+import dev.lemonadecode.platform.designsystem.LemonadeCodeAnimation
 import dev.lemonadecode.platform.designsystem.LemonadeCodeTheme
 import dev.lemonadecode.platform.designsystem.LemonadeCodeThemeMode
 import dev.lemonadecode.platform.localization.LemonadeCodeString
@@ -142,7 +158,6 @@ public fun WorkspaceContent(
     val maxDevicesWidth = min(DevicesPanelModel.MaxWidth.dp, maxWidth - besideDevices - gap * 3 - MainPanelMinWidth)
       .coerceAtLeast(minDevicesWidth)
     var draggedDevicesWidth by remember(docked?.width) { mutableStateOf<Dp?>(null) }
-    val devicesWidth = (draggedDevicesWidth ?: (docked?.width ?: DevicesPanelModel.DefaultWidth).dp).coerceIn(minDevicesWidth, maxDevicesWidth)
 
     Column(modifier = Modifier.fillMaxSize()) {
       TopBar(
@@ -160,29 +175,52 @@ public fun WorkspaceContent(
             .padding(start = gap, end = gap, bottom = gap),
         ) {
           if (!narrow) {
-            if (panel.expanded) {
-              SessionsSidebar(
-                navigation = panel.navigation,
-                onEvent = onEvent,
-                modifier = Modifier.width(sidebarWidth).fillMaxHeight(),
-                menu = panel.menu,
-              )
-              SidebarResizeHandle(
-                sidebarWidth = sidebarWidth,
-                minWidth = minSidebarWidth,
-                maxWidth = maxSidebarWidth,
-                onResize = { draggedWidth = it },
-                onResizeFinished = { onEvent(WorkspaceEvent.ResizeSessionsSidebar(it.value.roundToInt())) },
-                modifier = Modifier.width(gap),
-              )
-            } else {
-              SessionRail(
-                tiles = panel.tiles,
-                onEvent = onEvent,
-                modifier = Modifier.width(RailWidth).fillMaxHeight(),
-                menu = panel.menu,
-              )
-              Spacer(modifier = Modifier.width(gap))
+            // The column glides between sidebar and rail as they cross-fade; the sidebar keeps its
+            // full width inside and is cut off, rather than squeezed, as the column narrows.
+            val columnWidth = glideOnChange(
+              key = panel.expanded,
+              target = if (panel.expanded) sidebarWidth + gap else RailWidth + gap,
+            )
+            val animate = LemonadeCodeTheme.animations
+            AnimatedContent(
+              targetState = panel.expanded,
+              transitionSpec = {
+                if (animate) {
+                  (fadeIn(tween(LemonadeCodeAnimation.PanelMillis)) togetherWith fadeOut(tween(LemonadeCodeAnimation.FadeMillis))).using(null)
+                } else {
+                  (EnterTransition.None togetherWith ExitTransition.None).using(null)
+                }
+              },
+              contentAlignment = Alignment.TopStart,
+              label = "sessions column",
+              modifier = Modifier.width(columnWidth).fillMaxHeight().clipToBounds(),
+            ) { expanded ->
+              Row(modifier = Modifier.wrapContentWidth(Alignment.Start, unbounded = true).fillMaxHeight()) {
+                if (expanded) {
+                  SessionsSidebar(
+                    navigation = panel.navigation,
+                    onEvent = onEvent,
+                    modifier = Modifier.width(sidebarWidth).fillMaxHeight(),
+                    menu = panel.menu,
+                  )
+                  SidebarResizeHandle(
+                    sidebarWidth = sidebarWidth,
+                    minWidth = minSidebarWidth,
+                    maxWidth = maxSidebarWidth,
+                    onResize = { draggedWidth = it },
+                    onResizeFinished = { onEvent(WorkspaceEvent.ResizeSessionsSidebar(it.value.roundToInt())) },
+                    modifier = Modifier.width(gap),
+                  )
+                } else {
+                  SessionRail(
+                    tiles = panel.tiles,
+                    onEvent = onEvent,
+                    modifier = Modifier.width(RailWidth).fillMaxHeight(),
+                    menu = panel.menu,
+                  )
+                  Spacer(modifier = Modifier.width(gap))
+                }
+              }
             }
           }
           MainPanel(
@@ -192,61 +230,76 @@ public fun WorkspaceContent(
             onEvent = onEvent,
             modifier = Modifier.weight(1f).fillMaxHeight(),
           )
-          if (docked != null && !narrow) {
-            SidebarResizeHandle(
-              sidebarWidth = devicesWidth,
-              minWidth = minDevicesWidth,
-              maxWidth = maxDevicesWidth,
-              onResize = { draggedDevicesWidth = it },
-              onResizeFinished = { onEvent(WorkspaceEvent.ResizeDevicesPanel(it.value.roundToInt())) },
-              atEnd = true,
-              label = stringResource(Res.string.devices_resize),
-              modifier = Modifier.width(gap),
-            )
-            DevicesPanel(
-              panel = docked,
-              onEvent = onEvent,
-              modifier = Modifier
-                .width(devicesWidth)
-                .fillMaxHeight()
-                .clip(LemonadeTheme.shapes.semantic.radiusContainerDefault),
-            )
+          // Slides in from the window's edge as it widens, pushing the session over.
+          AnimatedPresence(
+            value = docked?.takeIf { !narrow },
+            enter = LemonadeCodeAnimation.expandSideways(from = Alignment.Start),
+            exit = LemonadeCodeAnimation.shrinkSideways(towards = Alignment.Start),
+            modifier = Modifier.fillMaxHeight(),
+          ) { devices ->
+            // Glides as a device's screen and logs trade the narrow width for the wide one; a drag
+            // or the window moves it at once.
+            val devicesWidth = (draggedDevicesWidth ?: devices.width.dp).coerceIn(minDevicesWidth, maxDevicesWidth)
+            val width = glideOnChange(key = devices.width, target = devicesWidth)
+            Row(modifier = Modifier.fillMaxHeight()) {
+              SidebarResizeHandle(
+                sidebarWidth = devicesWidth,
+                minWidth = minDevicesWidth,
+                maxWidth = maxDevicesWidth,
+                onResize = { draggedDevicesWidth = it },
+                onResizeFinished = { onEvent(WorkspaceEvent.ResizeDevicesPanel(it.value.roundToInt())) },
+                atEnd = true,
+                label = stringResource(Res.string.devices_resize),
+                modifier = Modifier.width(gap),
+              )
+              DevicesPanel(
+                panel = devices,
+                onEvent = onEvent,
+                modifier = Modifier
+                  .width(width)
+                  .fillMaxHeight()
+                  .clip(LemonadeTheme.shapes.semantic.radiusContainerDefault),
+              )
+            }
           }
         }
         // Below the breakpoint the panel floats over the session, at the right.
-        model.devices?.takeIf { it.window == DevicesWindow.Docked && narrow }?.let { docked ->
+        AnimatedPresence(
+          value = docked?.takeIf { narrow },
+          enter = LemonadeCodeAnimation.slideIn(AnimationEdge.End),
+          exit = LemonadeCodeAnimation.slideOut(AnimationEdge.End),
+          modifier = Modifier.align(Alignment.TopEnd).padding(end = gap, bottom = gap).fillMaxHeight(),
+        ) { devices ->
           val shape = LemonadeTheme.shapes.semantic.radiusContainerDefault
+          // Glides between a device's narrow and wide layouts; follows the window at once.
+          val width = glideOnChange(key = devices.width, target = min(devices.width.dp, windowWidth - gap * 2))
           DevicesPanel(
-            panel = docked,
+            panel = devices,
             onEvent = onEvent,
             modifier = Modifier
-              .align(Alignment.TopEnd)
-              .padding(end = gap, bottom = gap)
-              .width(min(docked.width.dp, windowWidth - gap * 2))
+              .width(width)
               .fillMaxHeight()
               .lemonadeShadow(shadow = LemonadeShadow.Xlarge, shape = shape)
               .clip(shape),
           )
         }
-        if (narrow && panel.drawerOpen) {
-          SessionsDrawer(model = model, width = drawerWidth, onEvent = onEvent)
-        }
-        model.error?.let { message ->
-          ErrorBanner(
-            message = message,
-            onDismiss = { onEvent(WorkspaceEvent.DismissError) },
-            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = LemonadeTheme.spaces.spacing800),
-          )
+        SessionsDrawer(visible = narrow && panel.drawerOpen, model = model, width = drawerWidth, onEvent = onEvent)
+        AnimatedPresence(
+          value = model.error,
+          enter = LemonadeCodeAnimation.slideIn(AnimationEdge.Bottom),
+          exit = LemonadeCodeAnimation.fadeOut(),
+          modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = LemonadeTheme.spaces.spacing800),
+        ) { message ->
+          ErrorBanner(message = message, onDismiss = { onEvent(WorkspaceEvent.DismissError) })
         }
         // A problem report outranks a confirmation; the toast waits under it.
-        if (model.error == null) {
-          model.toast?.let { message ->
-            LemonadeUi.Toast(
-              label = message.resolve(),
-              voice = ToastVoice.Success,
-              modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = LemonadeTheme.spaces.spacing800),
-            )
-          }
+        AnimatedPresence(
+          value = model.toast?.takeIf { model.error == null },
+          enter = LemonadeCodeAnimation.slideIn(AnimationEdge.Bottom),
+          exit = LemonadeCodeAnimation.fadeOut(),
+          modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = LemonadeTheme.spaces.spacing800),
+        ) { message ->
+          LemonadeUi.Toast(label = message.resolve(), voice = ToastVoice.Success)
         }
       }
     }
@@ -256,36 +309,58 @@ public fun WorkspaceContent(
   LaunchedEffect(Unit) { focusRequester.requestFocus() }
 }
 
+/** The scrim fades while the sessions slide in from the left over it. */
 @Composable
 private fun SessionsDrawer(
+  visible: Boolean,
+  model: WorkspaceModel,
+  width: Dp,
+  onEvent: (WorkspaceEvent) -> Unit,
+) {
+  AnimatedVisibility(
+    visible = visible,
+    enter = LemonadeCodeAnimation.fadeIn(),
+    exit = LemonadeCodeAnimation.fadeOut(),
+    modifier = Modifier.fillMaxSize(),
+  ) {
+    SessionsDrawerContent(model = model, width = width, onEvent = onEvent)
+  }
+}
+
+@Composable
+private fun AnimatedVisibilityScope.SessionsDrawerContent(
   model: WorkspaceModel,
   width: Dp,
   onEvent: (WorkspaceEvent) -> Unit,
 ) {
   val shape = LemonadeTheme.shapes.semantic.radiusContainerDefault
-  Box(
-    modifier = Modifier
-      .fillMaxSize()
-      .background(LemonadeCodeTheme.scrim)
-      .clickable(
-        interactionSource = remember { MutableInteractionSource() },
-        indication = null,
-        onClick = { onEvent(WorkspaceEvent.CloseDrawer) },
-      ),
-  )
-  SessionsSidebar(
-    navigation = model.sessions.navigation,
-    onEvent = onEvent,
-    menu = model.sessions.menu,
-    modifier = Modifier
-      .padding(start = LemonadeTheme.spaces.spacing200, bottom = LemonadeTheme.spaces.spacing200)
-      .width(width)
-      .fillMaxHeight()
-      .lemonadeShadow(shadow = LemonadeShadow.Xlarge, shape = shape)
-      .clip(shape)
-      .background(LemonadeTheme.colors.background.bgDefault)
-      .padding(LemonadeTheme.spaces.spacing200),
-  )
+  // A Box, so the sidebar keeps its own width inside the full-size layer.
+  Box(modifier = Modifier.fillMaxSize()) {
+    Box(
+      modifier = Modifier
+        .fillMaxSize()
+        .background(LemonadeCodeTheme.scrim)
+        .clickable(
+          interactionSource = remember { MutableInteractionSource() },
+          indication = null,
+          onClick = { onEvent(WorkspaceEvent.CloseDrawer) },
+        ),
+    )
+    SessionsSidebar(
+      navigation = model.sessions.navigation,
+      onEvent = onEvent,
+      menu = model.sessions.menu,
+      modifier = Modifier
+        .animateEnterExit(enter = LemonadeCodeAnimation.slideIn(AnimationEdge.Start), exit = LemonadeCodeAnimation.slideOut(AnimationEdge.Start))
+        .padding(start = LemonadeTheme.spaces.spacing200, bottom = LemonadeTheme.spaces.spacing200)
+        .width(width)
+        .fillMaxHeight()
+        .lemonadeShadow(shadow = LemonadeShadow.Xlarge, shape = shape)
+        .clip(shape)
+        .background(LemonadeTheme.colors.background.bgDefault)
+        .padding(LemonadeTheme.spaces.spacing200),
+    )
+  }
 }
 
 @Composable
@@ -311,17 +386,68 @@ private fun MainPanel(
         onEvent = onEvent,
       )
     }
-    val fill = Modifier.weight(1f).fillMaxWidth()
-    when (val content = model.content) {
-      is WorkspaceContentModel.Terminal -> terminal(content.sessionId, fill)
-      is WorkspaceContentModel.Message -> {
-        content.diffToolbar?.let { DiffToolbar(toolbar = it, onEvent = onEvent) }
-        MessageState(content = content, modifier = fill)
+    // Another session, or Terminal and Diff trading places, cross-fade; the same view of the same
+    // session updates in place.
+    val animate = LemonadeCodeTheme.animations
+    AnimatedContent(
+      targetState = MainPanelView(sessionId = model.sessions.tiles.firstOrNull { it.selected }?.id, content = model.content),
+      contentKey = { it.key },
+      transitionSpec = {
+        if (animate) {
+          (fadeIn(tween(LemonadeCodeAnimation.FadeMillis, delayMillis = 40)) togetherWith fadeOut(tween(LemonadeCodeAnimation.PopoverOutMillis))).using(null)
+        } else {
+          (EnterTransition.None togetherWith ExitTransition.None).using(null)
+        }
+      },
+      label = "main panel",
+      modifier = Modifier.weight(1f).fillMaxWidth(),
+    ) { view ->
+      val fill = Modifier.fillMaxSize()
+      when (val content = view.content) {
+        is WorkspaceContentModel.Terminal -> terminal(content.sessionId, fill)
+        is WorkspaceContentModel.Message -> Column(modifier = fill) {
+          content.diffToolbar?.let { DiffToolbar(toolbar = it, onEvent = onEvent) }
+          MessageState(content = content, modifier = Modifier.weight(1f).fillMaxWidth())
+        }
+        is WorkspaceContentModel.Diff -> DiffPane(review = content.review, narrowLayout = narrowLayout, onEvent = onEvent, modifier = fill)
+        WorkspaceContentModel.NoSessions -> NoSessions(onEvent = onEvent, modifier = fill)
       }
-      is WorkspaceContentModel.Diff -> DiffPane(review = content.review, narrowLayout = narrowLayout, onEvent = onEvent, modifier = fill)
-      WorkspaceContentModel.NoSessions -> NoSessions(onEvent = onEvent, modifier = fill)
     }
   }
+}
+
+/** What the main panel shows: [content], for the session [sessionId]. */
+private data class MainPanelView(
+  val sessionId: String?,
+  val content: WorkspaceContentModel,
+) {
+  val key: String get() = "${content::class.simpleName}:$sessionId"
+}
+
+/**
+ * [target], except just after [key] changes, like the sidebar collapsing: then it glides there
+ * from where it was. Any other change, like dragging the sidebar's edge or resizing the window,
+ * lands at once.
+ */
+@Composable
+private fun glideOnChange(key: Any, target: Dp): Dp {
+  val spec = LemonadeCodeAnimation.spec<Dp>()
+  val animatable = remember { Animatable(target, Dp.VectorConverter) }
+  val last = remember { arrayOf(key) }
+  val gliding = remember { mutableStateOf(false) }
+  if (last[0] != key) {
+    last[0] = key
+    gliding.value = true
+  }
+  LaunchedEffect(key, target) {
+    if (gliding.value) {
+      animatable.animateTo(target, spec)
+      gliding.value = false
+    } else {
+      animatable.snapTo(target)
+    }
+  }
+  return if (gliding.value) animatable.value else target
 }
 
 @Composable

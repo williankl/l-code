@@ -1,5 +1,6 @@
 package dev.lemonadecode.workspace.ui
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Arrangement
@@ -69,6 +70,7 @@ import com.teya.lemonade.core.SymbolContainerVoice
 import com.teya.lemonade.core.TagVoice
 import dev.lemonadecode.platform.designsystem.AnchoredPopover
 import dev.lemonadecode.platform.designsystem.HoverTooltip
+import dev.lemonadecode.platform.designsystem.LemonadeCodeAnimation
 import dev.lemonadecode.platform.designsystem.LemonadeCodeTheme
 import dev.lemonadecode.platform.designsystem.TooltipPlacement
 import dev.lemonadecode.platform.designsystem.bottomHairline
@@ -142,7 +144,12 @@ internal fun DiffPane(
       fileList = FileListToggle(shown = fileListShown, onToggle = { onEvent(WorkspaceEvent.ShowFileList(!fileListShown)) }),
     )
     Row(modifier = Modifier.weight(1f).fillMaxWidth()) {
-      if (fileListShown) {
+      // Slides out from the left edge as it widens, pushing the diff over.
+      AnimatedVisibility(
+        visible = fileListShown,
+        enter = LemonadeCodeAnimation.expandSideways(from = Alignment.End),
+        exit = LemonadeCodeAnimation.shrinkSideways(towards = Alignment.End),
+      ) {
         ChangedFiles(
           files = review.files,
           activeFile = activeFile,
@@ -162,16 +169,16 @@ internal fun DiffPane(
       ) {
         review.files.forEachIndexed { index, file ->
           if (index > 0) {
-            item(key = "gap:${file.id}") { Spacer(modifier = Modifier.height(spaces.spacing300)) }
+            item(key = "gap:${file.id}") { Spacer(modifier = diffItemMotion().height(spaces.spacing300)) }
           }
           stickyHeader(key = "head:${file.id}") {
-            DiffFileHeader(file = file, onEvent = onEvent)
+            DiffFileHeader(file = file, onEvent = onEvent, modifier = diffItemMotion())
           }
           val preview = file.preview
           when {
             !file.expanded -> Unit
             preview != null && preview.showing -> item(key = "body:${file.id}") {
-              FilePreviewBody(file = file, preview = preview, assets = review.assets, onEvent = onEvent)
+              FilePreviewBody(file = file, preview = preview, assets = review.assets, onEvent = onEvent, modifier = diffItemMotion())
             }
             else -> diffFileRows(file = file, state = fileStates.getOrPut(file.id) { DiffFileRowsState() }, measure = measure, onEvent = onEvent)
           }
@@ -313,43 +320,43 @@ private fun DiffBasePicker(
       enabled = base.options.isNotEmpty(),
       modifier = Modifier.semantics { contentDescription = pickerLabel },
     )
-    if (base.pickerOpen) {
+    AnchoredPopover(
+      visible = base.pickerOpen,
+      onDismissRequest = { onEvent(WorkspaceEvent.DismissDiffBasePicker) },
+      width = BasePickerWidth,
+      placement = TooltipPlacement.BelowStart,
+      padding = spaces.spacing300,
+      spacing = spaces.spacing200,
+    ) {
+      // Inside, so each opening starts with an empty search.
       var query by remember { mutableStateOf("") }
       val shown = base.options.filter { query.isBlank() || it.name.contains(query.trim(), ignoreCase = true) }
-      AnchoredPopover(
-        onDismissRequest = { onEvent(WorkspaceEvent.DismissDiffBasePicker) },
-        width = BasePickerWidth,
-        placement = TooltipPlacement.BelowStart,
-        padding = spaces.spacing300,
-        spacing = spaces.spacing200,
+      LemonadeUi.Text(
+        text = stringResource(Res.string.diff_compare_with),
+        textStyle = LemonadeTheme.typography.bodySmallSemiBold,
+        modifier = Modifier.padding(start = spaces.spacing200, end = spaces.spacing200, top = spaces.spacing100),
+      )
+      LemonadeUi.SearchField(
+        input = query,
+        onInputChanged = { query = it },
+        placeholder = stringResource(Res.string.diff_find_branch),
+        modifier = Modifier.fillMaxWidth(),
+      )
+      Column(
+        modifier = Modifier
+          .heightIn(max = BasePickerMaxHeight)
+          .verticalScroll(rememberScrollState()),
       ) {
-        LemonadeUi.Text(
-          text = stringResource(Res.string.diff_compare_with),
-          textStyle = LemonadeTheme.typography.bodySmallSemiBold,
-          modifier = Modifier.padding(start = spaces.spacing200, end = spaces.spacing200, top = spaces.spacing100),
-        )
-        LemonadeUi.SearchField(
-          input = query,
-          onInputChanged = { query = it },
-          placeholder = stringResource(Res.string.diff_find_branch),
-          modifier = Modifier.fillMaxWidth(),
-        )
-        Column(
-          modifier = Modifier
-            .heightIn(max = BasePickerMaxHeight)
-            .verticalScroll(rememberScrollState()),
-        ) {
-          shown.forEach { branch ->
-            BaseOption(branch = branch, selected = branch.name == base.selected, onClick = { onEvent(WorkspaceEvent.CompareWith(branch.name)) })
-          }
-          if (shown.isEmpty()) {
-            LemonadeUi.Text(
-              text = stringResource(Res.string.diff_no_branch_match),
-              textStyle = LemonadeTheme.typography.bodySmallRegular,
-              color = colors.content.contentSecondary,
-              modifier = Modifier.padding(horizontal = spaces.spacing200, vertical = spaces.spacing300),
-            )
-          }
+        shown.forEach { branch ->
+          BaseOption(branch = branch, selected = branch.name == base.selected, onClick = { onEvent(WorkspaceEvent.CompareWith(branch.name)) })
+        }
+        if (shown.isEmpty()) {
+          LemonadeUi.Text(
+            text = stringResource(Res.string.diff_no_branch_match),
+            textStyle = LemonadeTheme.typography.bodySmallRegular,
+            color = colors.content.contentSecondary,
+            modifier = Modifier.padding(horizontal = spaces.spacing200, vertical = spaces.spacing300),
+          )
         }
       }
     }
@@ -460,6 +467,7 @@ private fun changeVoice(change: FileChangeKind): SymbolContainerVoice = when (ch
 private fun DiffFileHeader(
   file: DiffFileModel,
   onEvent: (WorkspaceEvent) -> Unit,
+  modifier: Modifier = Modifier,
 ) {
   val spaces = LemonadeTheme.spaces
   val colors = LemonadeTheme.colors
@@ -469,7 +477,7 @@ private fun DiffFileHeader(
   Row(
     verticalAlignment = Alignment.CenterVertically,
     horizontalArrangement = Arrangement.spacedBy(spaces.spacing200),
-    modifier = Modifier
+    modifier = modifier
       .fillMaxWidth()
       .background(colors.background.bgSubtle, shape)
       .then(if (file.expanded) Modifier.bottomHairline(colors.border.borderNeutralLow) else Modifier)

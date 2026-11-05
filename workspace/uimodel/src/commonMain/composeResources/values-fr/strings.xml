@@ -9,6 +9,8 @@
   <string name="theme_dark">Sombre</string>
   <string name="theme_light">Clair</string>
   <string name="theme_system">Système</string>
+  <string name="animations_title">Animations</string>
+  <string name="animations_description">Les panneaux, menus et listes s’ouvrent et se déplacent en douceur. Désactivez-les pour que chaque changement soit immédiat.</string>
   <string name="keep_awake_title">Rester éveillé tant que des sessions travaillent</string>
   <string name="keep_awake_description">Empêche cet ordinateur de se mettre en veille, et son écran de s’assombrir ou de se verrouiller, tant qu’une session travaille.</string>
   <string name="keep_awake_tag">Éveil maintenu · %1$d en cours</string>

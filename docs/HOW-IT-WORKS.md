@@ -183,8 +183,9 @@ Installed from a release file (DMG, MSI, .deb or .tar.gz), the app looks for a n
 seconds after launch and every 6 hours. A release counts when it's published, has a higher version
 and carries both the file for your kind of install and a `SHA256SUMS` file.
 
-When you press **Update and restart**, the app downloads the file, checks it against `SHA256SUMS`,
-quits, and a small helper swaps the new version in and starts it again, sessions restored:
+When you press **Update now**, the app downloads the file and checks it against `SHA256SUMS`. When
+you press **Restart now**, it quits, and a small helper swaps the new version in and starts it again,
+sessions restored:
 
 | Installed from | The helper |
 |---|---|
@@ -197,7 +198,13 @@ Homebrew and Snap Store installs never check; those tools update the app themsel
 
 ## What goes over the network
 
-Only the update check: installs from a release file ask GitHub's public API which releases exist,
-and download one when you press **Update**. Lemonade Code itself contacts nothing else, and your
-code, sessions and comments stay on your computer. (Programs you run in its terminals, like Claude
-Code, connect wherever they normally do.)
+Very little, and your code, sessions and comments stay on your computer. Lemonade Code itself only
+connects for two things:
+
+- **The update check.** Installs from a release file ask GitHub's public API which releases exist,
+  and download one when you press **Update now**.
+- **Web pictures in Markdown previews.** When a Markdown file's preview shows a picture from the
+  web, like a badge, it's downloaded then. Pictures from the repository are read locally.
+
+Programs you run in its terminals, like Claude Code, connect wherever they normally do, and so do
+`adb` and libimobiledevice when the Mobile plugin talks to a phone over Wi-Fi.

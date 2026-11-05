@@ -66,12 +66,17 @@ tidy.
 Start Claude Code, Codex, or any program you like. The sidebar shows what every session is up to,
 **working**, **needs input** or **idle**, so you always know which one wants you.
 
+Looking at something else? You'll hear it: a soft ding when an agent is done, and a double ding
+when one needs you, whichever session it's in.
+
 <img src="docs/images/terminals.png" width="100%" alt="The sessions sidebar with four sessions and their status, next to a terminal where Claude Code finished adding rate limiting">
 
 ### See exactly what changed
 
 Switch to the **Diff** tab to see every change in that folder against `main`, or any branch you
-pick. New and uncommitted files are included, code is coloured, and the full file is one click away.
+pick. Only your branch's own work shows, even when your local `main` is behind `origin/main`.
+New and uncommitted files are included, code is coloured, a list of changed files keeps your place,
+and the full file is one click away.
 
 <img src="docs/images/review-diff.png" width="100%" alt="The diff of src/server/app.ts showing the full file, with a comment under line 9 and the changed files listed beside it">
 
@@ -104,7 +109,20 @@ Start a sub-session in the same folder, or in a new **git worktree** on its own 
 work never collides. Sessions nest as deep as you need, and a lime rail traces each one back to
 where it started.
 
-<img src="docs/images/new-worktree.png" width="100%" alt="The New sub-session panel with New worktree picked, showing the folder and branch it will create">
+Done with it? Close the session and Lemonade Code offers to tidy up the worktree too, even one the
+agent made for itself. The branch stays, and you're warned first if anything uncommitted would be
+lost.
+
+<table>
+<tr>
+<td width="50%"><img src="docs/images/new-worktree.png" alt="The New sub-session panel with New worktree picked, showing the folder and branch it will create"></td>
+<td width="50%"><img src="docs/images/close-worktree.png" alt="Closing sub-2 asks whether to delete its worktree too, warning that it has uncommitted changes"></td>
+</tr>
+<tr>
+<td align="center"><sub><b>Branch out</b>, and see the folder and branch before they exist</sub></td>
+<td align="center"><sub><b>Clean up</b>, and the worktree goes when its session does</sub></td>
+</tr>
+</table>
 
 ### Previews for more than code
 
@@ -131,9 +149,22 @@ model to turn it around.
 </tr>
 </table>
 
+### Your phone, right beside the code
+
+Building an app? Turn on the **Mobile** plugin and your Android or iOS device sits next to the
+session, screen and logs together. Android screens stream as smooth video, up to 60 frames a
+second, and you can tap, swipe and type on them from your desk.
+
+Pick which apps the logs come from, filter down to the errors, and press **Send errors** to hand
+them to the agent, or snap a screenshot it can look at. Pair a phone over Wi-Fi with a QR code, and
+pop the panel out onto another display when you want the room.
+
+<img src="docs/images/devices.png" width="100%" alt="The Devices panel three ways: the list of connected phones, a Pixel 8's screen beside its logs, and an iPhone's logs, each with two errors ready to send to claude">
+
 ### Dark or light
 
-Pick one, or follow your system. Both themes come straight from the Lemonade design system.
+Pick one, or follow your system. Both themes come straight from the Lemonade design system, and on
+macOS and Windows even the window's title bar follows along.
 
 <img src="docs/images/theme-split.png" width="100%" alt="The same review screen, half in the dark theme and half in the light theme">
 
@@ -158,8 +189,8 @@ And a few more:
   last output on screen. Claude Code conversations pick up where they left off.
 - 🔗 **Clickable links.** Ctrl-click (or ⌘-click) any web address in the terminal to open it.
 - ⌨️ **Every keyboard works.** Accents, dead keys and input methods type just like anywhere else.
-- 📱 **Phones beside the code.** Turn on the Mobile plugin to see an Android or iOS screen next to
-  its logs, use the phone from the app, and hand its errors or a screenshot to the agent.
+- 📋 **Paths to go.** Select a file's path right in the diff, or copy it with one click.
+- 🔕 **Quiet when you want it.** Turn the dings off in Settings, or press Play to hear them first.
 - 🌍 **Speaks your language.** English, German, Spanish, French, Portuguese and Slovak. It follows
   your system, or pick one in Settings.
 

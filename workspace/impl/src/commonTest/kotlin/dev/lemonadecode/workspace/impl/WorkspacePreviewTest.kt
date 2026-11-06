@@ -31,6 +31,7 @@ import dev.lemonadecode.updates.fake.FakeUpdateService
 import dev.lemonadecode.workspace.impl.showcase.ShowcaseFixtures
 import dev.lemonadecode.workspace.uimodel.DiffFileModel
 import dev.lemonadecode.workspace.uimodel.FilePreviewContentModel
+import dev.lemonadecode.workspace.uimodel.PreviewChangesModel
 import dev.lemonadecode.workspace.uimodel.PreviewKindModel
 import dev.lemonadecode.workspace.uimodel.PreviewLayout
 import dev.lemonadecode.workspace.uimodel.PreviewSideModel
@@ -119,7 +120,6 @@ class WorkspacePreviewTest {
       val file = previewing.file(readme.path)!!
       assertEquals(PreviewLayout.After, file.preview?.layout)
       assertTrue(file.rows.isEmpty())
-      assertTrue(!file.canShowFullFile)
 
       previewing.eventSink(WorkspaceEvent.SetPreviewLayout(readme.path, PreviewLayout.SideBySide))
       val switched = awaitItemWhere { it.file(readme.path)?.preview?.layout == PreviewLayout.SideBySide }
@@ -131,6 +131,45 @@ class WorkspacePreviewTest {
       assertTrue(text.file(readme.path)!!.rows.isNotEmpty())
       text.eventSink(WorkspaceEvent.ToggleFilePreview(readme.path))
       awaitItemWhere { it.file(readme.path)?.preview?.content is FilePreviewContentModel.Ready }
+    }
+  }
+
+  @Test
+  fun `a changed document previews only what changed, and its full file when asked`() = runTest {
+    withSession()
+    reviews.fileContents = mapOf(
+      (readme.path to FileVersion.Base) to bytes(35),
+      (readme.path to FileVersion.WorkingTree) to bytes(35),
+    )
+    presenter.test {
+      awaitItem().eventSink(WorkspaceEvent.SelectView(WorkspaceView.Diff))
+      val previewing = awaitItemWhere { it.file(readme.path)?.preview?.content is FilePreviewContentModel.Ready }
+      val file = previewing.file(readme.path)!!
+      assertTrue(file.canShowFullFile && !file.showingFullFile)
+      assertEquals(PreviewChangesModel(before = listOf(1..1), after = listOf(1..1)), file.preview?.changes)
+
+      previewing.eventSink(WorkspaceEvent.ToggleFullFile(readme.path))
+      val full = awaitItemWhere { it.file(readme.path)?.showingFullFile == true }.file(readme.path)!!
+      assertTrue(full.preview?.showing == true && full.rows.isEmpty())
+      assertNull(full.preview?.changes)
+    }
+  }
+
+  @Test
+  fun `an added document or a picture previews the whole file`() = runTest {
+    withSession()
+    reviews.fileContents = mapOf(
+      (logo.path to FileVersion.Base) to bytes(1),
+      (logo.path to FileVersion.WorkingTree) to bytes(2),
+      (chart.path to FileVersion.WorkingTree) to bytes(35),
+    )
+    presenter.test {
+      awaitItem().eventSink(WorkspaceEvent.SelectView(WorkspaceView.Diff))
+      val model = awaitItemWhere { listOf(logo, chart).all { file -> it.file(file.path)?.preview?.content is FilePreviewContentModel.Ready } }
+      listOf(logo, chart).forEach { file ->
+        assertNull(model.file(file.path)!!.preview?.changes)
+        assertTrue(!model.file(file.path)!!.canShowFullFile)
+      }
     }
   }
 

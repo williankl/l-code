@@ -481,6 +481,13 @@
   <string name="preview_too_large">Demasiado grande para la vista previa (%1$s)</string>
   <string name="preview_unreadable">No se pudo mostrar este archivo: %1$s</string>
   <string name="preview_empty">Archivo vacío</string>
+  <string name="preview_nothing_removed">No se quitó nada</string>
+  <string name="preview_nothing_added">No se añadió nada</string>
+  <plurals name="preview_hidden_lines">
+    <item quantity="one">%1$d línea sin cambios</item>
+    <item quantity="many">%1$d líneas sin cambios</item>
+    <item quantity="other">%1$d líneas sin cambios</item>
+  </plurals>
   <string name="preview_image_info">%1$d × %2$d · %3$s</string>
   <string name="preview_play">Reproducir</string>
   <string name="preview_pause">Pausar</string>

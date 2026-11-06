@@ -155,6 +155,108 @@ internal object MarkdownParser {
     if (frontMatter <= 0) return blocks
     return listOf(MarkdownBlock.Code("yaml", lines.subList(1, frontMatter).joinToString("\n"))) + blocks
   }
+
+  /**
+   * Only the parts of the document that [changed] lines fall in: whole top-level blocks, but just
+   * the touched items of a list and the touched rows of a table (under its header). HTML that
+   * opens in one block and closes in a later one stays together.
+   */
+  fun changes(text: String, changed: ChangedLines): MarkdownChanges {
+    val lines = text.replace('\u0000', '�').lines().map { expandIndentTabs(it) }
+    val frontMatter = frontMatterEnd(lines)
+    val bodyStart = if (frontMatter > 0) frontMatter + 1 else 0
+    val body = lines.subList(bodyStart, lines.size)
+    val definitions = HashMap<String, String>()
+    val spans = mutableListOf<Span>()
+    // Reading the structure also collects the link definitions the parts may use.
+    val items = BlockReader(definitions) { emptyList() }.items(body, depth = 0, spans)
+    val units = buildList {
+      if (frontMatter > 0) add(Span(0..frontMatter))
+      htmlRuns(items).forEach { run ->
+        val span = if (run.first == run.last) spans[run.first] else Span(spans[run.first].lines.first..spans[run.last].lines.last)
+        add(span.shifted(bodyStart))
+      }
+    }
+
+    val reader = BlockReader(definitions, InlineReader(definitions)::read)
+    fun blocksOf(piece: List<Int>): List<MarkdownBlock> = if (frontMatter > 0 && piece.first() == 0) {
+      listOf(MarkdownBlock.Code("yaml", lines.subList(1, frontMatter).joinToString("\n")))
+    } else {
+      reader.read(piece.map { lines[it] }, depth = 0)
+    }
+
+    // Each piece is the lines to draw together, and the first and last line of the file it shows.
+    class Piece(val lines: List<Int>, val first: Int, val last: Int, val blocks: List<MarkdownBlock>)
+    val pieces = mutableListOf<Piece>()
+    fun piece(lines: List<Int>, first: Int, last: Int) {
+      val blocks = blocksOf(lines)
+      if (blocks.isNotEmpty()) pieces += Piece(lines, first, last, blocks)
+    }
+    units.forEach { unit ->
+      val head = unit.head
+      if (unit.parts.isEmpty()) {
+        if (changed.any(unit.lines)) piece(unit.lines.toList(), unit.lines.first, unit.lines.last)
+        return@forEach
+      }
+      val runs = runsOf(unit.parts.indices.filter { changed.any(unit.parts[it]) })
+      val headLines = head?.toList().orEmpty()
+      if (runs.isEmpty() && head != null && changed.any(head)) piece(headLines, head.first, head.last)
+      runs.forEach { run ->
+        val rows = unit.parts[run.first].first..unit.parts[run.last].last
+        piece(headLines + rows, if (head != null && run.first == 0) head.first else rows.first, rows.last)
+      }
+    }
+
+    val shown = BooleanArray(lines.size)
+    pieces.forEach { piece -> piece.lines.forEach { shown[it] = true } }
+    // The lines from [from] until [until] left out, or 0 when nothing left out would draw.
+    fun hidden(from: Int, until: Int): Int {
+      var count = 0
+      var filled = false
+      for (index in from until until) {
+        if (shown[index]) continue
+        count++
+        if (lines[index].isNotBlank()) filled = true
+      }
+      return if (filled) count else 0
+    }
+
+    val excerpts = mutableListOf<MarkdownExcerpt>()
+    var blocks: MutableList<MarkdownBlock>? = null
+    var hiddenBefore = 0
+    var previous = -1
+    pieces.forEach { piece ->
+      val gap = hidden(previous + 1, piece.first)
+      val open = blocks
+      if (open == null || gap > 0) {
+        if (open != null) excerpts += MarkdownExcerpt(hiddenBefore, open)
+        blocks = piece.blocks.toMutableList()
+        hiddenBefore = gap
+      } else {
+        open += piece.blocks
+      }
+      previous = maxOf(previous, piece.last)
+    }
+    blocks?.let { excerpts += MarkdownExcerpt(hiddenBefore, it) }
+    val end = lines.indexOfLast { it.isNotBlank() }
+    return MarkdownChanges(excerpts, if (excerpts.isEmpty()) 0 else hidden(previous + 1, end + 1))
+  }
+}
+
+/** A changed part of a document; [hiddenBefore] lines between it and the part before were left out. */
+internal class MarkdownExcerpt(val hiddenBefore: Int, val blocks: List<MarkdownBlock>)
+
+/** The parts of a document a change touched, and how many lines after the last were left out. */
+internal class MarkdownChanges(val excerpts: List<MarkdownExcerpt>, val hiddenAfter: Int)
+
+/** Sorted [indices] as runs of consecutive ones. */
+internal fun runsOf(indices: List<Int>): List<IntRange> {
+  val runs = mutableListOf<IntRange>()
+  indices.forEach { index ->
+    val last = runs.lastOrNull()
+    if (last != null && index == last.last + 1) runs[runs.lastIndex] = last.first..index else runs += index..index
+  }
+  return runs
 }
 
 /** YAML front matter (`---` … `---` at the very top) is shown as a code block, as GitHub does. */
@@ -170,19 +272,41 @@ private fun frontMatterEnd(lines: List<String>): Int {
 /** Containers nested deeper than this are read as plain text, so odd input can't overflow the stack. */
 private const val MaxDepth = 32
 
-/** A block read from the lines, or null for one that shows nothing, and the line after it. */
-private class Read(val item: MarkdownItem?, val next: Int)
+/**
+ * A block read from the lines, or null for one that shows nothing, and the line after it. A table
+ * has its [head] (header and delimiter lines) and its rows as [parts]; a list has its items.
+ */
+private class Read(
+  val item: MarkdownItem?,
+  val next: Int,
+  val head: IntRange? = null,
+  val parts: List<IntRange> = emptyList(),
+)
+
+/** Where a top-level item sits: its [lines] (from 0) and, as in [Read], its [head] and [parts]. */
+private class Span(val lines: IntRange, val head: IntRange? = null, val parts: List<IntRange> = emptyList()) {
+  fun shifted(by: Int): Span = Span(lines.shifted(by), head?.shifted(by), parts.map { it.shifted(by) })
+}
+
+private fun IntRange.shifted(by: Int): IntRange = (first + by)..(last + by)
 
 private class BlockReader(
   private val definitions: MutableMap<String, String>,
   private val inline: (String) -> List<MarkdownInline>,
 ) {
-  fun read(lines: List<String>, depth: Int): List<MarkdownBlock> {
+  fun read(lines: List<String>, depth: Int): List<MarkdownBlock> = assembleHtml(items(lines, depth))
+
+  /** The blocks and pieces of HTML in [lines], with where each one sits added to [spans]. */
+  fun items(lines: List<String>, depth: Int, spans: MutableList<Span>? = null): List<MarkdownItem> {
     val blocks = mutableListOf<MarkdownItem>()
     val paragraph = mutableListOf<String>()
+    var paragraphStart = 0
     fun closeParagraph() {
       if (paragraph.isEmpty()) return
-      paragraphText(paragraph)?.let { blocks += MarkdownItem.Block(MarkdownBlock.Paragraph(inline(it))) }
+      paragraphText(paragraph)?.let {
+        blocks += MarkdownItem.Block(MarkdownBlock.Paragraph(inline(it)))
+        spans?.add(Span(paragraphStart..<paragraphStart + paragraph.size))
+      }
       paragraph.clear()
     }
 
@@ -202,6 +326,7 @@ private class BlockReader(
           paragraph.clear()
           if (text != null) {
             blocks += MarkdownItem.Block(MarkdownBlock.Heading(level, inline(text)))
+            spans?.add(Span(paragraphStart..i))
             i++
             continue
           }
@@ -210,15 +335,26 @@ private class BlockReader(
       val read = readBlock(lines, i, interrupting = paragraph.isNotEmpty(), depth = depth)
       if (read != null) {
         closeParagraph()
-        read.item?.let { blocks += it }
+        read.item?.let {
+          blocks += it
+          spans?.add(Span(i..lastFilled(lines, i, read.next), read.head, read.parts))
+        }
         i = read.next
       } else {
+        if (paragraph.isEmpty()) paragraphStart = i
         paragraph += line
         i++
       }
     }
     closeParagraph()
-    return assembleHtml(blocks)
+    return blocks
+  }
+
+  /** The last line before [next] that isn't blank, and not before [start]. */
+  private fun lastFilled(lines: List<String>, start: Int, next: Int): Int {
+    var end = next - 1
+    while (end > start && lines[end].isBlank()) end--
+    return end
   }
 
   private fun readBlock(lines: List<String>, start: Int, interrupting: Boolean, depth: Int): Read? {
@@ -296,10 +432,12 @@ private class BlockReader(
 
   private fun readList(lines: List<String>, start: Int, first: ListMarker, depth: Int): Read {
     val items = mutableListOf<MarkdownListItem>()
+    val parts = mutableListOf<IntRange>()
     var loose = false
     var marker = first
     var i = start
     while (true) {
+      val itemStart = i
       val content = mutableListOf<String>()
       val lazy = LazyTracker()
       val head = if (marker.empty) "" else marker.line.substring(marker.contentIndent)
@@ -346,6 +484,7 @@ private class BlockReader(
       val blocks = read(content, depth + 1)
       if (blankInside && blocks.size > 1) loose = true
       items += MarkdownListItem(checked = task?.let { it.groupValues[1] != " " }, blocks = blocks)
+      parts += itemStart..(i - 1 - blanks).coerceAtLeast(itemStart)
 
       var next = i
       while (next < lines.size && lines[next].isBlank()) next++
@@ -355,7 +494,7 @@ private class BlockReader(
       marker = following
       i = next
     }
-    return Read(MarkdownItem.Block(MarkdownBlock.ListBlock(first.ordered, first.number, loose, items)), i)
+    return Read(MarkdownItem.Block(MarkdownBlock.ListBlock(first.ordered, first.number, loose, items)), i, parts = parts)
   }
 
   private fun readHtml(lines: List<String>, start: Int): Read {
@@ -398,7 +537,7 @@ private class BlockReader(
       rows += List(header.size) { inline(cells.getOrElse(it) { "" }) }
       i++
     }
-    return Read(MarkdownItem.Block(MarkdownBlock.Table(alignments, header.map(inline), rows)), i)
+    return Read(MarkdownItem.Block(MarkdownBlock.Table(alignments, header.map(inline), rows)), i, head = start..start + 1, parts = (start + 2 until i).map { it..it })
   }
 
   /** The paragraph's text once any link reference definitions at its start are taken out. */

@@ -214,6 +214,9 @@ private class HtmlTreeBuilder {
   val root = HtmlNode.Element("", emptyMap())
   private val open = mutableListOf(root)
 
+  /** Whether every element opened so far has closed. */
+  val balanced: Boolean get() = open.size == 1
+
   fun block(block: MarkdownBlock) {
     open.last().children += HtmlNode.Block(block)
   }
@@ -278,6 +281,28 @@ internal fun assembleHtml(items: List<MarkdownItem>): List<MarkdownBlock> {
     }
   }
   return blocksOf(tree.root.children)
+}
+
+/**
+ * [items] as runs that close every element they open, like a `<div>` and the Markdown up to its
+ * `</div>`, so each run can be drawn on its own. Each run is a range of indices into [items].
+ */
+internal fun htmlRuns(items: List<MarkdownItem>): List<IntRange> {
+  val tree = HtmlTreeBuilder()
+  val runs = mutableListOf<IntRange>()
+  var start = 0
+  items.forEachIndexed { index, item ->
+    when (item) {
+      is MarkdownItem.Block -> tree.block(item.block)
+      is MarkdownItem.Html -> tokenizeHtml(item.text).forEach(tree::token)
+    }
+    if (tree.balanced) {
+      runs += start..index
+      start = index + 1
+    }
+  }
+  if (start < items.size) runs += start..items.lastIndex
+  return runs
 }
 
 /** Whether [node] flows with text, rather than standing as a block of its own. */

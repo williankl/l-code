@@ -1,9 +1,13 @@
 package dev.lemonadecode.workspace.ui.preview
 
-/** The first [rows] of a delimited file, as read (rows can differ in length), and how many it has in all. */
+/** The rows kept from a delimited file, as read (rows can differ in length), and how many it has in all. */
 internal class DelimitedText(
   val rows: List<List<String>>,
   val totalRows: Int,
+  /** Each kept row's place among all the rows, from 0. */
+  val indices: List<Int> = rows.indices.toList(),
+  /** The lines each kept row spans, from 0: more than one when a quoted field holds line breaks. */
+  val lines: List<IntRange> = emptyList(),
 )
 
 /**
@@ -13,20 +17,43 @@ internal class DelimitedText(
  * quote is kept, and a quote that never closes is just a character.
  */
 internal object DelimitedTextParser {
-  fun parse(text: String, separator: Char, keepRows: Int = Int.MAX_VALUE): DelimitedText {
+  /**
+   * Keeps the rows [keep] picks, by their place among all rows and the lines they span (both
+   * from 0), up to [keepRows] of them.
+   */
+  fun parse(
+    text: String,
+    separator: Char,
+    keepRows: Int = Int.MAX_VALUE,
+    keep: (index: Int, lines: IntRange) -> Boolean = { _, _ -> true },
+  ): DelimitedText {
     val rows = mutableListOf<List<String>>()
+    val indices = mutableListOf<Int>()
+    val rowLines = mutableListOf<IntRange>()
     var total = 0
     var row = mutableListOf<String>()
     val field = StringBuilder()
     // Whether the current line has anything in it: a character, a separator or a quoted field.
     var rowStarted = false
+    var line = 0
+    var rowStart = 0
     var i = 0
     var literalQuoteAt = -1
+
+    fun startRow() {
+      if (rowStarted) return
+      rowStarted = true
+      rowStart = line
+    }
 
     fun endRow() {
       if (rowStarted) {
         row += field.toString()
-        if (total < keepRows) rows += row
+        if (keep(total, rowStart..line) && rows.size < keepRows) {
+          rows += row
+          indices += total
+          rowLines += rowStart..line
+        }
         total++
       }
       row = mutableListOf()
@@ -46,28 +73,40 @@ internal object DelimitedTextParser {
           }
           field.clear()
           appendUnquoted(field, text, i + 1, close)
-          rowStarted = true
+          startRow()
+          line += lineBreaks(text, i + 1, close)
           i = close + 1
         }
         c == separator -> {
           row += field.toString()
           field.clear()
-          rowStarted = true
+          startRow()
           i++
         }
         c == '\n' || c == '\r' -> {
           endRow()
+          line++
           i += if (c == '\r' && text.getOrNull(i + 1) == '\n') 2 else 1
         }
         else -> {
           field.append(c)
-          rowStarted = true
+          startRow()
           i++
         }
       }
     }
     endRow()
-    return DelimitedText(rows, total)
+    return DelimitedText(rows, total, indices, rowLines)
+  }
+
+  /** The line breaks from [start] until [end], a CRLF counting as one. */
+  private fun lineBreaks(text: String, start: Int, end: Int): Int {
+    var count = 0
+    for (i in start until end) {
+      val c = text[i]
+      if (c == '\n' || (c == '\r' && text.getOrNull(i + 1) != '\n')) count++
+    }
+    return count
   }
 
   /** The index of the quote that ends a field opened just before [start], or -1. */

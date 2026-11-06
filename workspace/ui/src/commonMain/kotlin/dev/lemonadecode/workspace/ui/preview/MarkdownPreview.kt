@@ -77,6 +77,7 @@ import com.teya.lemonade.core.LemonadeIcons
 import com.teya.lemonade.textStyle
 import dev.lemonadecode.platform.designsystem.LemonadeCodeTheme
 import dev.lemonadecode.workspace.strings.Res
+import dev.lemonadecode.workspace.strings.preview_hidden_lines
 import dev.lemonadecode.workspace.strings.preview_markdown_alert_caution
 import dev.lemonadecode.workspace.strings.preview_markdown_alert_important
 import dev.lemonadecode.workspace.strings.preview_markdown_alert_note
@@ -85,6 +86,7 @@ import dev.lemonadecode.workspace.strings.preview_markdown_alert_warning
 import dev.lemonadecode.workspace.strings.preview_markdown_details
 import dev.lemonadecode.workspace.strings.preview_markdown_image
 import dev.lemonadecode.workspace.strings.preview_markdown_truncated
+import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
 
 /** Top-level blocks drawn at most; the preview isn't lazy, so a huge file stops here. */
@@ -95,15 +97,85 @@ private const val MaxTableRows = 200
 /** Pictures in a line of text are drawn no wider than this, so one big picture can't swamp the line. */
 private val MaxInlinePictureWidth = 480.dp
 
-/** A Markdown file drawn formatted, the way GitHub shows a README. */
+/**
+ * A Markdown file drawn formatted, the way GitHub shows a README. With [changes], only the parts
+ * they touch, and [nothing] when they touch none.
+ */
 @Composable
 internal fun MarkdownPreview(
   bytes: ByteArray,
   modifier: Modifier = Modifier,
   images: MarkdownImageSource = MarkdownImageSource.None,
+  changes: ChangedLines? = null,
+  nothing: @Composable () -> Unit = {},
 ) {
-  ParsedTextPreview(bytes = bytes, parse = MarkdownParser::parse, modifier = modifier) { blocks ->
-    MarkdownDocument(blocks, images = images)
+  if (changes == null) {
+    ParsedTextPreview(bytes = bytes, parse = MarkdownParser::parse, modifier = modifier) { blocks ->
+      MarkdownDocument(blocks, images = images)
+    }
+  } else {
+    ParsedTextPreview(bytes = bytes, parse = { MarkdownParser.changes(it, changes) }, modifier = modifier, key = changes) { parts ->
+      if (parts.excerpts.isEmpty()) nothing() else MarkdownChangesDocument(parts, images = images)
+    }
+  }
+}
+
+/** The changed parts of a document, with a line between them saying how much was left out. */
+@Composable
+private fun MarkdownChangesDocument(
+  changes: MarkdownChanges,
+  images: MarkdownImageSource,
+) {
+  val style = rememberMarkdownStyle()
+  // The block cap counts every part's blocks together, as it would the whole document's.
+  val excerpts = remember(changes) {
+    var budget = MaxBlocks
+    changes.excerpts.mapNotNull { excerpt ->
+      if (budget <= 0) return@mapNotNull null
+      val blocks = excerpt.blocks.take(budget)
+      budget -= blocks.size
+      excerpt.hiddenBefore to blocks
+    }
+  }
+  val truncated = changes.excerpts.sumOf { it.blocks.size } > MaxBlocks
+  CompositionLocalProvider(LocalMarkdownImages provides images) {
+    SelectionContainer(modifier = Modifier.fillMaxWidth()) {
+      Column(verticalArrangement = Arrangement.spacedBy(LemonadeTheme.spaces.spacing400), modifier = Modifier.fillMaxWidth()) {
+        excerpts.forEach { (hidden, blocks) ->
+          if (hidden > 0) HiddenLines(hidden, style)
+          Blocks(blocks, style, spacing = BlockSpacing.Loose, listDepth = 0, align = null)
+        }
+        when {
+          truncated -> LemonadeUi.Text(
+            text = stringResource(Res.string.preview_markdown_truncated),
+            textStyle = LemonadeTheme.typography.bodyXSmallRegular,
+            color = style.secondary,
+          )
+          changes.hiddenAfter > 0 -> HiddenLines(changes.hiddenAfter, style)
+        }
+      }
+    }
+  }
+}
+
+/** A rule across the page with how many unchanged lines it stands for. */
+@Composable
+private fun HiddenLines(
+  count: Int,
+  style: MarkdownStyle,
+) {
+  Row(
+    verticalAlignment = Alignment.CenterVertically,
+    horizontalArrangement = Arrangement.spacedBy(LemonadeTheme.spaces.spacing300),
+    modifier = Modifier.fillMaxWidth(),
+  ) {
+    Box(modifier = Modifier.weight(1f).height(1.dp).background(style.line))
+    LemonadeUi.Text(
+      text = pluralStringResource(Res.plurals.preview_hidden_lines, count, count),
+      textStyle = LemonadeTheme.typography.bodyXSmallRegular,
+      color = style.secondary,
+    )
+    Box(modifier = Modifier.weight(1f).height(1.dp).background(style.line))
   }
 }
 

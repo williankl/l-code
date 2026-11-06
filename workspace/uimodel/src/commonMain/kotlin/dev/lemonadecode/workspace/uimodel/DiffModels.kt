@@ -98,6 +98,17 @@ public data class FilePreviewModel(
   /** Which sides are shown; null when the file only has one, like an added or deleted file. */
   val layout: PreviewLayout?,
   val content: FilePreviewContentModel,
+  /** The lines the change touched; documents and tables draw only those parts. Null draws the whole file. */
+  val changes: PreviewChangesModel? = null,
+)
+
+/** The lines a change touched on each side, counted from 1 as the diff counts them. */
+@Immutable
+public data class PreviewChangesModel(
+  /** Lines removed from the file before the change. */
+  val before: List<IntRange>,
+  /** Lines added to the file after the change. */
+  val after: List<IntRange>,
 )
 
 public enum class PreviewKindModel { Image, Vector, Model, Markdown, Table, Video, Audio }

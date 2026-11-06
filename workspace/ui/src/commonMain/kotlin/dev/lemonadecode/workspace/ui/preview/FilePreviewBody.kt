@@ -30,6 +30,8 @@ import dev.lemonadecode.workspace.strings.preview_after
 import dev.lemonadecode.workspace.strings.preview_before
 import dev.lemonadecode.workspace.strings.preview_empty
 import dev.lemonadecode.workspace.strings.preview_loading
+import dev.lemonadecode.workspace.strings.preview_nothing_added
+import dev.lemonadecode.workspace.strings.preview_nothing_removed
 import dev.lemonadecode.workspace.strings.preview_side_by_side
 import dev.lemonadecode.workspace.strings.preview_too_large
 import dev.lemonadecode.workspace.uimodel.DiffFileModel
@@ -71,8 +73,8 @@ internal fun FilePreviewBody(
       FilePreviewContentModel.Loading -> PreviewMessage(stringResource(Res.string.preview_loading), loading = true)
       is FilePreviewContentModel.Failed -> PreviewMessage(content.message.resolve())
       is FilePreviewContentModel.Ready -> {
-        val before = SideSource(file.path, PreviewVersion.Before, assets)
-        val after = SideSource(file.path, PreviewVersion.After, assets)
+        val before = SideSource(file.path, PreviewVersion.Before, assets, preview.changes?.before)
+        val after = SideSource(file.path, PreviewVersion.After, assets, preview.changes?.after)
         when (preview.layout) {
           // Added and deleted files only have one side.
           null -> if (content.after != null) PreviewSide(content.after, preview.kind, after) else PreviewSide(content.before, preview.kind, before)
@@ -127,8 +129,16 @@ private fun LabelledSide(
   }
 }
 
-/** Where one side of a file was read from, for the files it refers to, like a README's pictures. */
-private class SideSource(val path: String, val version: PreviewVersion, val assets: PreviewAssetLoader)
+/**
+ * Where one side of a file was read from, for the files it refers to, like a README's pictures,
+ * and the lines its change touched when only those parts show.
+ */
+private class SideSource(
+  val path: String,
+  val version: PreviewVersion,
+  val assets: PreviewAssetLoader,
+  val changes: List<IntRange>?,
+)
 
 @Composable
 private fun PreviewSide(
@@ -143,6 +153,10 @@ private fun PreviewSide(
     is PreviewSideModel.Content -> if (side.bytes.isEmpty()) {
       PreviewMessage(stringResource(Res.string.preview_empty))
     } else {
+      val changes = source.changes?.let { remember(it) { ChangedLines(it) } }
+      val nothing = @Composable {
+        PreviewMessage(stringResource(if (source.version == PreviewVersion.Before) Res.string.preview_nothing_removed else Res.string.preview_nothing_added))
+      }
       when (kind) {
         PreviewKindModel.Image -> ImagePreview(side.bytes)
         PreviewKindModel.Vector -> SvgPreview(side.bytes)
@@ -150,8 +164,10 @@ private fun PreviewSide(
         PreviewKindModel.Markdown -> MarkdownPreview(
           bytes = side.bytes,
           images = remember(source.path, source.version, source.assets) { MarkdownImageSource(source.path, source.version, source.assets) },
+          changes = changes,
+          nothing = nothing,
         )
-        PreviewKindModel.Table -> TablePreview(side.bytes, side.extension)
+        PreviewKindModel.Table -> TablePreview(side.bytes, side.extension, changes = changes, nothing = nothing)
         PreviewKindModel.Video -> VideoPreview(side.bytes)
         PreviewKindModel.Audio -> AudioPreview(side.bytes)
       }

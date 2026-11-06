@@ -481,6 +481,13 @@
   <string name="preview_too_large">Grande demais para pré-visualizar (%1$s)</string>
   <string name="preview_unreadable">Não foi possível desenhar este arquivo: %1$s</string>
   <string name="preview_empty">Arquivo vazio</string>
+  <string name="preview_nothing_removed">Nada foi removido</string>
+  <string name="preview_nothing_added">Nada foi adicionado</string>
+  <plurals name="preview_hidden_lines">
+    <item quantity="one">%1$d linha sem alterações</item>
+    <item quantity="many">%1$d linhas sem alterações</item>
+    <item quantity="other">%1$d linhas sem alterações</item>
+  </plurals>
   <string name="preview_image_info">%1$d × %2$d · %3$s</string>
   <string name="preview_play">Reproduzir</string>
   <string name="preview_pause">Pausar</string>

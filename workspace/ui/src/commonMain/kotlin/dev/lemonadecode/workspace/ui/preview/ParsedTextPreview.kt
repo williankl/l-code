@@ -48,10 +48,11 @@ internal fun <T> ParsedTextPreview(
 ) {
   val currentParse by rememberUpdatedState(parse)
   val immediate = remember(bytes, key) { if (bytes.size <= ImmediateParseBytes) parseText(bytes, parse) else null }
-  val background by produceState<Pair<ByteArray, ParsedText<T>>?>(initialValue = null, bytes, key) {
-    if (immediate == null) value = bytes to withContext(Dispatchers.Default) { parseText(bytes, currentParse) }
+  val background by produceState<Triple<ByteArray, Any?, ParsedText<T>>?>(initialValue = null, bytes, key) {
+    if (immediate == null) value = Triple(bytes, key, withContext(Dispatchers.Default) { parseText(bytes, currentParse) })
   }
-  val state = immediate ?: background?.takeIf { it.first === bytes }?.second
+  // A result for other bytes, or another key, is stale: it waits for the new one.
+  val state = immediate ?: background?.takeIf { it.first === bytes && it.second == key }?.third
   Box(modifier = modifier.fillMaxWidth()) {
     when (state) {
       null -> PreviewMessage(stringResource(Res.string.preview_loading), loading = true)

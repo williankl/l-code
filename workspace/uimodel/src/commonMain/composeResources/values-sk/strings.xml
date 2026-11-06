@@ -504,6 +504,14 @@
   <string name="preview_too_large">Príliš veľký na ukážku (%1$s)</string>
   <string name="preview_unreadable">Tento súbor sa nepodarilo vykresliť: %1$s</string>
   <string name="preview_empty">Prázdny súbor</string>
+  <string name="preview_nothing_removed">Nič sa neodstránilo</string>
+  <string name="preview_nothing_added">Nič sa nepridalo</string>
+  <plurals name="preview_hidden_lines">
+    <item quantity="one">%1$d nezmenený riadok</item>
+    <item quantity="few">%1$d nezmenené riadky</item>
+    <item quantity="many">%1$d nezmenených riadkov</item>
+    <item quantity="other">%1$d nezmenených riadkov</item>
+  </plurals>
   <string name="preview_image_info">%1$d × %2$d · %3$s</string>
   <string name="preview_play">Prehrať</string>
   <string name="preview_pause">Pozastaviť</string>

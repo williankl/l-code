@@ -481,6 +481,13 @@
   <string name="preview_too_large">Trop volumineux pour l’aperçu (%1$s)</string>
   <string name="preview_unreadable">Impossible d’afficher ce fichier : %1$s</string>
   <string name="preview_empty">Fichier vide</string>
+  <string name="preview_nothing_removed">Rien n’a été supprimé</string>
+  <string name="preview_nothing_added">Rien n’a été ajouté</string>
+  <plurals name="preview_hidden_lines">
+    <item quantity="one">%1$d ligne inchangée</item>
+    <item quantity="many">%1$d lignes inchangées</item>
+    <item quantity="other">%1$d lignes inchangées</item>
+  </plurals>
   <string name="preview_image_info">%1$d × %2$d · %3$s</string>
   <string name="preview_play">Lire</string>
   <string name="preview_pause">Pause</string>

@@ -46,6 +46,7 @@ import dev.lemonadecode.workspace.uimodel.FileChangeKind
 import dev.lemonadecode.workspace.uimodel.FilePreviewContentModel
 import dev.lemonadecode.workspace.uimodel.FilePreviewModel
 import dev.lemonadecode.workspace.uimodel.PreviewAssetLoader
+import dev.lemonadecode.workspace.uimodel.PreviewChangesModel
 import dev.lemonadecode.workspace.uimodel.PreviewKindModel
 import dev.lemonadecode.workspace.uimodel.PreviewLayout
 import dev.lemonadecode.workspace.uimodel.PreviewSideModel
@@ -245,16 +246,40 @@ internal object DiffMapper {
       commentCount = comments.size,
       expanded = expanded,
       showingFullFile = full,
-      canShowFullFile = !showingPreview && !file.isBinary && (file.change == FileChange.Modified || file.change == FileChange.Renamed),
+      canShowFullFile = !file.isBinary && (file.change == FileChange.Modified || file.change == FileChange.Renamed) && (!showingPreview || showsChangedParts(file)),
       rows = rows,
-      preview = file.previewKind?.let { kind -> preview(file, kind, showingPreview, view, preview) },
+      preview = file.previewKind?.let { kind -> preview(file, kind, showingPreview, full, view, preview) },
     )
+  }
+
+  /**
+   * Documents and tables are drawn from text, so a part of one draws on its own: a changed file's
+   * preview shows only what changed, unless its full file is asked for.
+   */
+  private fun showsChangedParts(file: FileDiff): Boolean = !file.isBinary &&
+    (file.change == FileChange.Modified || file.change == FileChange.Renamed) &&
+    (file.previewKind == PreviewKind.Markdown || file.previewKind == PreviewKind.Table)
+
+  /** The lines removed and added, as runs; null when nothing did, like a file that was only renamed. */
+  private fun changesOf(file: FileDiff): PreviewChangesModel? {
+    val before = LineRuns()
+    val after = LineRuns()
+    file.lines.forEach { line ->
+      when (line.kind) {
+        DiffLineKind.Removed -> line.oldNumber?.let(before::add)
+        DiffLineKind.Added -> line.newNumber?.let(after::add)
+        DiffLineKind.Context -> Unit
+      }
+    }
+    if (before.isEmpty() && after.isEmpty()) return null
+    return PreviewChangesModel(before = before.ranges(), after = after.ranges())
   }
 
   private fun preview(
     file: FileDiff,
     kind: PreviewKind,
     showing: Boolean,
+    full: Boolean,
     view: WorkspaceViewState,
     load: PreviewLoad?,
   ): FilePreviewModel {
@@ -283,6 +308,7 @@ internal object DiffMapper {
       showing = showing,
       layout = if (bothSides) view.previewLayouts[file.path] ?: defaultLayout(kind) else null,
       content = content,
+      changes = if (showing && !full && showsChangedParts(file)) changesOf(file) else null,
     )
   }
 
@@ -414,5 +440,34 @@ internal object DiffMapper {
     CodeTokenKind.Comment -> TokenKindModel.Comment
     CodeTokenKind.Punctuation -> TokenKindModel.Punctuation
     CodeTokenKind.Heading -> TokenKindModel.Heading
+  }
+}
+
+/** Line numbers, given in order, gathered into runs of consecutive lines. */
+private class LineRuns {
+  private val runs = mutableListOf<IntRange>()
+  private var start = -1
+  private var end = -1
+
+  fun add(line: Int) {
+    if (start >= 0 && line == end + 1) {
+      end = line
+      return
+    }
+    flush()
+    start = line
+    end = line
+  }
+
+  fun isEmpty(): Boolean = start < 0 && runs.isEmpty()
+
+  fun ranges(): List<IntRange> {
+    flush()
+    return runs.toList()
+  }
+
+  private fun flush() {
+    if (start >= 0) runs += start..end
+    start = -1
   }
 }

@@ -15,6 +15,7 @@ short tour.
 - [Settings](#settings)
 - [Updates](#updates)
 - [Sessions come back](#sessions-come-back)
+- [Bring sessions from herdr](#bring-sessions-from-herdr)
 - [Shortcuts](#shortcuts)
 
 ---
@@ -334,7 +335,7 @@ Lemonade Code finds them on your `PATH`, in the Android SDK and in Homebrew's fo
 The gear at the top right opens settings: a short list where every item shows its value. Open one to
 change it on its own page; the back arrow or Esc returns to the list.
 
-<img src="images/settings.png" width="100%" alt="The settings list: Appearance, Language, Keep awake, Sounds, Plugins and Updates">
+<img src="images/settings.png" width="100%" alt="The settings list: Appearance, Language, Keep awake, Sounds, Plugins, Updates and Import sessions">
 
 - **Appearance:** Dark, Light, or follow the System. The window's title bar follows it on macOS and
   Windows. **Animations** is on by default: menus and panels open with a short fade, the sidebar
@@ -349,6 +350,7 @@ change it on its own page; the back arrow or Esc returns to the list.
   input. On from the start. **Play** lets you hear each one, even while they're off.
 - **Plugins:** turns on [Devices](#devices).
 - **Updates:** the version you have, and the newer one when it's out.
+- **Import sessions:** brings sessions over from [herdr](#bring-sessions-from-herdr).
 
 <img src="images/light-diff.png" width="100%" alt="The diff review in the light theme, with the Keeping awake tag in the top bar">
 
@@ -377,6 +379,31 @@ If Claude Code was running in a session, its conversation is resumed too. Progra
 Code start fresh. Sessions are also saved while the app runs, so even after a crash you keep them
 (just not their latest output). [Archived sessions](#archiving-sessions) stay archived: nothing starts
 for them until you restore them.
+
+---
+
+## Bring sessions from herdr
+
+Moving over from [herdr](https://herdr.dev)? **Settings › Import sessions** lists the workspaces
+herdr has, each with its name and folder. Tick the ones you want and press **Import**.
+
+Each one becomes a Lemonade Code session the way a saved session comes back after a restart:
+
+- **Same folder, same name.** A name you gave a workspace in herdr is kept as the session's own.
+- **Worktrees stay nested.** A linked git worktree herdr groups under its repository becomes a
+  sub-session of that repository's session.
+- **Claude Code picks up where it left off.** When herdr's Claude Code integration recorded the
+  conversation and Claude still has it, the session resumes it with `claude --resume`.
+
+Importing copies: herdr's sessions stay as they are, and nothing in herdr is started, stopped or
+changed. A session you imported before shows **Already imported** and can't be ticked again (with a
+few exceptions listed in the [roadmap](ROADMAP.md#importing-sessions)), and one whose folder no
+longer exists says so and stays unticked. If herdr is still running, the page asks you to quit it first, so
+a conversation isn't open in both. A saved herdr layout Lemonade Code can't read, like one from a
+newer herdr, is left out, and the page says so. herdr is the first tool Lemonade Code imports from; the page lists
+each tool on its own.
+
+<img src="images/import-sessions.png" width="100%" alt="Settings › Import sessions listing herdr's workspaces, a worktree nested under its repository, one already imported and one whose folder is gone">
 
 ---
 

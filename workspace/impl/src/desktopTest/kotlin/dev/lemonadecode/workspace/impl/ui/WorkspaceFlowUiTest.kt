@@ -38,6 +38,7 @@ import dev.lemonadecode.domain.session.SessionPlacement
 import dev.lemonadecode.domain.session.SessionStatus
 import dev.lemonadecode.domain.session.SubSessionLocation
 import dev.lemonadecode.domain.settings.ThemePreference
+import dev.lemonadecode.imports.fake.FakeSessionImportService
 import dev.lemonadecode.mobile.fake.FakeMobileService
 import dev.lemonadecode.platform.designsystem.LemonadeCodeTheme
 import dev.lemonadecode.platform.process.HomeDirectory
@@ -78,6 +79,7 @@ class WorkspaceFlowUiTest {
     updateService = updates,
     mobileService = mobile,
     soundPlayer = sounds,
+    sessionImports = FakeSessionImportService(),
     clock = { 0L },
   )
   private val ar = SessionId("ar")

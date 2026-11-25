@@ -5,6 +5,7 @@ import dev.lemonadecode.domain.session.LinkedWorktree
 import dev.lemonadecode.domain.session.Session
 import dev.lemonadecode.domain.session.SessionId
 import dev.lemonadecode.domain.session.SessionOrigin
+import dev.lemonadecode.domain.session.SessionPlacement
 import dev.lemonadecode.domain.session.SubSessionLocation
 import dev.lemonadecode.domain.session.SubSessionPlan
 import dev.lemonadecode.platform.core.LemonadeCodeResult
@@ -50,6 +51,13 @@ public interface SessionService {
 
   /** A playful branch name for a new worktree, like `worktree/generating-bugs`, to keep or type over. */
   public fun suggestWorktreeBranch(): String
+
+  /**
+   * Opens a session brought over from another tool, the way a saved one comes back after a restart:
+   * a fresh shell in its folder, under its parent when given, and its Claude Code conversation
+   * resumed. Fails with [SessionError.FolderNotFound] when the folder is gone.
+   */
+  public suspend fun openImported(session: ImportedSession): LemonadeCodeResult<SessionId, SessionError>
 
   /** Pastes [text] into the session's terminal, as a paste: nothing runs until the user says so. */
   public fun paste(id: SessionId, text: String): LemonadeCodeResult<Unit, SessionError>
@@ -130,6 +138,22 @@ public data class Unarchived(
   val id: SessionId,
   val missingFolders: Map<SessionId, String> = emptyMap(),
   val stillArchived: List<SessionId> = emptyList(),
+)
+
+/** A session from another tool, to open with [SessionService.openImported]. */
+public data class ImportedSession(
+  /** Absolute. */
+  val directory: String,
+  /** What it was called there, for a sub-session's name. */
+  val name: String,
+  /** The name the user gave it there, kept as its own; null for none. */
+  val customName: String? = null,
+  /** The session it goes under; null, or one that's gone, puts it at the top. */
+  val parentId: SessionId? = null,
+  /** Where it runs relative to its parent: [SessionPlacement.Worktree] for a worktree of the parent's repository. */
+  val placement: SessionPlacement = SessionPlacement.SameFolder,
+  /** The Claude Code conversation to resume, by its session id; null opens a plain shell. */
+  val claudeConversation: String? = null,
 )
 
 public sealed interface SessionError {

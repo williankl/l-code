@@ -344,6 +344,24 @@ class WorkspaceContentUiTest {
     expect(WorkspaceEvent.OpenSettingsPage(SettingsPage.Sounds)) { onNodeWithText("Sounds").performClick() }
     expect(WorkspaceEvent.OpenSettingsPage(SettingsPage.Plugins)) { onNodeWithText("Plugins").performClick() }
     expect(WorkspaceEvent.OpenSettingsPage(SettingsPage.Updates)) { onNodeWithText("Updates").performClick() }
+    onNode(hasText("Import sessions") and hasText("herdr")).assertExists()
+    expect(WorkspaceEvent.OpenSettingsPage(SettingsPage.ImportSessions)) { onNodeWithText("Import sessions").performClick() }
+  }
+
+  @Test
+  fun `the import page ticks what herdr has and imports it`() = show(WorkspaceShowcase.SettingsImport) {
+    onNodeWithText("5 sessions found").assertExists()
+    onNodeWithText("Worktree · Claude Code conversation").assertExists()
+    onNodeWithText("Folder no longer exists").assertExists()
+    expect(WorkspaceEvent.ToggleImportSession("herdr:default:w4")) { onNodeWithText("design notes").performClick() }
+    expect(WorkspaceEvent.TickAllImports("herdr", ticked = true)) { onNodeWithText("Select all").performClick() }
+    expect(WorkspaceEvent.ImportSessions) { onNodeWithText("Import 2 sessions").performClick() }
+
+    // One imported before can't be ticked.
+    events.clear()
+    onNodeWithText("payments-api").performClick()
+    waitForIdle()
+    assertEquals(emptyList(), events)
   }
 
   @Test

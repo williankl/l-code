@@ -8,6 +8,7 @@ import dev.lemonadecode.data.git.fake.FakeGitDataSource
 import dev.lemonadecode.domain.session.LinkedWorktree
 import dev.lemonadecode.domain.session.SessionId
 import dev.lemonadecode.domain.session.SessionOrigin
+import dev.lemonadecode.domain.session.SessionPlacement
 import dev.lemonadecode.domain.session.SessionStatus
 import dev.lemonadecode.domain.session.SubSessionLocation
 import dev.lemonadecode.platform.architecture.testing.FakeLemonadeCodeCoroutineDispatchers
@@ -16,6 +17,7 @@ import dev.lemonadecode.platform.core.getOrNull
 import dev.lemonadecode.platform.process.HomeDirectory
 import dev.lemonadecode.platform.terminal.TerminalLaunch
 import dev.lemonadecode.platform.terminal.TerminalSession
+import dev.lemonadecode.sessions.api.ImportedSession
 import dev.lemonadecode.sessions.api.SessionError
 import dev.lemonadecode.sessions.api.Unarchived
 import kotlinx.coroutines.CompletableDeferred
@@ -312,6 +314,84 @@ class SessionServiceImplTest {
     service.shutdown()
     assertEquals("sleep 60", store.saved!!.sessions.first { it.id == "waiting" }.resume)
     assertEquals(null, store.saved!!.sessions.first { it.id == "failed" }.resume)
+  }
+
+  @Test
+  fun `an imported session keeps its name, moves like any other, and keeps its id through the archive`() = runBlocking<Unit> {
+    val repo = File(home, "storefront").apply { mkdirs() }
+    val worktree = File(home, "storefront.worktrees/rate-limit").apply { mkdirs() }
+    val parent = service.openImported(ImportedSession(repo.path, "storefront")).getOrNull()!!
+    val other = service.openTerminal().getOrNull()!!
+    // The name herdr gave it, not one made from its worktree's folder.
+    val child = service.openImported(ImportedSession(worktree.path, "fix-tax", parentId = parent, placement = SessionPlacement.Worktree)).getOrNull()!!
+    assertEquals("fix-tax", service.sessions.value.single { it.id == child }.name)
+
+    service.move(other, 0)
+    assertEquals(listOf(other, parent, child), service.sessions.value.map { it.id })
+
+    // What the import remembered still points at it once it's back.
+    service.archive(parent)
+    assertEquals(listOf(other), service.sessions.value.map { it.id })
+    assertEquals(parent, service.unarchive(parent).getOrNull()!!.id)
+    val back = service.sessions.value
+    assertEquals(setOf(other, parent, child), back.map { it.id }.toSet())
+    assertEquals(parent, back.single { it.id == child }.parentId)
+    assertEquals("fix-tax", back.single { it.id == child }.name)
+  }
+
+  @Test
+  fun `an imported sub-session whose parent is archived while it starts isn't opened, and its shell ends`() = runBlocking<Unit> {
+    val parent = service.openTerminal().getOrNull()!!
+    val folder = File(home, "rate-limit").apply { mkdirs() }
+    val starting = CountDownLatch(1)
+    val release = CountDownLatch(1)
+    beforeStart = {
+      starting.countDown()
+      release.await()
+    }
+    val opening = async(Dispatchers.IO) { service.openImported(ImportedSession(folder.path, "rate-limit", parentId = parent, placement = SessionPlacement.Worktree)) }
+    assertTrue(starting.await(5, TimeUnit.SECONDS))
+    service.archive(parent)
+    release.countDown()
+
+    assertEquals(LemonadeCodeResult.failure(SessionError.ParentArchived), opening.await())
+    assertEquals(emptyList(), service.sessions.value.map { it.id }, "it doesn't run on its own")
+    assertEquals(emptyList(), service.archived.value.single().subSessions, "and isn't archived in its place")
+    val shell = startedShells.last()
+    withTimeout(5_000) {
+      while (ProcessHandle.of(shell.pid).map { it.isAlive }.orElse(false)) delay(50)
+    }
+  }
+
+  @Test
+  fun `an imported session opens under its parent and resumes its Claude Code conversation`() = runBlocking<Unit> {
+    val parent = service.openTerminal().getOrNull()!!
+    val folder = File(home, "rate-limit").apply { mkdirs() }
+    val conversation = "0b6f3c2e-4a51-4f7d-9d8e-1c2b3a4d5e6f"
+    val id = service.openImported(
+      ImportedSession(folder.path, "rate limit", customName = "rate limit", parentId = parent, placement = SessionPlacement.Worktree, claudeConversation = conversation),
+    ).getOrNull()!!
+    val session = service.sessions.value.single { it.id == id }
+    assertEquals(parent, session.parentId)
+    assertEquals(SessionPlacement.Worktree, session.placement)
+    assertEquals("rate limit", session.displayName)
+    assertEquals(folder.path, session.workingDirectory)
+    withTimeout(10_000) {
+      while (registry.terminal(id)!!.screen().lines().none { "claude --resume $conversation" in it }) delay(50)
+    }
+    assertEquals(
+      LemonadeCodeResult.failure(SessionError.FolderNotFound("/no/such/folder")),
+      service.openImported(ImportedSession("/no/such/folder", "gone")),
+    )
+
+    // An id the shell would read as code, or Claude as an option, is never resumed.
+    val asCode = service.openImported(ImportedSession(home.path, "~", claudeConversation = "x; echo pwned")).getOrNull()!!
+    val asOption = service.openImported(ImportedSession(home.path, "~", claudeConversation = "--dangerously-skip-permissions")).getOrNull()!!
+    service.shutdown()
+    fun resumeOf(session: dev.lemonadecode.domain.session.SessionId) = store.saved!!.sessions.first { it.id == session.value }.resume
+    assertEquals("claude --resume $conversation", resumeOf(id))
+    assertEquals(null, resumeOf(asCode))
+    assertEquals(null, resumeOf(asOption))
   }
 
   @Test

@@ -5,7 +5,9 @@ import dev.lemonadecode.domain.mobile.LogPackages
 import dev.lemonadecode.domain.mobile.MobileError
 import dev.lemonadecode.domain.mobile.MobilePlatform
 import dev.lemonadecode.domain.review.FileContent
+import dev.lemonadecode.domain.session.ImportableSession
 import dev.lemonadecode.domain.session.SessionId
+import dev.lemonadecode.domain.session.SourceScan
 import dev.lemonadecode.domain.session.SubSessionLocation
 import dev.lemonadecode.platform.localization.LemonadeCodeString
 import dev.lemonadecode.workspace.uimodel.DeviceTab
@@ -94,6 +96,8 @@ internal data class WorkspaceViewState(
   val restoring: Set<SessionId> = emptySet(),
   /** A session's row picked up in the tree, while it's dragged. */
   val sessionDrag: SessionDrag? = null,
+  /** Settings › Import sessions, since it last opened. */
+  val imports: ImportViewState? = null,
   val error: LemonadeCodeString? = null,
   val toast: LemonadeCodeString? = null,
 )
@@ -107,6 +111,25 @@ internal data class PreviewLoad(
   val after: FileContent? = null,
   val error: LemonadeCodeString? = null,
 )
+
+/** What Settings › Import sessions found and what is ticked in it. */
+internal data class ImportViewState(
+  /** What each tool has; null while still looking. */
+  val scans: List<SourceScan>? = null,
+  /** Keys of the sessions ticked. */
+  val ticked: Set<String> = emptySet(),
+  /** The ticked sessions are being opened. */
+  val importing: Boolean = false,
+  /** Counts the looks, so an older one finishing late is ignored. */
+  val attempt: Int = 0,
+) {
+  /** The sessions found that can come over. */
+  val importable: List<ImportableSession>
+    get() = scans.orEmpty().filterIsInstance<SourceScan.Found>().flatMap { it.sessions }.filter { it.blocked == null }
+
+  /** The ticked sessions that can come over, in the order they're listed. */
+  val picked: List<ImportableSession> get() = importable.filter { it.key in ticked }
+}
 
 /** The steps of the Devices panel: the list, a device, and the three steps of pairing. */
 internal enum class DevicesStep { List, Device, PairPlatform, PairMethod, PairQr, PairCode, PairNearby, PairCable, Paired }

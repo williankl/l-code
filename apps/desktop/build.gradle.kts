@@ -14,6 +14,7 @@ kotlin {
       implementation(projects.settings.impl)
       implementation(projects.updates.impl)
       implementation(projects.mobile.impl)
+      implementation(projects.imports.impl)
       implementation(projects.data.git.impl)
       implementation(projects.platform.architectureCore)
       implementation(projects.platform.preferencesCore)

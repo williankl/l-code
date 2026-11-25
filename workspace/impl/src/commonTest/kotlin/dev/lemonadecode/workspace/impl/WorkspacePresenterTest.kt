@@ -5,10 +5,14 @@ import dev.lemonadecode.domain.mobile.LogPackages
 import dev.lemonadecode.domain.mobile.MobileError
 import dev.lemonadecode.domain.review.DiffState
 import dev.lemonadecode.domain.review.Review
+import dev.lemonadecode.domain.session.ImportBlock
+import dev.lemonadecode.domain.session.ImportResult
+import dev.lemonadecode.domain.session.ImportableSession
 import dev.lemonadecode.domain.session.LinkedWorktree
 import dev.lemonadecode.domain.session.Session
 import dev.lemonadecode.domain.session.SessionId
 import dev.lemonadecode.domain.session.SessionPlacement
+import dev.lemonadecode.domain.session.SourceScan
 import dev.lemonadecode.domain.settings.AppLanguage
 import dev.lemonadecode.domain.settings.ThemePreference
 import dev.lemonadecode.domain.update.AppRelease
@@ -17,6 +21,7 @@ import dev.lemonadecode.domain.update.UpdateChecks
 import dev.lemonadecode.domain.update.UpdateFailure
 import dev.lemonadecode.domain.update.UpdateProgress
 import dev.lemonadecode.domain.update.UpdateState
+import dev.lemonadecode.imports.fake.FakeSessionImportService
 import dev.lemonadecode.mobile.fake.FakeMobileService
 import dev.lemonadecode.platform.core.LemonadeCodeResult
 import dev.lemonadecode.platform.localization.asLemonadeCodeString
@@ -43,6 +48,9 @@ import dev.lemonadecode.workspace.strings.error_launch
 import dev.lemonadecode.workspace.strings.error_parent_archived
 import dev.lemonadecode.workspace.strings.error_worktree_delete
 import dev.lemonadecode.workspace.strings.file_path_copied
+import dev.lemonadecode.workspace.strings.import_done
+import dev.lemonadecode.workspace.strings.import_interrupted
+import dev.lemonadecode.workspace.strings.import_some_failed
 import dev.lemonadecode.workspace.strings.session_archived
 import dev.lemonadecode.workspace.strings.session_path_copied
 import dev.lemonadecode.workspace.strings.time_hours_ago
@@ -103,6 +111,7 @@ class WorkspacePresenterTest {
   private val updates = FakeUpdateService()
   private val mobile = FakeMobileService()
   private val sounds = FakeSoundPlayer()
+  private val imports = FakeSessionImportService()
   private val presenter = WorkspacePresenter(
     sessions,
     reviews,
@@ -113,6 +122,7 @@ class WorkspacePresenterTest {
     updates,
     mobile,
     sounds,
+    imports,
   ) { Now }
 
   private fun withSession() {
@@ -301,6 +311,83 @@ class WorkspacePresenterTest {
       awaitItemWhere { it.settings.page == SettingsPage.Language }.eventSink(WorkspaceEvent.SettingsBack)
       awaitItemWhere { it.settings.page == SettingsPage.List && it.settings.open }.eventSink(WorkspaceEvent.SettingsBack)
       awaitItemWhere { !it.settings.open }
+    }
+  }
+
+  @Test
+  fun `import sessions looks at what herdr has and opens the ticked ones`() = runTest {
+    withSession()
+    imports.scans = listOf(SourceScan.Found(FakeSessionImportService.Herdr, listOf(storefrontImport, worktreeImport, importedBefore)))
+    imports.importResult = ImportResult(listOf(ar))
+    presenter.test {
+      val first = awaitItem()
+      assertEquals("herdr", first.settings.imports.sourceNames)
+      first.eventSink(WorkspaceEvent.ToggleSettings)
+      awaitItemWhere { it.settings.open }.eventSink(WorkspaceEvent.OpenSettingsPage(SettingsPage.ImportSessions))
+      val page = awaitItemWhere { it.settings.imports.sources.isNotEmpty() }
+      assertEquals(1, imports.scanCount)
+      val rows = page.settings.imports.sources.single().rows
+      assertEquals(listOf(false, true, false), rows.map { it.nested })
+      assertEquals(listOf(true, true, false), rows.map { it.enabled })
+      assertEquals(false, page.settings.imports.canImport)
+
+      // One imported before can't be ticked, by itself or with the rest.
+      page.eventSink(WorkspaceEvent.ToggleImportSession(importedBefore.key))
+      page.eventSink(WorkspaceEvent.TickAllImports("herdr", ticked = true))
+      val all = awaitItemWhere { it.settings.imports.tickedCount == 2 }
+      assertTrue(all.settings.imports.sources.single().allTicked)
+      all.eventSink(WorkspaceEvent.ToggleImportSession(worktreeImport.key))
+      awaitItemWhere { it.settings.imports.tickedCount == 1 }.eventSink(WorkspaceEvent.ImportSessions)
+
+      val done = awaitItemWhere { it.toast != null }
+      assertEquals(listOf(listOf(storefrontImport)), imports.imported)
+      assertEquals(false, done.settings.open)
+      assertEquals(Res.plurals.import_done.asLemonadeCodeString(1), done.toast)
+    }
+  }
+
+  @Test
+  fun `an import that opens nothing says why and looks again`() = runTest {
+    imports.scans = listOf(SourceScan.Found(FakeSessionImportService.Herdr, listOf(storefrontImport)))
+    imports.importResult = ImportResult(emptyList(), failed = listOf(storefrontImport))
+    presenter.test {
+      awaitItem().eventSink(WorkspaceEvent.OpenSettingsPage(SettingsPage.ImportSessions))
+      awaitItemWhere { it.settings.imports.sources.isNotEmpty() }.eventSink(WorkspaceEvent.ToggleImportSession(storefrontImport.key))
+      awaitItemWhere { it.settings.imports.tickedCount == 1 }.eventSink(WorkspaceEvent.ImportSessions)
+      val failed = awaitItemWhere { it.error != null }
+      assertEquals(Res.plurals.import_some_failed.asLemonadeCodeString(1), failed.error)
+      assertTrue(failed.settings.open)
+      yieldUntil { imports.scanCount == 2 }
+    }
+  }
+
+  @Test
+  fun `an import that breaks off says so and frees the page`() = runTest {
+    imports.scans = listOf(SourceScan.Found(FakeSessionImportService.Herdr, listOf(storefrontImport)))
+    imports.importError = IllegalStateException("No space left on device")
+    presenter.test {
+      awaitItem().eventSink(WorkspaceEvent.OpenSettingsPage(SettingsPage.ImportSessions))
+      awaitItemWhere { it.settings.imports.sources.isNotEmpty() }.eventSink(WorkspaceEvent.ToggleImportSession(storefrontImport.key))
+      awaitItemWhere { it.settings.imports.tickedCount == 1 }.eventSink(WorkspaceEvent.ImportSessions)
+      val failed = awaitItemWhere { it.error != null && !it.settings.imports.importing }
+      assertEquals(Res.string.import_interrupted.asLemonadeCodeString(), failed.error)
+      assertTrue(failed.settings.open)
+      yieldUntil { imports.scanCount == 2 }
+    }
+  }
+
+  @Test
+  fun `an import with nothing left to open frees the page and looks again`() = runTest {
+    imports.scans = listOf(SourceScan.Found(FakeSessionImportService.Herdr, listOf(storefrontImport)))
+    imports.importResult = ImportResult(emptyList())
+    presenter.test {
+      awaitItem().eventSink(WorkspaceEvent.OpenSettingsPage(SettingsPage.ImportSessions))
+      awaitItemWhere { it.settings.imports.sources.isNotEmpty() }.eventSink(WorkspaceEvent.ToggleImportSession(storefrontImport.key))
+      awaitItemWhere { it.settings.imports.tickedCount == 1 }.eventSink(WorkspaceEvent.ImportSessions)
+      yieldUntil { imports.scanCount == 2 }
+      val page = awaitItemWhere { !it.settings.imports.importing && !it.settings.imports.loading }
+      assertEquals(null, page.error)
+      assertTrue(page.settings.open)
     }
   }
 
@@ -1494,6 +1581,7 @@ class WorkspacePresenterTest {
       updates,
       mobile,
       sounds,
+      imports,
     ) { Now }
     presenter.test {
       val first = awaitItem()
@@ -1603,6 +1691,10 @@ class WorkspacePresenterTest {
   }
 
   private fun dev.lemonadecode.workspace.uimodel.WorkspaceModel.lines(path: String): List<DiffRowModel.Line> = (content as? WorkspaceContentModel.Diff)?.review?.files?.first { it.path == path }?.rows?.filterIsInstance<DiffRowModel.Line>().orEmpty()
+
+  private val storefrontImport = ImportableSession("herdr:1", "storefront", null, ShowcaseFixtures.Repo, conversation = "chat-1")
+  private val worktreeImport = ImportableSession("herdr:2", "rate-limit", null, "${ShowcaseFixtures.Repo}.worktrees/rate-limit", parentKey = "herdr:1", worktree = true)
+  private val importedBefore = ImportableSession("herdr:3", "payments", null, "${ShowcaseFixtures.Home}/code/payments", blocked = ImportBlock.AlreadyImported)
 
   private companion object {
     const val Now: Long = 1_793_600_000_000

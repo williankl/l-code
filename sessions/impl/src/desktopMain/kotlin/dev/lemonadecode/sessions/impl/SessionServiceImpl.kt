@@ -4,6 +4,7 @@ import dev.lemonadecode.data.git.GitDataSource
 import dev.lemonadecode.data.git.GitError
 import dev.lemonadecode.domain.session.ArchivedSession
 import dev.lemonadecode.domain.session.BranchName
+import dev.lemonadecode.domain.session.ClaudeConversation
 import dev.lemonadecode.domain.session.LinkedWorktree
 import dev.lemonadecode.domain.session.Session
 import dev.lemonadecode.domain.session.SessionId
@@ -22,6 +23,7 @@ import dev.lemonadecode.platform.di.AppScope
 import dev.lemonadecode.platform.process.HomeDirectory
 import dev.lemonadecode.platform.terminal.TerminalSession
 import dev.lemonadecode.platform.terminal.TerminalSignal
+import dev.lemonadecode.sessions.api.ImportedSession
 import dev.lemonadecode.sessions.api.SessionError
 import dev.lemonadecode.sessions.api.SessionService
 import dev.lemonadecode.sessions.api.Unarchived
@@ -128,6 +130,36 @@ internal class SessionServiceImpl(
   }
 
   override fun suggestWorktreeBranch(): String = WorktreeNames.suggest(Random.Default)
+
+  override suspend fun openImported(session: ImportedSession): LemonadeCodeResult<SessionId, SessionError> {
+    val folder = File(session.directory)
+    if (!folder.isDirectory) return LemonadeCodeResult.failure(SessionError.FolderNotFound(folder.path))
+    val parent = session.parentId?.takeIf { parentId -> state.value.any { it.id == parentId } }
+    val checkout = git.checkout(folder.absolutePath).getOrNull()
+    // Brought in as if saved at the last quit, so its agent is picked up the same way.
+    val entry = SavedSession(
+      id = UUID.randomUUID().toString(),
+      name = session.name,
+      workingDirectory = folder.absolutePath,
+      resume = session.claudeConversation?.let(ClaudeConversation::resumeCommand),
+      customName = session.customName?.trim()?.takeIf { it.isNotEmpty() },
+    )
+    return launch(folder.absolutePath, initialInput = null, restored = entry) { id ->
+      Session(
+        id = id,
+        name = if (parent == null) rootName(folder.absolutePath) else session.name,
+        shell = launcher.shellName,
+        workingDirectory = folder.absolutePath,
+        repositoryRoot = checkout?.root,
+        branch = checkout?.branch,
+        parentId = parent,
+        placement = if (parent == null) SessionPlacement.Root else session.placement.takeIf { it != SessionPlacement.Root } ?: SessionPlacement.SameFolder,
+        origin = SessionOrigin.Opened,
+        status = SessionStatus.Shell,
+        customName = entry.customName,
+      )
+    }
+  }
 
   override suspend fun startSubSession(
     parentId: SessionId,

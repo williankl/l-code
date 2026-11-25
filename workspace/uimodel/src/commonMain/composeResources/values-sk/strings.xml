@@ -52,6 +52,53 @@
   <string name="plugins_value_none">Žiadne zapnuté</string>
   <string name="plugins_mobile_status">Pripojené: %1$d Android · %2$d iOS</string>
   <string name="plugins_open_devices">Otvoriť zariadenia</string>
+  <string name="settings_import">Importovať relácie</string>
+  <string name="import_intro">Prenesie relácie z iného nástroja aj s ich priečinkami, názvami a worktree. Claude Code pokračuje tam, kde skončil. Druhý nástroj si tie svoje ponechá.</string>
+  <string name="import_looking">Hľadajú sa relácie…</string>
+  <plurals name="import_found">
+    <item quantity="one">Nájdená %1$d relácia</item>
+    <item quantity="few">Nájdené %1$d relácie</item>
+    <item quantity="many">Nájdených %1$d relácií</item>
+    <item quantity="other">Nájdených %1$d relácií</item>
+  </plurals>
+  <string name="import_none">Žiadne relácie na prenesenie</string>
+  <string name="import_not_installed">Na tomto počítači nie je nainštalovaný</string>
+  <string name="import_unknown_format">Relácie ukladá spôsobom, ktorý Lemonade Code ešte nepozná</string>
+  <string name="import_read_failed">Jeho relácie sa nepodarilo prečítať</string>
+  <plurals name="import_skipped">
+    <item quantity="one">%1$d uložené rozloženie sa nepodarilo prečítať, jeho relácie tu nie sú</item>
+    <item quantity="few">%1$d uložené rozloženia sa nepodarilo prečítať, ich relácie tu nie sú</item>
+    <item quantity="many">%1$d uložených rozložení sa nepodarilo prečítať, ich relácie tu nie sú</item>
+    <item quantity="other">%1$d uložených rozložení sa nepodarilo prečítať, ich relácie tu nie sú</item>
+  </plurals>
+  <string name="import_interrupted">Import sa zastavil pred dokončením. Relácie, ktoré sa otvorili, zostávajú otvorené.</string>
+  <string name="import_running">%1$s stále beží. Najprv ho ukončite, aby žiadna konverzácia nebola otvorená v oboch.</string>
+  <string name="import_select_all">Vybrať všetko</string>
+  <string name="import_select_none">Zrušiť výber</string>
+  <string name="import_note_worktree">Worktree</string>
+  <string name="import_note_conversation">Konverzácia Claude Code</string>
+  <string name="import_note_worktree_conversation">Worktree · Konverzácia Claude Code</string>
+  <string name="import_already_imported">Už importovaná</string>
+  <string name="import_folder_missing">Priečinok už neexistuje</string>
+  <plurals name="import_button">
+    <item quantity="one">Importovať %1$d reláciu</item>
+    <item quantity="few">Importovať %1$d relácie</item>
+    <item quantity="many">Importovať %1$d relácií</item>
+    <item quantity="other">Importovať %1$d relácií</item>
+  </plurals>
+  <string name="import_busy">Importuje sa…</string>
+  <plurals name="import_done">
+    <item quantity="one">Importovaná %1$d relácia</item>
+    <item quantity="few">Importované %1$d relácie</item>
+    <item quantity="many">Importovaných %1$d relácií</item>
+    <item quantity="other">Importovaných %1$d relácií</item>
+  </plurals>
+  <plurals name="import_some_failed">
+    <item quantity="one">%1$d reláciu sa nepodarilo importovať: jej priečinok chýba alebo sa jej shell nespustil</item>
+    <item quantity="few">%1$d relácie sa nepodarilo importovať: ich priečinky chýbajú alebo sa ich shelly nespustili</item>
+    <item quantity="many">%1$d relácií sa nepodarilo importovať: ich priečinky chýbajú alebo sa ich shelly nespustili</item>
+    <item quantity="other">%1$d relácií sa nepodarilo importovať: ich priečinky chýbajú alebo sa ich shelly nespustili</item>
+  </plurals>
 
   <!-- Settings › Updates -->
   <string name="updates_version">Lemonade Code %1$s</string>

@@ -205,6 +205,8 @@ And a few more:
   that way.
 - 🗃️ **Archive, don't close.** Put a session away with its sub-sessions and bring it back later, right
   where it was, conversation and all.
+- 🧳 **Coming from herdr?** Settings › Import sessions brings its sessions over, worktrees nested
+  and Claude Code conversations resumed. herdr keeps its own.
 - 🔗 **Clickable links.** Ctrl-click (or ⌘-click) any web address in the terminal to open it.
 - ⌨️ **Every keyboard works.** Accents, dead keys and input methods type just like anywhere else.
 - 📋 **Paths to go.** Select a file's path right in the diff, or copy it with one click.

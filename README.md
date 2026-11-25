@@ -14,9 +14,9 @@ When the work is done, see what changed, comment on any line, and send your note
 [![Built with Lemonade](https://img.shields.io/badge/built_with-🍋_Lemonade-E1E51A?style=flat-square&labelColor=28310B)](#-built-with-lemonade)
 [![Compose Multiplatform](https://img.shields.io/badge/Compose_Multiplatform-Kotlin-E1E51A?style=flat-square&labelColor=28310B&logo=kotlin&logoColor=E1E51A)](docs/ARCHITECTURE.md)
 
-[![Download for macOS](https://img.shields.io/badge/Download-macOS-E1E51A?style=for-the-badge&labelColor=28310B)](https://github.com/williankl/loupe/releases/latest)
-[![Download for Windows](https://img.shields.io/badge/Download-Windows-E1E51A?style=for-the-badge&labelColor=28310B)](https://github.com/williankl/loupe/releases/latest)
-[![Download for Linux](https://img.shields.io/badge/Download-Linux-E1E51A?style=for-the-badge&labelColor=28310B)](https://github.com/williankl/loupe/releases/latest)
+[![Download for macOS](https://img.shields.io/badge/Download-macOS-E1E51A?style=for-the-badge&labelColor=28310B)](https://github.com/williankl/l-code/releases/latest)
+[![Download for Windows](https://img.shields.io/badge/Download-Windows-E1E51A?style=for-the-badge&labelColor=28310B)](https://github.com/williankl/l-code/releases/latest)
+[![Download for Linux](https://img.shields.io/badge/Download-Linux-E1E51A?style=for-the-badge&labelColor=28310B)](https://github.com/williankl/l-code/releases/latest)
 
 <br>
 
@@ -220,13 +220,38 @@ See everything in the **[feature guide](docs/FEATURES.md)**.
 
 Lemonade Code is free. Pick your platform:
 
-| Platform | Install |
-|---|---|
-| **macOS** (Apple Silicon or Intel) | `brew install --cask williankl/tap/lemonade-code`, or the DMG from [Releases](https://github.com/williankl/loupe/releases/latest) |
-| **Windows** (x64) | The MSI from [Releases](https://github.com/williankl/loupe/releases/latest). No admin rights needed. |
-| **Ubuntu** | `sudo snap install lemonade-code --classic`, or from the App Center |
-| **Ubuntu, Debian** | The `.deb` from [Releases](https://github.com/williankl/loupe/releases/latest): `sudo apt install ./lemonade-code_*_amd64.deb` |
-| **Any Linux** (x64) | The `.tar.gz` from [Releases](https://github.com/williankl/loupe/releases/latest). Unpack it anywhere and run `lemonade-code/bin/Lemonade Code`. |
+**macOS** (Apple Silicon or Intel)
+
+```sh
+brew install --cask williankl/tap/lemonade-code
+```
+
+Or download the DMG from [Releases](https://github.com/williankl/l-code/releases/latest) and drag
+Lemonade Code to Applications.
+
+**Windows** (x64)
+
+Download the MSI from [Releases](https://github.com/williankl/l-code/releases/latest) and run it.
+No admin rights needed.
+
+**Ubuntu, Debian** (x64)
+
+Download the `.deb` from [Releases](https://github.com/williankl/l-code/releases/latest), then in
+the folder you saved it to:
+
+```sh
+sudo apt install ./lemonade-code_*_amd64.deb
+```
+
+**Any Linux** (x64)
+
+Download the `.tar.gz` from [Releases](https://github.com/williankl/l-code/releases/latest), then
+in the folder you saved it to:
+
+```sh
+tar -xzf lemonade-code-*-linux-x64.tar.gz
+./lemonade-code/bin/"Lemonade Code"
+```
 
 You'll also want `git` installed, so the Diff tab has something to show. Step-by-step help, updates
 and uninstalling are in the **[install guide](docs/INSTALL.md)**.

@@ -69,15 +69,6 @@ Sessions run PowerShell: `pwsh` if you have PowerShell 7, otherwise Windows Powe
 
 For 64-bit (x64) Linux.
 
-**Ubuntu, with the Snap Store:** find *Lemonade Code* in the App Center, or run
-
-```sh
-sudo snap install lemonade-code --classic
-```
-
-The snap uses classic confinement, like other terminals and IDEs, because it runs your own shell,
-git and agents in any folder.
-
 **Ubuntu or Debian, with the .deb:** download `lemonade-code_<version>_amd64.deb` from
 [Releases](https://github.com/williankl/loupe/releases/latest), then
 
@@ -101,7 +92,6 @@ tar -xzf lemonade-code-<version>-linux-x64.tar.gz
 |---|---|
 | DMG, MSI, .deb or .tar.gz | By itself. An **Update** button shows up next to Settings when a new version is out. One click and the app restarts on it, with your sessions restored. |
 | Homebrew | `brew upgrade --cask lemonade-code` |
-| Snap Store | Automatically, like every snap |
 
 Updating a .deb asks for your password, because the package is installed system-wide.
 
@@ -131,7 +121,6 @@ moved here the first time you open it.
 | Homebrew | `brew uninstall --cask lemonade-code` |
 | DMG | Drag **Lemonade Code** from Applications to the Trash |
 | MSI | **Settings → Apps → Installed apps → Lemonade Code → Uninstall** |
-| Snap Store | `sudo snap remove lemonade-code` |
 | .deb | `sudo apt remove lemonade-code` |
 | .tar.gz | Delete the `lemonade-code` folder |
 

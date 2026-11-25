@@ -193,6 +193,7 @@ internal object WorkspaceModelMapper {
   private fun worktreeBranch(name: String, plan: SubSessionPlan?, taken: String?, home: String): WorktreeBranchModel = WorktreeBranchModel(
     name = name,
     path = plan?.workingDirectory?.let { abbreviateHome(it, home) }.orEmpty(),
+    sessionName = plan?.name.orEmpty(),
     problem = when {
       name.isEmpty() -> null
       !BranchName.isValid(name) -> Res.string.worktree_branch_invalid.asLemonadeCodeString()

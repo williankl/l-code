@@ -98,12 +98,23 @@ public class FakeSessionService(initial: List<Session> = emptyList()) : SessionS
 
   override fun planSubSession(parentId: SessionId, location: SubSessionLocation, namePrefix: String, branch: String?): SubSessionPlan? {
     val parent = state.value.firstOrNull { it.id == parentId } ?: return null
-    val name = generateSequence(1) { it + 1 }.map { "$namePrefix-$it" }.first { n -> state.value.none { it.name == n } }
     val worktree = location == SubSessionLocation.NewWorktree
+    val folder = "${parent.repositoryRoot}.worktrees"
+    // Like the real one: a new worktree's sub-session takes its folder's name, kept apart from the
+    // worktrees there already and from its siblings.
+    val name = if (worktree && branch != null) {
+      val base = branch.substringAfterLast('/')
+      generateSequence(1) { it + 1 }.map { if (it == 1) base else "$base-$it" }.first { n ->
+        base.isEmpty() ||
+          (state.value.none { it.parentId == parentId && (it.name == n || it.displayName == n) } && worktrees.none { it.path == "$folder/$n" })
+      }
+    } else {
+      generateSequence(1) { it + 1 }.map { "$namePrefix-$it" }.first { n -> state.value.none { it.name == n } }
+    }
     return SubSessionPlan(
       name = name,
       location = location,
-      workingDirectory = if (worktree) "${parent.repositoryRoot}.worktrees/${branch?.substringAfterLast('/') ?: name}" else parent.workingDirectory,
+      workingDirectory = if (worktree) "$folder/$name" else parent.workingDirectory,
       branch = if (worktree) branch ?: "${parent.branch}-$name" else parent.branch,
       createsBranch = worktree,
       baseBranch = parent.branch,

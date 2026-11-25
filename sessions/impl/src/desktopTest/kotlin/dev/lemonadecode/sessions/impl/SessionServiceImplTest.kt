@@ -1,6 +1,7 @@
 package dev.lemonadecode.sessions.impl
 
 import dev.lemonadecode.data.git.GitCheckout
+import dev.lemonadecode.data.git.GitDataSource
 import dev.lemonadecode.data.git.GitError
 import dev.lemonadecode.data.git.GitWorktree
 import dev.lemonadecode.data.git.fake.FakeGitDataSource
@@ -46,9 +47,14 @@ class SessionServiceImplTest {
   private var agent: (Long) -> String? = { null }
   private val services = mutableListOf<SessionServiceImpl>()
 
+  /** The fake git, making a new worktree's folder as git does, for the shell started in it. */
+  private val gitMakingWorktrees = object : GitDataSource by git {
+    override suspend fun addWorktree(repositoryRoot: String, path: String, branch: String, startPoint: String): LemonadeCodeResult<Unit, GitError> = git.addWorktree(repositoryRoot, path, branch, startPoint).also { if (it.isSuccess) File(path).mkdirs() }
+  }
+
   /** A service as one launch of Lemonade Code sees it; a second one over the same [store] is the next launch. */
   private fun newService(registry: SessionRegistry) = SessionServiceImpl(
-    git = git,
+    git = gitMakingWorktrees,
     launcher = object : ShellLauncher {
       override val shellName: String get() = shell.shellName
 
@@ -273,7 +279,6 @@ class SessionServiceImplTest {
       origin = SessionOrigin.Review(2),
       namePrefix = "review",
     ).getOrNull()!!
-    File(home.parentFile, "${home.name}.worktrees/sub-1").mkdirs()
     val worktree = service.startSubSession(parent, SubSessionLocation.NewWorktree).getOrNull()!!
     val sessions = service.sessions.value
     assertEquals(listOf(parent, review, worktree), sessions.map { it.id })
@@ -288,16 +293,68 @@ class SessionServiceImplTest {
   }
 
   @Test
-  fun `a worktree goes on the branch the user typed, in a folder named after it`() = runBlocking<Unit> {
+  fun `a worktree goes on the branch the user typed, in a folder named after it, and so does its sub-session`() = runBlocking<Unit> {
     git.checkoutResult = LemonadeCodeResult.success(GitCheckout(root = home.path, branch = "main"))
     val parent = service.openTerminal().getOrNull()!!
-    // The fake git creates nothing, and the shell needs its folder.
-    val folder = File(home.parentFile, "${home.name}.worktrees/generating-bugs").apply { mkdirs() }
+    val folder = File(home.parentFile, "${home.name}.worktrees/generating-bugs")
     val id = service.startSubSession(parent, SubSessionLocation.NewWorktree, branch = "worktree/generating-bugs").getOrNull()!!
     assertEquals(FakeGitDataSource.WorktreeCall(home.path, folder.path, "worktree/generating-bugs", "main"), git.worktreeCalls.single())
     val session = service.sessions.value.single { it.id == id }
     assertEquals("worktree/generating-bugs", session.branch)
-    assertEquals("sub-1", session.name)
+    assertEquals("generating-bugs", session.name)
+    assertEquals("generating-bugs", session.displayName)
+
+    // A name of the user's own wins, and clearing it goes back to the worktree's.
+    service.rename(id, "flaky login")
+    assertEquals("flaky login", service.sessions.value.single { it.id == id }.displayName)
+    service.rename(id, null)
+    assertEquals("generating-bugs", service.sessions.value.single { it.id == id }.displayName)
+  }
+
+  @Test
+  fun `a session moved into a worktree an agent made shows its name, a sub-session keeps its own`() = runBlocking<Unit> {
+    val worktree = File(home, "storefront/.claude/worktrees/feature-x").apply { mkdirs() }
+    git.checkoutResult = LemonadeCodeResult.success(GitCheckout(root = home.path, branch = "main"))
+    val root = service.openTerminal().getOrNull()!!
+    val sub = service.startSubSession(root, SubSessionLocation.SameFolder).getOrNull()!!
+    git.checkoutResult = LemonadeCodeResult.success(GitCheckout(root = worktree.path, branch = "worktree-feature-x"))
+    listOf(root, sub).forEach { registry.terminal(it)!!.send("cd storefront/.claude/worktrees/feature-x\r") }
+    val moved = withTimeout(10_000) {
+      service.sessions.first { sessions -> sessions.all { it.workingDirectory.let(::File).canonicalPath == worktree.canonicalPath } }
+    }
+    assertEquals(listOf("feature-x", "sub-1"), moved.map { it.name })
+  }
+
+  @Test
+  fun `a worktree folder already there, kept from before, moves the new one along`() = runBlocking<Unit> {
+    git.checkoutResult = LemonadeCodeResult.success(GitCheckout(root = home.path, branch = "main"))
+    val parent = service.openTerminal().getOrNull()!!
+    File(home.parentFile, "${home.name}.worktrees/generating-bugs").mkdirs()
+    val plan = service.planSubSession(parent, SubSessionLocation.NewWorktree, branch = "feat/generating-bugs")
+    assertEquals("generating-bugs-2", plan?.name, "the panel shows where it will really go")
+
+    val first = service.startSubSession(parent, SubSessionLocation.NewWorktree, branch = "feat/generating-bugs").getOrNull()!!
+    val second = service.startSubSession(parent, SubSessionLocation.NewWorktree, branch = "fix/generating-bugs").getOrNull()!!
+    assertEquals(
+      listOf("generating-bugs-2", "generating-bugs-3").map { File(home.parentFile, "${home.name}.worktrees/$it").path },
+      git.worktreeCalls.map { it.path },
+    )
+    assertEquals(listOf("generating-bugs-2", "generating-bugs-3"), listOf(first, second).map { id -> service.sessions.value.single { it.id == id }.name })
+  }
+
+  @Test
+  fun `a worktree sub-session saved under its old name comes back with it`() = runBlocking<Unit> {
+    val folder = File(home.parentFile, "${home.name}.worktrees/generating-bugs").apply { mkdirs() }
+    store.saved = SavedSessions(
+      listOf(
+        SavedSession(id = "root", name = home.name, workingDirectory = home.path),
+        SavedSession(id = "old", name = "sub-1", workingDirectory = folder.path, parentId = "root", placement = "Worktree", origin = "Split"),
+      ),
+    )
+    assertEquals(2, service.restore())
+    val restored = service.sessions.value.single { it.id.value == "old" }
+    assertEquals("sub-1", restored.displayName)
+    assertEquals(folder.path, restored.workingDirectory)
   }
 
   @Test

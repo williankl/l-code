@@ -160,19 +160,23 @@ A sub-session can start in one of two places:
 |---|---|---|
 | **Folder** | The parent's folder | A new folder next to the repository, named after the branch, like `storefront.worktrees/generating-bugs` |
 | **Branch** | The parent's branch | A new branch you name, starting from the parent's |
+| **Name in the list** | `sub-1`, `sub-2`… | The worktree's, like `generating-bugs` |
 | **Good for** | Reviews and quick follow-ups | Parallel work that must never collide |
 
 A new worktree asks for its branch first, filled in with a playful suggestion like
 `worktree/generating-bugs`. Press **Enter** to keep it, or type over it: everything is yours to
-rename, `worktree/` included. The folder follows the name as you type. A name git won't take, or a
-branch that already exists, is caught before anything is created. The same field opens from a
-session's right-click menu.
+rename, `worktree/` included. The folder follows the name as you type, and so does the sub-session:
+it's called after the last part of the branch, the same as its folder, so `worktree/generating-bugs`
+shows up in the list and the header as `generating-bugs`. If a folder by that name is already there,
+or a sibling has the name, `-2` is added to both. A name git won't take, or a branch that already
+exists, is caught before anything is created. The same field opens from a session's right-click
+menu. Rename the sub-session whenever you like; your name stays.
 
-Before anything is created, the panel shows you the exact folder and branch you'll get.
+Before anything is created, the panel shows you the exact name, folder and branch you'll get.
 
-<img src="images/new-worktree.png" width="100%" alt="The New sub-session panel previewing a new worktree's folder and branch">
+<img src="images/new-worktree.png" width="100%" alt="The New sub-session panel previewing a new worktree's name, folder and branch">
 
-<img src="images/worktree-created.png" width="100%" alt="sub-1 in the same folder and sub-2 in its own worktree, both under bench-redis">
+<img src="images/worktree-created.png" width="100%" alt="sub-1 in the same folder and generating-bugs in its own worktree, both under bench-redis">
 
 ### Closing a worktree's session
 
@@ -193,7 +197,7 @@ uncommitted changes or new files says so: they're lost if you delete it.
 
 Closing a session that isn't in a worktree works as before, with no question.
 
-<img src="images/close-worktree.png" width="100%" alt="Closing sub-2 asks whether to delete its worktree too, warning that it has uncommitted changes and saying its branch stays">
+<img src="images/close-worktree.png" width="100%" alt="Closing generating-bugs asks whether to delete its worktree too, warning that it has uncommitted changes and saying its branch stays">
 
 ---
 

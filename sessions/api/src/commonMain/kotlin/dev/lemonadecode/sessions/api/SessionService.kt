@@ -21,7 +21,9 @@ public interface SessionService {
 
   /**
    * What [startSubSession] would create, for showing before anything happens. Null if it can't.
-   * A new worktree goes on [branch] when given, in a folder named after its last part.
+   * A new worktree goes on [branch] when given, in a folder named after its last part, and the
+   * sub-session is named after that folder; `-2`, `-3`… keep it apart from a folder already there
+   * and from its siblings' names.
    */
   public fun planSubSession(
     parentId: SessionId,

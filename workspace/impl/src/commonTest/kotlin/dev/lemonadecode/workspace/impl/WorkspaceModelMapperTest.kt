@@ -102,8 +102,17 @@ class WorkspaceModelMapperTest {
   }
 
   @Test
+  fun `a sub-session in a new worktree goes by the worktree's name, in the list and the header`() {
+    val model = WorkspaceShowcase.AfterCreatingBoth.model()
+    val rows = assertIs<SessionNavigationModel.Tree>(model.sessions.navigation).rows
+    assertEquals(listOf("sub-1", "generating-bugs"), rows.filter { it.depth == 5 }.map { it.name })
+    assertEquals("generating-bugs", model.header?.name)
+    assertEquals("generating-bugs", WorkspaceShowcase.ChoosingWorktree.model().newSubSession.worktreeBranch?.sessionName)
+  }
+
+  @Test
   fun `paths are shown relative to home`() {
-    assertEquals("~/code/storefront.worktrees/sub-2", WorkspaceShowcase.AfterCreatingBoth.model().topBar.path)
+    assertEquals("~/code/storefront.worktrees/generating-bugs", WorkspaceShowcase.AfterCreatingBoth.model().topBar.path)
   }
 
   @Test

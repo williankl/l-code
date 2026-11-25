@@ -305,8 +305,8 @@ private fun RenameForm(
 }
 
 /**
- * The branch field the menu turns into for a new worktree, with the folder it will get. Enter or
- * Create starts it, Esc or Cancel closes the menu.
+ * The branch field the menu turns into for a new worktree, with the name and folder it will get.
+ * Enter or Create starts it, Esc or Cancel closes the menu.
  */
 @Composable
 private fun NewWorktreeForm(
@@ -323,6 +323,7 @@ private fun NewWorktreeForm(
   ) {
     Column(verticalArrangement = Arrangement.spacedBy(spaces.spacing100)) {
       WorktreeBranchField(branch = branch, onCreate = create, onCancel = cancel, onEvent = onEvent, modifier = Modifier.fillMaxWidth())
+      WorktreeSessionName(branch.sessionName)
       Mono(text = branch.path, style = LemonadeCodeTheme.typography.codeSmall, color = LemonadeCodeTheme.code.path)
     }
     Row(

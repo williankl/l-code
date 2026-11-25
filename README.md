@@ -115,8 +115,8 @@ lost.
 
 <table>
 <tr>
-<td width="50%"><img src="docs/images/new-worktree.png" alt="The New sub-session panel with New worktree picked, showing the folder and branch it will create"></td>
-<td width="50%"><img src="docs/images/close-worktree.png" alt="Closing sub-2 asks whether to delete its worktree too, warning that it has uncommitted changes"></td>
+<td width="50%"><img src="docs/images/new-worktree.png" alt="The New sub-session panel with New worktree picked, showing the name, folder and branch it will create"></td>
+<td width="50%"><img src="docs/images/close-worktree.png" alt="Closing generating-bugs asks whether to delete its worktree too, warning that it has uncommitted changes"></td>
 </tr>
 <tr>
 <td align="center"><sub><b>Branch out</b>, in the same folder or a fresh worktree</sub></td>

@@ -7,16 +7,17 @@ import dev.lemonadecode.domain.session.SubSessionLocation
 import dev.lemonadecode.domain.session.SubSessionPlan
 
 /**
- * Names and places sub-sessions. Worktrees go next to the repository, in a `<repo>.worktrees/`
- * folder, on the branch the user typed, in a folder named after its last part; with none typed, on
- * a branch named after the parent's branch and the sub-session.
+ * Names and places sub-sessions. One in the same folder is `sub-1`, `sub-2`… Worktrees go next to
+ * the repository, in a `<repo>.worktrees/` folder, on the branch the user typed, in a folder named
+ * after its last part, and the sub-session takes the folder's name: `worktree/generating-bugs` makes
+ * `generating-bugs`. With no branch typed, a `sub-1` folder on a branch named after the parent's.
  */
 internal object SubSessionPlanner {
-  fun plan(parent: Session, existing: List<Session>, location: SubSessionLocation, prefix: String, branch: String? = null): SubSessionPlan? {
-    val name = nextName(existing, prefix)
+  /** [folderTaken] tells whether something is already at a path, so a new worktree goes elsewhere. */
+  fun plan(parent: Session, existing: List<Session>, location: SubSessionLocation, prefix: String, branch: String? = null, folderTaken: (String) -> Boolean = { false }): SubSessionPlan? {
     return when (location) {
       SubSessionLocation.SameFolder -> SubSessionPlan(
-        name = name,
+        name = nextName(existing, prefix),
         location = location,
         workingDirectory = parent.workingDirectory,
         branch = parent.branch,
@@ -30,10 +31,15 @@ internal object SubSessionPlanner {
         } else {
           "${root.substringBeforeLast('/')}/${root.substringAfterLast('/')}.worktrees"
         }
+        val name = if (branch == null) {
+          nextName(existing, prefix) { folderTaken("$folder/$it") }
+        } else {
+          worktreeName(branch, siblings = existing.filter { it.parentId == parent.id }) { folderTaken("$folder/$it") }
+        }
         SubSessionPlan(
           name = name,
           location = location,
-          workingDirectory = "$folder/${branch?.substringAfterLast('/') ?: name}",
+          workingDirectory = "$folder/$name",
           branch = branch ?: parent.branch?.let { "$it-$name" } ?: "lemonade-code/$name",
           createsBranch = true,
           baseBranch = parent.branch,
@@ -42,7 +48,24 @@ internal object SubSessionPlanner {
     }
   }
 
-  fun nextName(existing: List<Session>, prefix: String): String = generateSequence(1) { it + 1 }.map { "$prefix-$it" }.first { name -> existing.none { it.name == name } }
+  fun nextName(existing: List<Session>, prefix: String, taken: (String) -> Boolean = { false }): String = generateSequence(1) { it + 1 }
+    .map { "$prefix-$it" }
+    .first { name -> existing.none { it.name == name } && !taken(name) }
+
+  /**
+   * The name of a new worktree on [branch], for its folder and its sub-session alike: the branch's
+   * last part, which git's rules for branch names already keep a plain folder name. When a folder by
+   * that name is [taken], or a sibling goes by it, `-2`, `-3`… follow, so neither the folder nor the
+   * name in the list is ever a copy.
+   */
+  fun worktreeName(branch: String, siblings: List<Session>, taken: (String) -> Boolean): String {
+    val base = branch.substringAfterLast('/')
+    // Nothing typed yet, or a name ending in `/`: nothing to keep apart, and git won't take it anyway.
+    if (base.isEmpty()) return base
+    return generateSequence(1) { it + 1 }
+      .map { if (it == 1) base else "$base-$it" }
+      .first { name -> siblings.none { it.name == name || it.displayName == name } && !taken(name) }
+  }
 
   /** Inserts [created] after [parentId] and everything already nested under it. */
   fun insertUnder(sessions: List<Session>, parentId: SessionId, created: Session): List<Session> {

@@ -241,7 +241,9 @@ private fun NewSubSessionPopover(
           .background(colors.background.bgSubtle, LemonadeTheme.shapes.radius300)
           .padding(horizontal = spaces.spacing300, vertical = spaces.spacing200),
       ) {
-        // A new worktree's branch is in the field above; its folder follows what is typed there.
+        // A new worktree's branch is in the field above; its folder, and the name the sub-session
+        // gets from it, follow what is typed there.
+        if (worktreeBranch != null) WorktreeSessionName(worktreeBranch.sessionName, Modifier.padding(bottom = 2.dp))
         Mono(text = worktreeBranch?.path ?: menu.path, style = mono, color = code.path)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(rememberCharWidth(mono))) {
           if (worktreeBranch == null) Mono(text = menu.branch, style = mono, color = code.branch)

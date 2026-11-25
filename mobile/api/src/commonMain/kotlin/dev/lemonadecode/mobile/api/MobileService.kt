@@ -15,6 +15,8 @@ import dev.lemonadecode.domain.mobile.MobilePlatform
 import dev.lemonadecode.domain.mobile.MobileTools
 import dev.lemonadecode.domain.mobile.NearbyDevice
 import dev.lemonadecode.domain.mobile.QrPairing
+import dev.lemonadecode.domain.mobile.RecordingResolution
+import dev.lemonadecode.domain.mobile.ScreenRecording
 import dev.lemonadecode.platform.core.LemonadeCodeResult
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
@@ -78,6 +80,29 @@ public interface MobileService {
 
   /** Saves a picture of the screen as a PNG and returns its absolute path. */
   public suspend fun screenshot(id: DeviceId): LemonadeCodeResult<String, MobileError>
+
+  /** Screen recordings by device: the ones under way, and how the last one of each other device ended. */
+  public val recordings: StateFlow<Map<DeviceId, ScreenRecording>>
+
+  /**
+   * Starts recording [id]'s screen to an MP4 file at [resolution], on a device with
+   * [DeviceCapability.Record]. The recording is the video [screen] streams, so [screen] has to be
+   * collected meanwhile: it starts over, at the size asked for, for the file to open on a whole
+   * picture, and carries on as the stream starts again; at full resolution the mirror shows that
+   * stream until the recording ends. When the screen turns, the recording goes on in a new file.
+   *
+   * It stops by itself, keeping what was recorded, when the device goes away or the plugin is
+   * turned off. It fails, keeping what reached the disk, when no video comes, when the video stops
+   * coming, when the device won't record at its full size, when pictures come out of order, or when
+   * the file can't be written; a still screen is no failure. While the disk runs low it says so.
+   */
+  public suspend fun startRecording(id: DeviceId, resolution: RecordingResolution = RecordingResolution.Mirror): LemonadeCodeResult<Unit, MobileError>
+
+  /** Stops recording [id]'s screen and saves the video; returns how it ended, or null when it wasn't recording. */
+  public suspend fun stopRecording(id: DeviceId): ScreenRecording?
+
+  /** Forgets how [id]'s last recording ended; one under way goes on. */
+  public fun dismissRecording(id: DeviceId)
 
   /**
    * Devices of [platform] on this network, looked for while collected. Android devices already

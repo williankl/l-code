@@ -71,6 +71,8 @@ public sealed interface DevicesContentModel {
     /** e.g. "1080 × 2400 · 4 fps · clicks go to the device". */
     val screenDetail: LemonadeCodeString?,
     val logs: DeviceLogsModel,
+    /** Recording the screen to a video; null where the device can't, e.g. iOS, and no button shows. */
+    val recording: ScreenRecordingModel? = null,
   ) : DevicesContentModel
 
   /** Pairing, step 1: Android or iOS. */
@@ -154,6 +156,10 @@ public data class DeviceRowModel(
   val canOpenWindow: Boolean = false,
   /** A window of its own mirrors the device now; the ↗ closes it and the row brings it forward. */
   val windowOpen: Boolean = false,
+  /** Its screen is being recorded, for so long, e.g. "0:42"; null while it isn't. */
+  val recordingElapsed: String? = null,
+  /** While it's recorded, that the disk is running low; the time shows in the caution colour, and this on hover. */
+  val recordingLowSpace: LemonadeCodeString? = null,
 )
 
 /** A device mirrored in a window of its own: its page, the same as in the Devices panel. */
@@ -250,6 +256,55 @@ public data class MirrorControlsModel(
   val keyboardOn: Boolean = false,
   /** Clicks and drags on the screen reach the device. */
   val touch: Boolean = false,
+)
+
+/** The record button under a mirrored screen, and the video it saved last. */
+@Immutable
+public data class ScreenRecordingModel(
+  /** Recording now: the button stops it and shows for how long, as [elapsed]. */
+  val recording: Boolean = false,
+  /** e.g. "0:42" or "1:02:05"; null while not recording. */
+  val elapsed: String? = null,
+  /** Why a recording can't start now, e.g. the screen comes as screenshots; the button is off and its tooltip says this. */
+  val unavailable: LemonadeCodeString? = null,
+  /** The last recording saved, whole or in part, shown until it's dismissed or another starts. */
+  val saved: SavedRecordingModel? = null,
+  /** Why the last recording failed, shown in red with what it saved, until dismissed or another starts. */
+  val problem: LemonadeCodeString? = null,
+  /** While it records, that the disk is running low, e.g. "Disk space is low: 1 GB left. The recording goes on." */
+  val lowSpace: LemonadeCodeString? = null,
+  /** The sizes to record at, offered by the button before it starts; null while the choice isn't open. */
+  val choice: RecordingChoiceModel? = null,
+)
+
+public enum class RecordingResolutionModel { Full, Mirror }
+
+/** The sizes a recording can be made at, asked each time before it starts. */
+@Immutable
+public data class RecordingChoiceModel(val options: List<RecordingOptionModel>)
+
+@Immutable
+public data class RecordingOptionModel(
+  val resolution: RecordingResolutionModel,
+  /** e.g. "Full resolution". */
+  val title: LemonadeCodeString,
+  /** e.g. "1080 × 2400", the size it records this device's screen at. */
+  val size: LemonadeCodeString,
+  /** What it's good for, e.g. "smaller files". */
+  val note: LemonadeCodeString,
+  /** The one picked last time. */
+  val last: Boolean = false,
+)
+
+/** A recording saved to disk, whole or as far as it was written, and where to find it. */
+@Immutable
+public data class SavedRecordingModel(
+  /** e.g. "0:42 video saved", "2 videos saved" when the screen turned, or "Part of the recording saved" when writing failed. */
+  val label: LemonadeCodeString,
+  /** The files' absolute paths, one a line. */
+  val paths: String,
+  /** A `file://` URI of the first file; opening it shows the file in its folder. */
+  val revealUri: String,
 )
 
 /** Which lines a device's log shows: every line, only warnings, or only errors (fatal ones included). */

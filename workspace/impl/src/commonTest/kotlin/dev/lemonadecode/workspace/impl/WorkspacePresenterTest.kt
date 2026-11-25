@@ -3,6 +3,10 @@ package dev.lemonadecode.workspace.impl
 import dev.lemonadecode.domain.mobile.DeviceApp
 import dev.lemonadecode.domain.mobile.LogPackages
 import dev.lemonadecode.domain.mobile.MobileError
+import dev.lemonadecode.domain.mobile.RecordingFailure
+import dev.lemonadecode.domain.mobile.RecordingResolution
+import dev.lemonadecode.domain.mobile.RecordingStop
+import dev.lemonadecode.domain.mobile.ScreenRecording
 import dev.lemonadecode.domain.review.DiffState
 import dev.lemonadecode.domain.review.Review
 import dev.lemonadecode.domain.session.ImportBlock
@@ -51,8 +55,17 @@ import dev.lemonadecode.workspace.strings.file_path_copied
 import dev.lemonadecode.workspace.strings.import_done
 import dev.lemonadecode.workspace.strings.import_interrupted
 import dev.lemonadecode.workspace.strings.import_some_failed
+import dev.lemonadecode.workspace.strings.mirror_size
+import dev.lemonadecode.workspace.strings.recording_failed_no_video
+import dev.lemonadecode.workspace.strings.recording_failed_partly
+import dev.lemonadecode.workspace.strings.recording_low_space
+import dev.lemonadecode.workspace.strings.recording_low_space_toast
+import dev.lemonadecode.workspace.strings.recording_saved
+import dev.lemonadecode.workspace.strings.recording_saved_device_gone
+import dev.lemonadecode.workspace.strings.recording_saved_toast
 import dev.lemonadecode.workspace.strings.session_archived
 import dev.lemonadecode.workspace.strings.session_path_copied
+import dev.lemonadecode.workspace.strings.size_gigabytes
 import dev.lemonadecode.workspace.strings.time_hours_ago
 import dev.lemonadecode.workspace.strings.update_failed_checksum
 import dev.lemonadecode.workspace.strings.updates_up_to_date
@@ -76,7 +89,9 @@ import dev.lemonadecode.workspace.uimodel.LanguageOption
 import dev.lemonadecode.workspace.uimodel.LogFilter
 import dev.lemonadecode.workspace.uimodel.MobilePlatformModel
 import dev.lemonadecode.workspace.uimodel.PairingMethod
+import dev.lemonadecode.workspace.uimodel.RecordingResolutionModel
 import dev.lemonadecode.workspace.uimodel.ReleaseNotesModel
+import dev.lemonadecode.workspace.uimodel.ScreenRecordingModel
 import dev.lemonadecode.workspace.uimodel.SessionDragModel
 import dev.lemonadecode.workspace.uimodel.SessionDropModel
 import dev.lemonadecode.workspace.uimodel.SessionMenuModel
@@ -553,6 +568,198 @@ class WorkspacePresenterTest {
       yieldUntil { sessions.pasted.isNotEmpty() }
       assertEquals(ar to "/tmp/lemonade-code/screenshots/Pixel\\ 8-20261102.png ", sessions.pasted.single())
       awaitItemWhere { it.toast != null }
+    }
+  }
+
+  @Test
+  fun `recording a device's screen counts its time, streams on off the page, and says where it saved`() = runTest {
+    withSession()
+    settings.update { it.copy(mobilePlugin = true) }
+    mobile.setDevices(ShowcaseDevices.connected)
+    mobile.screens.value = mapOf(ShowcaseDevices.pixel.id to ShowcaseDevices.screen())
+    mobile.recordingStartsAt = Now - 5_000
+    mobile.nextRecordingEnd = ScreenRecording.Saved(listOf("${ShowcaseFixtures.Home}/Movies/Lemonade Code/Pixel-8.mp4"), durationMillis = 5_000)
+    val pixel = ShowcaseDevices.pixel.id.value
+    fun WorkspaceModel.page() = devices?.content as? DevicesContentModel.Device
+    presenter.test {
+      awaitItem().eventSink(WorkspaceEvent.ToggleDevices)
+      awaitItemWhere { it.devices != null }.eventSink(WorkspaceEvent.SelectDevice(pixel))
+      val shown = awaitItemWhere { it.page()?.screen is DeviceScreenModel.Frame }
+      assertEquals(ScreenRecordingModel(), shown.page()?.recording)
+      // Recording asks what size first, each time.
+      shown.eventSink(WorkspaceEvent.ToggleScreenRecording)
+      val choosing = awaitItemWhere { it.page()?.recording?.choice != null }
+      val options = choosing.page()?.recording?.choice?.options.orEmpty()
+      assertEquals(listOf(RecordingResolutionModel.Full, RecordingResolutionModel.Mirror), options.map { it.resolution })
+      assertEquals(listOf(Res.string.mirror_size.asLemonadeCodeString(1080, 2400), Res.string.mirror_size.asLemonadeCodeString(576, 1280)), options.map { it.size })
+      assertEquals(listOf(false, false), options.map { it.last }, "nothing was picked before")
+      choosing.eventSink(WorkspaceEvent.StartScreenRecording(RecordingResolutionModel.Mirror))
+      val recording = awaitItemWhere { it.page()?.recording?.recording == true }
+      assertNull(recording.page()?.recording?.choice)
+      assertEquals("0:05", recording.page()?.recording?.elapsed)
+
+      // Back to the list: the recording goes on, so the screen streams on, and the row says so.
+      recording.eventSink(WorkspaceEvent.DevicesBack)
+      val list = awaitItemWhere { it.rowOf(pixel)?.recordingElapsed != null }
+      assertEquals("0:05", list.rowOf(pixel)?.recordingElapsed)
+      assertEquals(1, mobile.screenCollectors.value[ShowcaseDevices.pixel.id])
+
+      list.eventSink(WorkspaceEvent.SelectDevice(pixel))
+      awaitItemWhere { it.page()?.recording?.recording == true }.eventSink(WorkspaceEvent.ToggleScreenRecording)
+      val saved = awaitItemWhere { it.toast != null }
+      assertEquals(Res.string.recording_saved_toast.asLemonadeCodeString("Pixel 8", "~/Movies/Lemonade Code"), saved.toast)
+      assertEquals(Res.string.recording_saved.asLemonadeCodeString("0:05"), saved.page()?.recording?.saved?.label)
+
+      saved.eventSink(WorkspaceEvent.DismissSavedRecording)
+      val dismissed = awaitItemWhere { it.page()?.recording?.saved == null }
+      assertEquals(listOf("record $pixel mirror", "stop recording $pixel", "dismiss recording $pixel"), mobile.actions)
+
+      // Next time the choice ticks the size picked last; closing it records nothing.
+      dismissed.eventSink(WorkspaceEvent.ToggleScreenRecording)
+      val again = awaitItemWhere { it.page()?.recording?.choice != null }
+      assertEquals(listOf(false, true), again.page()?.recording?.choice?.options?.map { it.last })
+      again.eventSink(WorkspaceEvent.DismissRecordingChoice)
+      awaitItemWhere { it.page()?.recording?.choice == null }
+      assertEquals(3, mobile.actions.size)
+    }
+  }
+
+  @Test
+  fun `full resolution is asked of the service, and a disk running low is a warning under the screen, not an error`() = runTest {
+    withSession()
+    settings.update { it.copy(mobilePlugin = true) }
+    mobile.setDevices(ShowcaseDevices.connected)
+    mobile.screens.value = mapOf(ShowcaseDevices.pixel.id to ShowcaseDevices.screen())
+    val pixel = ShowcaseDevices.pixel.id
+    fun WorkspaceModel.page() = devices?.content as? DevicesContentModel.Device
+    presenter.test {
+      awaitItem().eventSink(WorkspaceEvent.ToggleDevices)
+      awaitItemWhere { it.devices != null }.eventSink(WorkspaceEvent.SelectDevice(pixel.value))
+      awaitItemWhere { it.page()?.screen is DeviceScreenModel.Frame }.eventSink(WorkspaceEvent.ToggleScreenRecording)
+      awaitItemWhere { it.page()?.recording?.choice != null }.eventSink(WorkspaceEvent.StartScreenRecording(RecordingResolutionModel.Full))
+      awaitItemWhere { it.page()?.recording?.recording == true }
+      assertEquals(listOf("record ${pixel.value} full"), mobile.actions)
+
+      mobile.recordings.value = mapOf(pixel to ScreenRecording.Recording(Now, RecordingResolution.Full, spaceLeft = 1_600_000_000L))
+      val warning = Res.string.recording_low_space.asLemonadeCodeString(Res.string.size_gigabytes.asLemonadeCodeString(1))
+      val low = awaitItemWhere { it.page()?.recording?.lowSpace != null }
+      assertEquals(warning, low.page()?.recording?.lowSpace)
+      assertNull(low.error, "the app has no warning banner; the line under the screen says it")
+    }
+  }
+
+  @Test
+  fun `a disk running low is a warning toast, even with the Devices panel closed, once per time it runs low`() = runTest {
+    withSession()
+    settings.update { it.copy(mobilePlugin = true) }
+    mobile.setDevices(ShowcaseDevices.connected)
+    val pixel = ShowcaseDevices.pixel.id
+    fun warning(left: Int) = Res.string.recording_low_space_toast.asLemonadeCodeString(Res.string.size_gigabytes.asLemonadeCodeString(left), "Pixel 8")
+    presenter.test {
+      awaitItem()
+      // Recording goes on with the panel closed.
+      mobile.recordings.value = mapOf(pixel to ScreenRecording.Recording(Now))
+      mobile.recordings.value = mapOf(pixel to ScreenRecording.Recording(Now, spaceLeft = 1_600_000_000L))
+      val low = awaitItemWhere { it.toast != null }
+      assertNull(low.devices, "the panel is closed")
+      assertEquals(warning(1), low.toast)
+      assertTrue(low.toastWarning)
+      awaitItemWhere { it.toast == null }
+      // Lower still: already said.
+      mobile.recordings.value = mapOf(pixel to ScreenRecording.Recording(Now, spaceLeft = 900_000_000L))
+      // Room again, then low again: said again.
+      mobile.recordings.value = mapOf(pixel to ScreenRecording.Recording(Now))
+      mobile.recordings.value = mapOf(pixel to ScreenRecording.Recording(Now, spaceLeft = 1_200_000_000L))
+      val again = awaitItemWhere { it.toast != null }
+      assertEquals(warning(1), again.toast, "no toast came at 900 MB")
+      assertTrue(again.toastWarning)
+      // A confirmation after it is no warning.
+      again.eventSink(WorkspaceEvent.CopiedFilePath("/tmp/a"))
+      assertEquals(false, awaitItemWhere { it.toast == Res.string.file_path_copied.asLemonadeCodeString("/tmp/a") }.toastWarning)
+    }
+  }
+
+  @Test
+  fun `a choice of size left open closes once the device records, so it doesn't open again after`() = runTest {
+    withSession()
+    settings.update { it.copy(mobilePlugin = true) }
+    mobile.setDevices(ShowcaseDevices.connected)
+    mobile.screens.value = mapOf(ShowcaseDevices.pixel.id to ShowcaseDevices.screen())
+    val pixel = ShowcaseDevices.pixel.id
+    fun WorkspaceModel.page() = devices?.content as? DevicesContentModel.Device
+    presenter.test {
+      awaitItem().eventSink(WorkspaceEvent.ToggleDevices)
+      awaitItemWhere { it.devices != null }.eventSink(WorkspaceEvent.SelectDevice(pixel.value))
+      awaitItemWhere { it.page()?.screen is DeviceScreenModel.Frame }.eventSink(WorkspaceEvent.ToggleScreenRecording)
+      awaitItemWhere { it.page()?.recording?.choice != null }
+      // Recording starts from another page of the device, e.g. its own window.
+      mobile.recordings.value = mapOf(pixel to ScreenRecording.Recording(Now))
+      awaitItemWhere { it.page()?.recording?.recording == true }
+      testScheduler.runCurrent()
+      mobile.recordings.value = mapOf(pixel to ShowcaseDevices.savedRecording)
+      val stopped = awaitItemWhere { it.page()?.recording?.saved != null }
+      assertNull(stopped.page()?.recording?.choice)
+    }
+  }
+
+  @Test
+  fun `a choice of size left open closes when the screen comes as screenshots, and stays closed when video returns`() = runTest {
+    withSession()
+    settings.update { it.copy(mobilePlugin = true) }
+    mobile.setDevices(ShowcaseDevices.connected)
+    mobile.screens.value = mapOf(ShowcaseDevices.pixel.id to ShowcaseDevices.screen())
+    val pixel = ShowcaseDevices.pixel.id
+    fun WorkspaceModel.page() = devices?.content as? DevicesContentModel.Device
+    presenter.test {
+      awaitItem().eventSink(WorkspaceEvent.ToggleDevices)
+      awaitItemWhere { it.devices != null }.eventSink(WorkspaceEvent.SelectDevice(pixel.value))
+      awaitItemWhere { it.page()?.screen is DeviceScreenModel.Frame }.eventSink(WorkspaceEvent.ToggleScreenRecording)
+      awaitItemWhere { it.page()?.recording?.choice != null }
+      mobile.screens.value = mapOf(pixel to ShowcaseDevices.screen(video = false))
+      awaitItemWhere { it.page()?.recording?.unavailable != null }
+      testScheduler.runCurrent()
+      mobile.screens.value = mapOf(pixel to ShowcaseDevices.screen())
+      val back = awaitItemWhere { it.page()?.recording?.unavailable == null }
+      assertNull(back.page()?.recording?.choice)
+    }
+  }
+
+  @Test
+  fun `a recording that ends by itself says so, kept when the device went or why nothing was saved`() = runTest {
+    withSession()
+    settings.update { it.copy(mobilePlugin = true) }
+    mobile.setDevices(ShowcaseDevices.connected)
+    mobile.screens.value = mapOf(ShowcaseDevices.pixel.id to ShowcaseDevices.screen())
+    val pixel = ShowcaseDevices.pixel.id
+    fun WorkspaceModel.recording() = (devices?.content as? DevicesContentModel.Device)?.recording?.recording == true
+    presenter.test {
+      awaitItem().eventSink(WorkspaceEvent.ToggleDevices)
+      awaitItemWhere { it.devices != null }.eventSink(WorkspaceEvent.SelectDevice(pixel.value))
+      awaitItemWhere { (it.devices?.content as? DevicesContentModel.Device)?.screen is DeviceScreenModel.Frame }.eventSink(WorkspaceEvent.StartScreenRecording(RecordingResolutionModel.Mirror))
+      awaitItemWhere { it.recording() }
+
+      // Unplugged: the service stops it and keeps what was recorded.
+      mobile.setDevices(ShowcaseDevices.connected - ShowcaseDevices.pixel)
+      mobile.recordings.value = mapOf(pixel to ScreenRecording.Saved(listOf("${ShowcaseFixtures.Home}/Movies/Lemonade Code/Pixel-8.mp4"), 3_000, stop = RecordingStop.DeviceGone))
+      val gone = awaitItemWhere { it.toast != null }
+      assertEquals(Res.string.recording_saved_device_gone.asLemonadeCodeString("Pixel 8", "~/Movies/Lemonade Code"), gone.toast)
+
+      mobile.setDevices(ShowcaseDevices.connected)
+      mobile.recordings.value = mapOf(pixel to ScreenRecording.Recording(Now))
+      awaitItemWhere { it.recording() }
+      mobile.recordings.value = mapOf(pixel to ScreenRecording.Failed(RecordingFailure.NoVideo))
+      val failed = awaitItemWhere { it.error != null }
+      assertEquals(Res.string.recording_failed_no_video.asLemonadeCodeString("Pixel 8"), failed.error)
+
+      // The disk filled up: the error says where what was written is, and the page still finds it.
+      failed.eventSink(WorkspaceEvent.DismissError)
+      mobile.recordings.value = mapOf(pixel to ScreenRecording.Recording(Now))
+      awaitItemWhere { it.recording() && it.error == null }
+      val written = "${ShowcaseFixtures.Home}/Movies/Lemonade Code/Pixel-8.mp4"
+      mobile.recordings.value = mapOf(pixel to ScreenRecording.Failed(RecordingFailure.Unwritable("No space left on device"), listOf(written)))
+      val full = awaitItemWhere { it.error != null }
+      assertEquals(Res.string.recording_failed_partly.asLemonadeCodeString("~/Movies/Lemonade Code"), full.error)
+      assertEquals("file:///Users/you/Movies/Lemonade%20Code/Pixel-8.mp4", (full.devices?.content as? DevicesContentModel.Device)?.recording?.saved?.revealUri)
     }
   }
 

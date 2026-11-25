@@ -164,7 +164,8 @@ second, and you can tap, swipe and type on them from your desk.
 <img src="docs/images/devices.png" width="100%" alt="The Devices panel three ways: the list of connected phones, a Pixel 8's screen beside its logs at 60 fps, and an iPhone's logs, each with two errors ready to send to claude">
 
 Pick which apps the logs come from, filter down to the errors, and press **Send errors** to hand
-them to the agent, or snap a screenshot it can look at. Pair a phone over Wi-Fi in three quick
+them to the agent, or snap a screenshot it can look at. Record an Android screen as an MP4 to show
+a bug to someone. Pair a phone over Wi-Fi in three quick
 steps, and pop the panel out onto another display when you want the room. Testing on more than
 one? Give each device a window of its own and watch them side by side.
 

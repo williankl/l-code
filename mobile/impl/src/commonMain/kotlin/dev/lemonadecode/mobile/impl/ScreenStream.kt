@@ -2,6 +2,7 @@ package dev.lemonadecode.mobile.impl
 
 import dev.lemonadecode.domain.mobile.DeviceScreen
 import dev.lemonadecode.domain.mobile.ScreenPicture
+import dev.lemonadecode.domain.mobile.ScreenVideoSize
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.Channel
@@ -17,8 +18,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.selects.onTimeout
 import kotlinx.coroutines.selects.select
 import kotlinx.coroutines.withTimeoutOrNull
-import kotlin.math.abs
-import kotlin.math.roundToInt
 import kotlin.time.ComparableTimeMark
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
@@ -44,6 +43,9 @@ internal fun interface ScreenDecoders {
  * only squeeze into its old size; [turned] says it was just turned from here, so its size is
  * looked at again straight away. Until the size is known, and once recording has failed a few
  * times running, it falls back on [capture]'s [Screenshots], trying to record again now and then.
+ * [restart] starts the recording over at once, for a video file to begin on a whole picture or to
+ * go back to its own size; asked for while screenshots stand in, it tries video again at once.
+ * [onFallback] hears each time it gives up on video for screenshots.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 internal fun mirrorScreens(
@@ -52,21 +54,31 @@ internal fun mirrorScreens(
   stream: (width: Int, height: Int) -> Flow<ScreenPicture.Bgra>,
   capture: suspend () -> Capture,
   turned: Flow<Unit> = emptyFlow(),
+  restart: Flow<Unit> = emptyFlow(),
+  onFallback: () -> Unit = {},
 ): Flow<DeviceScreen> = channelFlow {
   send(DeviceScreen.Loading)
   val rate = FrameRate(timeSource)
   val screenshots = Screenshots(rate, capture)
   var failures = 0
   var gaveUpAt: ComparableTimeMark? = null
+  // Restarts asked for wait here until a stream starts, which answers them.
+  val restarts = Channel<Unit>(Channel.CONFLATED)
+  launch { restart.collect { restarts.trySend(Unit) } }
   while (true) {
     if (failures >= MaxRecordingFailures) {
-      val since = gaveUpAt ?: timeSource.markNow().also { gaveUpAt = it }
-      if (since.elapsedNow() < RecordingAgainAfter) {
+      val since = gaveUpAt ?: timeSource.markNow().also {
+        gaveUpAt = it
+        onFallback()
+      }
+      val asked = restarts.tryReceive().isSuccess
+      if (!asked && since.elapsedNow() < RecordingAgainAfter) {
         screenshots.next { send(it) }
         continue
       }
-      // One more try; another failure goes back to screenshots for a while.
-      failures = MaxRecordingFailures - 1
+      // Asked to start over, e.g. back at its own size after a recording: video gets its full
+      // tries again. Otherwise one more; another failure goes back to screenshots for a while.
+      failures = if (asked) 0 else MaxRecordingFailures - 1
       gaveUpAt = null
     }
     val screen = size()
@@ -74,9 +86,12 @@ internal fun mirrorScreens(
       screenshots.next { send(it) }
       continue
     }
+    // The stream starting now answers whatever restart was asked for before it.
+    val _ = restarts.tryReceive()
     val (width, height) = screen
     var frames = 0
     var turnedAway = false
+    var restarted = false
     coroutineScope {
       val shown = CompletableDeferred<Unit>()
       val recording = launch {
@@ -108,13 +123,19 @@ internal fun mirrorScreens(
         turnedAway = true
         recording.cancel()
       }
+      val restarting = launch {
+        restarts.receive()
+        restarted = true
+        recording.cancel()
+      }
       recording.join()
       waiting.cancel()
       turning.cancel()
+      restarting.cancel()
       nudges.cancel()
     }
     when {
-      turnedAway -> delay(RecordingRestart)
+      turnedAway || restarted -> delay(RecordingRestart)
       frames == 0 -> {
         failures++
         delay(RecordingRetry)
@@ -133,9 +154,18 @@ internal fun mirrorScreens(
  * yet is decoded once nothing more has come for [quiet], so the screen's last change shows. When
  * that turns out to have been a pause in the middle of the picture, the decoder has a damaged one
  * that the pictures after it build on, so the flow ends there, for a new recording to start whole.
+ * [onUnit] gets each access unit once it's decoded, with the pictures it gave, e.g. to record it,
+ * and [onCutShort] hears when the last one it got, handed over as the stream went quiet, turns out
+ * to be only part of one. Whatever [onUnit] throws ends the video.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
-internal fun decodeVideo(chunks: Flow<ByteArray>, decoders: ScreenDecoders, quiet: Duration = QuietFlush): Flow<ScreenPicture.Bgra> = channelFlow {
+internal fun decodeVideo(
+  chunks: Flow<ByteArray>,
+  decoders: ScreenDecoders,
+  quiet: Duration = QuietFlush,
+  onUnit: (unit: ByteArray, pictures: List<ScreenPicture.Bgra>) -> Unit = { _, _ -> },
+  onCutShort: () -> Unit = {},
+): Flow<ScreenPicture.Bgra> = channelFlow {
   val decoder = decoders.h264()
   try {
     val splitter = AccessUnitSplitter()
@@ -155,10 +185,15 @@ internal fun decodeVideo(chunks: Flow<ByteArray>, decoders: ScreenDecoders, quie
         else -> splitter.feed(chunk.getOrThrow())
       }
       if (splitter.cutShort) {
+        onCutShort()
         incoming.cancel()
         break
       }
-      for (unit in units) decoder.decode(unit).forEach { send(it) }
+      for (unit in units) {
+        val pictures = decoder.decode(unit)
+        onUnit(unit, pictures)
+        pictures.forEach { send(it) }
+      }
       if (chunk?.isClosed == true) break
     }
   } finally {
@@ -166,26 +201,8 @@ internal fun decodeVideo(chunks: Flow<ByteArray>, decoders: ScreenDecoders, quie
   }
 }
 
-/**
- * The size a screen [width] by [height] is recorded at: shrunk so its longer side is at most
- * [MaxRecordingSide], which is plenty for the panel and light on Wi‑Fi, with both sides multiples
- * of 8, which every encoder takes. `screenrecord` keeps the screen's shape and fills the rest of
- * the picture with black, so a size whose shape is the screen's, within a pixel, is looked for.
- */
-internal fun recordingSize(width: Int, height: Int): Pair<Int, Int> {
-  val long = maxOf(width, height, 1)
-  val ratio = minOf(width, height).coerceAtLeast(1).toDouble() / long
-  val top = maxOf(EncoderStep, minOf(long, MaxRecordingSide) / EncoderStep * EncoderStep)
-  fun shortFor(side: Int) = maxOf(EncoderStep, (side * ratio / EncoderStep).roundToInt() * EncoderStep)
-  fun error(side: Int) = abs(shortFor(side) - side * ratio)
-  val best = (top downTo maxOf(EncoderStep, top * 3 / 4) step EncoderStep)
-    .firstOrNull { error(it) < 1.0 }
-    ?: (top downTo maxOf(EncoderStep, top * 3 / 4) step EncoderStep).minBy(::error)
-  return if (width >= height) best to shortFor(best) else shortFor(best) to best
-}
-
-internal const val MaxRecordingSide = 1280
-private const val EncoderStep = 8
+/** The size the mirror streams a screen [width] by [height] at; see [ScreenVideoSize.mirror]. */
+internal fun recordingSize(width: Int, height: Int): Pair<Int, Int> = ScreenVideoSize.mirror(width, height)
 
 /** Recording failures in a row after which only screenshots are taken, for [RecordingAgainAfter]. */
 private const val MaxRecordingFailures = 3

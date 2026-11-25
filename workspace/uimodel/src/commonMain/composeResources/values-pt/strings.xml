@@ -436,6 +436,38 @@
   <string name="screen_failed_detail">A tentar novamente…</string>
   <string name="screenshot_attached">Captura de ecrã anexada a %1$s</string>
   <string name="screenshot_failed">Não foi possível fazer a captura de ecrã: %1$s</string>
+  <string name="mirror_record">Gravar o ecrã</string>
+  <string name="mirror_record_stop">Parar a gravação</string>
+  <string name="mirror_record_screenshots">Para gravar, é preciso o ecrã em vídeo. Este dispositivo está a enviar capturas de ecrã por agora.</string>
+  <string name="recording_saved">Vídeo de %1$s guardado</string>
+  <plurals name="recording_saved_videos">
+    <item quantity="one">%1$d vídeo guardado</item>
+    <item quantity="many">%1$d vídeos guardados</item>
+    <item quantity="other">%1$d vídeos guardados</item>
+  </plurals>
+  <string name="recording_saved_partly">Gravação guardada em parte</string>
+  <string name="recording_show">Mostrar na pasta</string>
+  <string name="recording_saved_toast">Gravação de %1$s guardada em %2$s</string>
+  <string name="recording_saved_device_gone">%1$s desligou-se durante a gravação. O que foi gravado está guardado em %2$s.</string>
+  <string name="recording_saved_plugin_off">A gravação de %1$s parou porque o plugin Móvel foi desligado. Está guardada em %2$s.</string>
+  <string name="recording_failed_no_video">Não foi possível gravar %1$s: não enviou vídeo.</string>
+  <string name="recording_failed_unwritable">Não foi possível guardar a gravação.</string>
+  <string name="recording_failed_partly">Não foi possível escrever toda a gravação. O que foi escrito está em %1$s.</string>
+  <string name="recording_choose_title">Tamanho da gravação</string>
+  <string name="recording_full">Resolução completa</string>
+  <string name="recording_full_note">O tamanho do próprio telemóvel: mais nítido, ficheiros maiores</string>
+  <string name="recording_mirror">Tamanho do espelho</string>
+  <string name="recording_mirror_note">Como o espelho o mostra: ficheiros mais pequenos</string>
+  <string name="recording_low_space">Pouco espaço em disco: restam %1$s. A gravação continua.</string>
+  <string name="recording_low_space_toast">Pouco espaço em disco: restam %1$s. A gravação de %2$s continua.</string>
+  <string name="size_gigabytes">%1$d GB</string>
+  <string name="size_megabytes">%1$d MB</string>
+  <string name="recording_failed_full_resolution">%1$s não consegue gravar o ecrã em resolução completa. Experimente o tamanho do espelho.</string>
+  <string name="recording_failed_video_lost">%1$s deixou de enviar vídeo, por isso a gravação parou.</string>
+  <string name="recording_failed_unsupported">%1$s enviou imagens fora de ordem, que não podem ser guardadas tal como chegam, por isso a gravação parou.</string>
+  <string name="recording_failed_no_whole_picture">Parou antes de %1$s enviar uma imagem inteira, por isso nada foi guardado.</string>
+  <string name="recording_kept_in">O que foi gravado está em %1$s.</string>
+  <string name="sentences_two">%1$s %2$s</string>
 
   <!-- Devices › logs -->
   <string name="logs_all">Todos</string>

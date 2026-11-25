@@ -303,7 +303,12 @@ public fun WorkspaceContent(
           exit = LemonadeCodeAnimation.fadeOut(),
           modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = LemonadeTheme.spaces.spacing800),
         ) { message ->
-          LemonadeUi.Toast(label = message.resolve(), voice = ToastVoice.Success)
+          // A warning is no success: no tick, the caution sign instead.
+          if (model.toastWarning) {
+            LemonadeUi.Toast(label = message.resolve(), voice = ToastVoice.Neutral, icon = LemonadeIcons.TriangleAlert)
+          } else {
+            LemonadeUi.Toast(label = message.resolve(), voice = ToastVoice.Success)
+          }
         }
       }
     }

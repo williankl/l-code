@@ -463,6 +463,39 @@
   <string name="screen_failed_detail">Skúša sa znova…</string>
   <string name="screenshot_attached">Snímka obrazovky priložená k relácii %1$s</string>
   <string name="screenshot_failed">Snímku obrazovky sa nepodarilo vytvoriť: %1$s</string>
+  <string name="mirror_record">Nahrávať obrazovku</string>
+  <string name="mirror_record_stop">Zastaviť nahrávanie</string>
+  <string name="mirror_record_screenshots">Nahrávanie potrebuje obrazovku ako video. Toto zariadenie zatiaľ posiela snímky obrazovky.</string>
+  <string name="recording_saved">Video (%1$s) je uložené</string>
+  <plurals name="recording_saved_videos">
+    <item quantity="one">Uložené %1$d video</item>
+    <item quantity="few">Uložené %1$d videá</item>
+    <item quantity="many">Uložených %1$d videí</item>
+    <item quantity="other">Uložených %1$d videí</item>
+  </plurals>
+  <string name="recording_saved_partly">Nahrávka je uložená len sčasti</string>
+  <string name="recording_show">Zobraziť v priečinku</string>
+  <string name="recording_saved_toast">Nahrávka zariadenia %1$s je uložená v priečinku %2$s</string>
+  <string name="recording_saved_device_gone">Zariadenie %1$s sa počas nahrávania odpojilo. To, čo sa nahralo, je uložené v priečinku %2$s.</string>
+  <string name="recording_saved_plugin_off">Nahrávanie zariadenia %1$s sa zastavilo, lebo bol vypnutý doplnok Mobilné zariadenia. Je uložené v priečinku %2$s.</string>
+  <string name="recording_failed_no_video">Zariadenie %1$s sa nepodarilo nahrať: neposlalo video.</string>
+  <string name="recording_failed_unwritable">Nahrávku sa nepodarilo uložiť.</string>
+  <string name="recording_failed_partly">Celú nahrávku sa nepodarilo zapísať. To, čo sa zapísalo, je v priečinku %1$s.</string>
+  <string name="recording_choose_title">Veľkosť nahrávky</string>
+  <string name="recording_full">Plné rozlíšenie</string>
+  <string name="recording_full_note">Vlastná veľkosť telefónu: najostrejšie, väčšie súbory</string>
+  <string name="recording_mirror">Veľkosť zrkadla</string>
+  <string name="recording_mirror_note">Tak, ako ju ukazuje zrkadlo: menšie súbory</string>
+  <string name="recording_low_space">Na disku je málo miesta: zostáva %1$s. Nahrávanie pokračuje.</string>
+  <string name="recording_low_space_toast">Na disku je málo miesta: zostáva %1$s. Nahrávanie zariadenia %2$s pokračuje.</string>
+  <string name="size_gigabytes">%1$d GB</string>
+  <string name="size_megabytes">%1$d MB</string>
+  <string name="recording_failed_full_resolution">Zariadenie %1$s nevie nahrávať obrazovku v plnom rozlíšení. Skúste veľkosť zrkadla.</string>
+  <string name="recording_failed_video_lost">Zariadenie %1$s prestalo posielať video, preto sa nahrávanie zastavilo.</string>
+  <string name="recording_failed_unsupported">Zariadenie %1$s poslalo snímky mimo poradia, ktoré sa nedajú uložiť tak, ako prichádzajú, preto sa nahrávanie zastavilo.</string>
+  <string name="recording_failed_no_whole_picture">Zastavené skôr, ako zariadenie %1$s poslalo celú snímku, preto sa nič neuložilo.</string>
+  <string name="recording_kept_in">To, čo sa nahralo, je v priečinku %1$s.</string>
+  <string name="sentences_two">%1$s %2$s</string>
 
   <!-- Devices › logs -->
   <string name="logs_all">Všetko</string>

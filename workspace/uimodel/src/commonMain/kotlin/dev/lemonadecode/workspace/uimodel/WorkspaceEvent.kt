@@ -169,6 +169,18 @@ public sealed interface WorkspaceEvent {
   /** Saves the device's screen and hands the picture to the selected session. */
   public data object ScreenshotToSession : DevicePageEvent
 
+  /** Asks what size to record the device's screen at, or, while it records, stops and saves it. */
+  public data object ToggleScreenRecording : DevicePageEvent
+
+  /** Starts recording the device's screen at [resolution]. */
+  public data class StartScreenRecording(val resolution: RecordingResolutionModel) : DevicePageEvent
+
+  /** Closes the choice of size without recording. */
+  public data object DismissRecordingChoice : DevicePageEvent
+
+  /** Hides the line saying where the last recording was saved. */
+  public data object DismissSavedRecording : DevicePageEvent
+
   /** Typing goes to the device, or stops going there. */
   public data object ToggleDeviceKeyboard : DevicePageEvent
   public data class TypeOnDevice(val text: String) : DevicePageEvent

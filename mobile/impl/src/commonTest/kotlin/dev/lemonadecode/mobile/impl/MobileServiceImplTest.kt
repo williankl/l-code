@@ -20,7 +20,11 @@ import dev.lemonadecode.domain.mobile.MobileTools
 import dev.lemonadecode.domain.mobile.NearbyDevice
 import dev.lemonadecode.domain.mobile.NearbyKind
 import dev.lemonadecode.domain.mobile.QrPairing
+import dev.lemonadecode.domain.mobile.RecordingFailure
+import dev.lemonadecode.domain.mobile.RecordingResolution
+import dev.lemonadecode.domain.mobile.RecordingStop
 import dev.lemonadecode.domain.mobile.ScreenPicture
+import dev.lemonadecode.domain.mobile.ScreenRecording
 import dev.lemonadecode.domain.mobile.ScreenUnavailable
 import dev.lemonadecode.domain.settings.AppSettings
 import dev.lemonadecode.platform.architecture.testing.FakeLemonadeCodeCoroutineDispatchers
@@ -40,6 +44,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
@@ -49,6 +54,7 @@ class MobileServiceImplTest {
   private val finder = FakeToolFinder()
   private val files = FakeDeviceFiles()
   private val decoders = FakeScreenDecoders()
+  private val videos = FakeVideoFiles()
 
   private val pixel = DeviceId("38021FDH2000AB")
   private val logcat = "adb -s 38021FDH2000AB logcat -v threadtime -T 300"
@@ -63,8 +69,10 @@ class MobileServiceImplTest {
     files = files,
     qr = FakeQrEncoder,
     decoders = decoders,
+    videos = videos,
     dispatchers = FakeLemonadeCodeCoroutineDispatchers(StandardTestDispatcher(testScheduler)),
     scope = backgroundScope,
+    clock = { 1_793_600_000_000 + testScheduler.currentTime },
     timeSource = testScheduler.timeSource,
     random = Random(7),
   )
@@ -151,7 +159,16 @@ class MobileServiceImplTest {
     val service = service()
     runCurrent()
 
-    val android = setOf(DeviceCapability.Mirror, DeviceCapability.Touch, DeviceCapability.Keys, DeviceCapability.Rotate, DeviceCapability.Screenshot, DeviceCapability.Logs, DeviceCapability.LogsByApp)
+    val android = setOf(
+      DeviceCapability.Mirror,
+      DeviceCapability.Touch,
+      DeviceCapability.Keys,
+      DeviceCapability.Rotate,
+      DeviceCapability.Screenshot,
+      DeviceCapability.Record,
+      DeviceCapability.Logs,
+      DeviceCapability.LogsByApp,
+    )
     assertEquals(
       listOf(
         MobileDevice(pixel, MobilePlatform.Android, "Willian's Pixel", "15", DeviceConnection.Usb, "38021FDH2000AB", DeviceAvailability.Ready, 1080, 2400, android),
@@ -314,6 +331,227 @@ class MobileServiceImplTest {
   }
 
   @Test
+  fun `recording an Android screen starts its video over, and keeps what was recorded when the device goes`() = runTest {
+    answerPixel()
+    commands.answer("adb -s 38021FDH2000AB shell dumpsys window displays", "cur=1080x2400\n")
+    val video = commands.byteStream("adb -s 38021FDH2000AB exec-out screenrecord --output-format=h264 --size 576x1280 --bit-rate 8000000 -")
+    val streamStart = nal(7, 0x42) + nal(8, 0xCE) + picture(idr = true)
+    val service = service()
+    runCurrent()
+
+    service.screen(pixel).test {
+      assertEquals(DeviceScreen.Loading, awaitItem())
+      video.send(streamStart)
+      assertIs<DeviceScreen.Frame>(awaitItem())
+      assertEquals(1, commands.count("adb -s 38021FDH2000AB exec-out screenrecord"))
+
+      assertEquals(LemonadeCodeResult.success(Unit), service.startRecording(pixel))
+      assertEquals(ScreenRecording.Recording(1_793_600_000_000 + testScheduler.currentTime), service.recordings.value[pixel])
+      // The video in hand started earlier, so it starts over for the file to open on a whole picture.
+      advanceTimeBy(500.milliseconds)
+      runCurrent()
+      assertEquals(2, commands.count("adb -s 38021FDH2000AB exec-out screenrecord"))
+      video.send(streamStart)
+      assertIs<DeviceScreen.Frame>(awaitItem())
+      video.send(picture())
+      assertIs<DeviceScreen.Frame>(awaitItem())
+
+      // Unplugged: the recording stops by itself and keeps what it has.
+      commands.answer("adb devices -l", "List of devices attached\n")
+      advanceTimeBy(3.seconds)
+      runCurrent()
+      cancelAndIgnoreRemainingEvents()
+    }
+    val saved = assertIs<ScreenRecording.Saved>(service.recordings.value[pixel])
+    assertEquals(listOf("/home/me/Videos/Lemonade Code/Willian's Pixel-1.mp4"), saved.files)
+    assertEquals(RecordingStop.DeviceGone, saved.stop)
+    val file = videos.opened.single()
+    assertEquals(576 to 1280, file.width to file.height)
+    assertEquals(listOf(7, 1), file.pictures.map { it.first })
+    assertTrue(file.finishedAt != null)
+    assertEquals(null, service.stopRecording(pixel))
+  }
+
+  @Test
+  fun `turning the plugin off while recording saves the recording, saying that's why`() = runTest {
+    answerPixel()
+    commands.answer("adb -s 38021FDH2000AB shell dumpsys window displays", "cur=1080x2400\n")
+    val video = commands.byteStream("adb -s 38021FDH2000AB exec-out screenrecord --output-format=h264 --size 576x1280 --bit-rate 8000000 -")
+    val streamStart = nal(7, 0x42) + nal(8, 0xCE) + picture(idr = true)
+    val service = service()
+    runCurrent()
+
+    service.screen(pixel).test {
+      assertEquals(DeviceScreen.Loading, awaitItem())
+      video.send(streamStart)
+      assertIs<DeviceScreen.Frame>(awaitItem())
+      assertEquals(LemonadeCodeResult.success(Unit), service.startRecording(pixel))
+      advanceTimeBy(500.milliseconds)
+      runCurrent()
+      video.send(streamStart)
+      assertIs<DeviceScreen.Frame>(awaitItem())
+
+      settings.update { it.copy(mobilePlugin = false) }
+      runCurrent()
+      cancelAndIgnoreRemainingEvents()
+    }
+    val saved = assertIs<ScreenRecording.Saved>(service.recordings.value[pixel])
+    assertEquals(RecordingStop.PluginOff, saved.stop)
+  }
+
+  @Test
+  fun `at full resolution the stream starts over at the device's own size, and goes back to the mirror's after`() = runTest {
+    answerPixel()
+    commands.answer("adb -s 38021FDH2000AB shell dumpsys window displays", "cur=1080x2400\n")
+    val mirror = commands.byteStream("adb -s 38021FDH2000AB exec-out screenrecord --output-format=h264 --size 576x1280 --bit-rate 8000000 -")
+    val full = commands.byteStream("adb -s 38021FDH2000AB exec-out screenrecord --output-format=h264 --size 1080x2400 --bit-rate 8000000 -")
+    val streamStart = nal(7, 0x42) + nal(8, 0xCE) + picture(idr = true)
+    val service = service()
+    runCurrent()
+
+    service.screen(pixel).test {
+      assertEquals(DeviceScreen.Loading, awaitItem())
+      decoders.size = 576 to 1280
+      mirror.send(streamStart)
+      assertIs<DeviceScreen.Frame>(awaitItem())
+
+      assertEquals(LemonadeCodeResult.success(Unit), service.startRecording(pixel, RecordingResolution.Full))
+      advanceTimeBy(500.milliseconds)
+      runCurrent()
+      assertEquals(1, commands.count("adb -s 38021FDH2000AB exec-out screenrecord --output-format=h264 --size 1080x2400"))
+      decoders.size = 1080 to 2400
+      full.send(streamStart)
+      val frame = assertIs<DeviceScreen.Frame>(awaitItem())
+      // Taps still map to the device's pixels.
+      assertEquals(1080 to 2400, frame.width to frame.height)
+      assertEquals(1080 to 2400, (frame.picture as ScreenPicture.Bgra).let { it.width to it.height })
+
+      val saved = assertIs<ScreenRecording.Saved>(service.stopRecording(pixel))
+      assertEquals(1, saved.files.size)
+      advanceTimeBy(500.milliseconds)
+      runCurrent()
+      assertEquals(2, commands.count("adb -s 38021FDH2000AB exec-out screenrecord --output-format=h264 --size 576x1280"), "back to the mirror's size")
+      cancelAndIgnoreRemainingEvents()
+    }
+    assertEquals(1080 to 2400, videos.opened.single().let { it.width to it.height })
+  }
+
+  @Test
+  fun `a device that won't record at its own size says so, and the mirror goes back to its size`() = runTest {
+    answerPixel()
+    commands.answer("adb -s 38021FDH2000AB shell dumpsys window displays", "cur=1080x2400\n")
+    val mirror = commands.byteStream("adb -s 38021FDH2000AB exec-out screenrecord --output-format=h264 --size 576x1280 --bit-rate 8000000 -")
+    // No stream is faked at 1080x2400: screenrecord fails there at once, as an encoder that refuses it does.
+    val streamStart = nal(7, 0x42) + nal(8, 0xCE) + picture(idr = true)
+    val service = service()
+    runCurrent()
+
+    service.screen(pixel).test {
+      assertEquals(DeviceScreen.Loading, awaitItem())
+      mirror.send(streamStart)
+      assertIs<DeviceScreen.Frame>(awaitItem())
+      assertEquals(LemonadeCodeResult.success(Unit), service.startRecording(pixel, RecordingResolution.Full))
+      advanceTimeBy(2.seconds)
+      runCurrent()
+      assertEquals(ScreenRecording.Failed(RecordingFailure.FullResolutionRefused), service.recordings.value[pixel])
+      assertEquals(2, commands.count("adb -s 38021FDH2000AB exec-out screenrecord --output-format=h264 --size 576x1280"), "back to the mirror's size")
+      cancelAndIgnoreRemainingEvents()
+    }
+  }
+
+  @Test
+  fun `a refused size, which adb reports as text and a clean end, says so, and the mirror is back on video at once`() = runTest {
+    answerPixel()
+    commands.answer("adb -s 38021FDH2000AB shell dumpsys window displays", "cur=1080x2400\n")
+    commands.picture("adb -s 38021FDH2000AB exec-out screencap -p", png(1080, 2400))
+    val mirror = commands.byteStream("adb -s 38021FDH2000AB exec-out screenrecord --output-format=h264 --size 576x1280 --bit-rate 8000000 -")
+    val full = commands.byteStream("adb -s 38021FDH2000AB exec-out screenrecord --output-format=h264 --size 1080x2400 --bit-rate 8000000 -")
+    // What `adb exec-out screenrecord` gives for a size the encoder won't take: exit 0, the error as output.
+    full.send("ERROR: unable to configure video/avc codec at 1080x2400 (err=-22)\n".encodeToByteArray())
+    full.close()
+    val streamStart = nal(7, 0x42) + nal(8, 0xCE) + picture(idr = true)
+    val service = service()
+    runCurrent()
+
+    service.screen(pixel).test {
+      assertEquals(DeviceScreen.Loading, awaitItem())
+      mirror.send(streamStart)
+      assertIs<DeviceScreen.Frame>(awaitItem())
+      assertEquals(LemonadeCodeResult.success(Unit), service.startRecording(pixel, RecordingResolution.Full))
+      advanceTimeBy(2.seconds)
+      runCurrent()
+      assertEquals(ScreenRecording.Failed(RecordingFailure.FullResolutionRefused), service.recordings.value[pixel])
+      assertEquals(1, commands.count("adb -s 38021FDH2000AB exec-out screenrecord --output-format=h264 --size 1080x2400"))
+      // Straight back to video at the mirror's size, not screenshots.
+      assertEquals(2, commands.count("adb -s 38021FDH2000AB exec-out screenrecord --output-format=h264 --size 576x1280"))
+      mirror.send(streamStart)
+      assertIs<ScreenPicture.Bgra>(assertIs<DeviceScreen.Frame>(awaitItem()).picture)
+      cancelAndIgnoreRemainingEvents()
+    }
+    assertEquals(0, commands.count("adb -s 38021FDH2000AB exec-out screencap"))
+  }
+
+  @Test
+  fun `a device that records its own size smaller has refused it too`() = runTest {
+    answerPixel()
+    commands.answer("adb -s 38021FDH2000AB shell dumpsys window displays", "cur=1080x2400\n")
+    val mirror = commands.byteStream("adb -s 38021FDH2000AB exec-out screenrecord --output-format=h264 --size 576x1280 --bit-rate 8000000 -")
+    val full = commands.byteStream("adb -s 38021FDH2000AB exec-out screenrecord --output-format=h264 --size 1080x2400 --bit-rate 8000000 -")
+    val streamStart = nal(7, 0x42) + nal(8, 0xCE) + picture(idr = true)
+    val service = service()
+    runCurrent()
+
+    service.screen(pixel).test {
+      assertEquals(DeviceScreen.Loading, awaitItem())
+      decoders.size = 576 to 1280
+      mirror.send(streamStart)
+      assertIs<DeviceScreen.Frame>(awaitItem())
+      assertEquals(LemonadeCodeResult.success(Unit), service.startRecording(pixel, RecordingResolution.Full))
+      advanceTimeBy(500.milliseconds)
+      runCurrent()
+      // The encoder made it 720 × 1600.
+      decoders.size = 720 to 1600
+      full.send(streamStart)
+      advanceTimeBy(1.seconds)
+      runCurrent()
+      assertEquals(ScreenRecording.Failed(RecordingFailure.FullResolutionRefused), service.recordings.value[pixel])
+      assertEquals(emptyList(), videos.opened, "nothing of the wrong size was written")
+      cancelAndIgnoreRemainingEvents()
+    }
+  }
+
+  @Test
+  fun `the mirror falling back on screenshots stops the recording, keeping what it recorded`() = runTest {
+    answerPixel()
+    commands.answer("adb -s 38021FDH2000AB shell dumpsys window displays", "cur=1080x2400\n")
+    commands.picture("adb -s 38021FDH2000AB exec-out screencap -p", png(1080, 2400))
+    val video = commands.byteStream("adb -s 38021FDH2000AB exec-out screenrecord --output-format=h264 --size 576x1280 --bit-rate 8000000 -")
+    val streamStart = nal(7, 0x42) + nal(8, 0xCE) + picture(idr = true)
+    val service = service()
+    runCurrent()
+
+    service.screen(pixel).test {
+      assertEquals(DeviceScreen.Loading, awaitItem())
+      video.send(streamStart)
+      assertIs<DeviceScreen.Frame>(awaitItem())
+      assertEquals(LemonadeCodeResult.success(Unit), service.startRecording(pixel))
+      advanceTimeBy(500.milliseconds)
+      runCurrent()
+      video.send(streamStart)
+      assertIs<DeviceScreen.Frame>(awaitItem())
+      // screenrecord stops working: every run ends at once, and screenshots take over.
+      video.close()
+      advanceTimeBy(5.seconds)
+      runCurrent()
+      cancelAndIgnoreRemainingEvents()
+    }
+    assertEquals(
+      ScreenRecording.Failed(RecordingFailure.VideoLost, listOf("/home/me/Videos/Lemonade Code/Willian's Pixel-1.mp4")),
+      service.recordings.value[pixel],
+    )
+  }
+
+  @Test
   fun `screenshots are saved under the device's name`() = runTest {
     answerPixel()
     commands.picture("adb -s 38021FDH2000AB exec-out screencap -p", png(1080, 2400))
@@ -367,6 +605,8 @@ class MobileServiceImplTest {
       cancelAndIgnoreRemainingEvents()
     }
     assertEquals(LemonadeCodeResult.failure(MobileError.CommandFailed("libimobiledevice can't do this on an iPhone or iPad")), service.tap(DeviceId(udid), 1, 1))
+    assertEquals(LemonadeCodeResult.failure(MobileError.CommandFailed("libimobiledevice can't do this on an iPhone or iPad")), service.startRecording(DeviceId(udid)))
+    assertEquals(emptyMap(), service.recordings.value)
   }
 
   @Test

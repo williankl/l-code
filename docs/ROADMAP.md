@@ -45,6 +45,32 @@ What Lemonade Code doesn't do yet. Want something that isn't here?
 - **iOS is view only.** iPhones and iPads can't be tapped or typed on from Lemonade Code, and their
   screen only shows over a cable. Newer iOS versions may need the developer disk image mounted
   before `idevicescreenshot` can capture them.
+- **Recording iOS screens.** iPhones and iPads send their screen as screenshots, a few a second, so
+  only Android screens can be recorded.
+- **One video per way the screen faces.** Turning the phone while recording goes on in a second
+  video, since players don't follow a video that changes size.
+- **Recording at full resolution is unmeasured.** It keeps the mirror's bit rate, and what it costs
+  the mirror in memory and frame rate hasn't been measured on a phone yet.
+- **An encoder that pads its size counts as refusing full resolution.** One that rounds the size
+  up, e.g. to a multiple of 16, without saying it crops back, gives pictures of another size than
+  asked, which reads as a refusal.
+- **Unplugged before the first full-size picture.** Unplugging the phone in the moment before its
+  first picture at full resolution can be reported as "can't record at full resolution" rather than
+  as the phone going away. Nothing is saved either way.
+- **A refusal after a turn is named "video lost".** When the screen turns and the device refuses
+  its full size the other way round, the recording ends as "stopped sending video", keeping the
+  first file, rather than naming the refusal.
+- **A screen that turns off while recording ends it.** The phone sends no video with its screen
+  off, so at `screenrecord`'s next restart, within three minutes, the stream doesn't start again and
+  the recording stops as "stopped sending video".
+- **Recording at the edges of a cut-short picture.** When the stream goes quiet, the mirror hands
+  over the picture in hand so the screen's last change shows. If more of that picture comes after,
+  it was cut short: the recording takes it back, and the video has a short gap there until the next
+  picture, over which players hold the one before. Three edge cases are left as they are:
+  - Stopping before more comes keeps that picture, cut short or not.
+  - A turn or a restart just after it ends the stream before more can come, so it's kept.
+  - When the last picture was taken back and none comes before Stop, the video ends at that
+    picture's time rather than at Stop.
 - **Tested against recorded tool output.** The Android and iOS support is checked against what
   `adb` and libimobiledevice print, not yet against every device.
 

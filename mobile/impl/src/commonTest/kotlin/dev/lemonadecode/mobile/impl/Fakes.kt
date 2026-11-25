@@ -109,6 +109,81 @@ internal class FakeDeviceFiles : DeviceFiles {
     saved += deviceName to png
     return "/tmp/lemonade-code/screenshots/$deviceName.png"
   }
+
+  private var recordings = 0
+
+  override suspend fun recordingPath(deviceName: String): String = "/home/me/Videos/Lemonade Code/$deviceName-${++recordings}.mp4"
+
+  /** The free space the disk recordings go to has, in bytes; null when it can't be told. */
+  var freeSpace: Long? = 500_000_000_000L
+
+  override suspend fun recordingSpace(): Long? = freeSpace
+}
+
+/** Video files the recorder writes, kept in memory: what each was given, and how it ended. */
+internal class FakeVideoFiles : VideoFiles {
+  val opened = mutableListOf<FakeVideoFile>()
+
+  /** Set to make opening a file fail with this message. */
+  var failure: String? = null
+
+  /** Set to make each file opened from now on fail as it's finished, with this message. */
+  var finishFailure: String? = null
+
+  /** Set to make each file opened from now on fail on its nth picture, as a full disk would. */
+  var writeFailureAt: Int? = null
+
+  /** Set to make the files opened from now on hold their pictures in memory, none reaching the disk. */
+  var nothingReachesDisk = false
+
+  override fun mp4(path: String, width: Int, height: Int, parameterSets: ByteArray): VideoFile {
+    failure?.let { error(it) }
+    return FakeVideoFile(path, width, height, parameterSets, finishFailure, writeFailureAt, !nothingReachesDisk).also { opened += it }
+  }
+}
+
+internal class FakeVideoFile(
+  val path: String,
+  val width: Int,
+  val height: Int,
+  val parameterSets: ByteArray,
+  private val finishFailure: String? = null,
+  private val writeFailureAt: Int? = null,
+  private val picturesReachDisk: Boolean = true,
+) : VideoFile {
+  /** Each picture kept: its first NAL unit's type, when it shows from in milliseconds, and whether it's a key frame. */
+  val pictures = mutableListOf<Triple<Int, Long, Boolean>>()
+
+  /** When the file ended, in milliseconds; null until it did. */
+  var finishedAt: Long? = null
+
+  /** It was deleted, nothing being kept in it. */
+  var deleted = false
+
+  private var written = 0
+
+  override fun write(accessUnit: ByteArray, atMicros: Long, keyFrame: Boolean) {
+    check(finishedAt == null && !deleted) { "written after it ended" }
+    if (++written == writeFailureAt) error("No space left on device")
+    pictures += Triple(nalTypes(accessUnit).first(), atMicros / 1_000, keyFrame)
+  }
+
+  override val reachedDisk: Boolean get() = picturesReachDisk && pictures.isNotEmpty()
+
+  override fun discardLast() {
+    val _ = pictures.removeAt(pictures.lastIndex)
+  }
+
+  override fun finish(atMicros: Long) {
+    check(finishedAt == null && !deleted) { "ended twice" }
+    finishFailure?.let { error(it) }
+    finishedAt = atMicros / 1_000
+  }
+
+  override fun delete() {
+    check(finishedAt == null) { "deleted after it was finished" }
+    deleted = true
+  }
 }
 
 internal val FakeQrEncoder = QrEncoder { QrMatrix(1, booleanArrayOf(true)) }
@@ -132,13 +207,16 @@ internal class FakeScreenDecoders : ScreenDecoders {
   var opened = 0
   var closed = 0
 
+  /** The size its pictures say they are, as the stream's would; 2 by 1 unless set. */
+  var size: Pair<Int, Int> = 2 to 1
+
   override fun h264(): ScreenDecoder {
     opened++
     return object : ScreenDecoder {
       override fun decode(accessUnit: ByteArray): List<ScreenPicture.Bgra> {
         units += accessUnit
         val pictures = units.count(::holdsSlice)
-        return if (holdsSlice(accessUnit)) listOf(ScreenPicture.Bgra(ByteArray(8) { if (it == 0) pictures.toByte() else 0 }, 2, 1, 8)) else emptyList()
+        return if (holdsSlice(accessUnit)) listOf(ScreenPicture.Bgra(ByteArray(8) { if (it == 0) pictures.toByte() else 0 }, size.first, size.second, 8)) else emptyList()
       }
 
       override fun close() {

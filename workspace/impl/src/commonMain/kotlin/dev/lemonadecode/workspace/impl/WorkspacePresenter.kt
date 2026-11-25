@@ -189,12 +189,20 @@ public class WorkspacePresenter internal constructor(
         val before = seenRecordings[id]
         if (recording is ScreenRecording.Recording) {
           mobileService.devices.value.firstOrNull { it.id == id }?.let { recordingNames[id] = it.name }
+          // The disk starts running low: a warning toast, which shows wherever you are, even with the
+          // Devices panel closed; again only once it has recovered and runs low again.
+          val left = recording.spaceLeft
+          if (left != null && (before as? ScreenRecording.Recording)?.spaceLeft == null) {
+            val warning = DevicesMapper.lowSpaceToast(recordingNames[id] ?: id.value, left)
+            view = view.copy(toast = warning, toastWarning = true)
+            toastTimer.restart(scope) { if (view.toast === warning) view = view.copy(toast = null) }
+          }
         } else if (before is ScreenRecording.Recording) {
           val (message, failed) = DevicesMapper.recordingEnded(recording, recordingNames[id] ?: id.value, homeDirectory.path) ?: continue
           if (failed) {
             view = view.copy(error = message)
           } else {
-            view = view.copy(toast = message)
+            view = view.copy(toast = message, toastWarning = false)
             toastTimer.restart(scope) { if (view.toast === message) view = view.copy(toast = null) }
           }
         }
@@ -241,7 +249,7 @@ public class WorkspacePresenter internal constructor(
         fun fail(message: LemonadeCodeString) = update { it.copy(error = message) }
         fun updateDevices(transform: (DevicesViewState) -> DevicesViewState) = update { state -> state.devices?.let { state.copy(devices = transform(it)) } ?: state }
         fun showToast(message: LemonadeCodeString) {
-          update { it.copy(toast = message) }
+          update { it.copy(toast = message, toastWarning = false) }
           toastTimer.restart(scope) { update { state -> if (state.toast === message) state.copy(toast = null) else state } }
         }
 

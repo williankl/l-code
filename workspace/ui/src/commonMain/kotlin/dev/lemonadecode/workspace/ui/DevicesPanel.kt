@@ -474,13 +474,22 @@ private fun DeviceRow(
         )
         device.recordingElapsed?.let { elapsed ->
           val recording = stringResource(Res.string.mirror_record_stop)
-          Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(spaces.spacing100),
-            modifier = Modifier.semantics(mergeDescendants = true) { contentDescription = "$recording $elapsed" },
-          ) {
-            StatusDot(color = colors.content.contentCritical)
-            LemonadeUi.Text(text = elapsed, textStyle = LemonadeTheme.typography.bodyXSmallSemiBold, color = colors.content.contentCritical, maxLines = 1)
+          // While the disk runs low, the time shows in the caution colour and says why on hover.
+          val lowSpace = device.recordingLowSpace?.resolve()
+          val tint = if (lowSpace != null) colors.content.contentCaution else colors.content.contentCritical
+          HoverTooltip(text = lowSpace.orEmpty(), placement = TooltipPlacement.BelowEnd, enabled = lowSpace != null) {
+            Row(
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(spaces.spacing100),
+              modifier = Modifier.semantics(mergeDescendants = true) { contentDescription = listOfNotNull("$recording $elapsed", lowSpace).joinToString(". ") },
+            ) {
+              if (lowSpace != null) {
+                LemonadeUi.Icon(icon = LemonadeIcons.TriangleAlert, contentDescription = null, size = LemonadeAssetSize.XSmall, tint = tint)
+              } else {
+                StatusDot(color = tint)
+              }
+              LemonadeUi.Text(text = elapsed, textStyle = LemonadeTheme.typography.bodyXSmallSemiBold, color = tint, maxLines = 1)
+            }
           }
         }
       }

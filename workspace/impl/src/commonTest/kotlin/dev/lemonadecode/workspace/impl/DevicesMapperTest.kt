@@ -264,6 +264,14 @@ class DevicesMapperTest {
   }
 
   @Test
+  fun `a device whose recording's disk runs low is marked in the list`() {
+    val low = DevicesMapper.row(ShowcaseDevices.pixel, recording = ScreenRecording.Recording(now - 7_000, spaceLeft = 1_600_000_000L), nowMillis = now)
+    assertEquals("0:07", low.recordingElapsed)
+    assertEquals(Res.string.recording_low_space.asLemonadeCodeString(Res.string.size_gigabytes.asLemonadeCodeString(1)), low.recordingLowSpace)
+    assertNull(DevicesMapper.row(ShowcaseDevices.pixel, recording = ScreenRecording.Recording(now - 7_000), nowMillis = now).recordingLowSpace)
+  }
+
+  @Test
   fun `each way a recording goes wrong says so, and where what it recorded before is`() {
     val home = "/Users/me"
     val files = listOf("/Users/me/Movies/Lemonade Code/Pixel-8.mp4")

@@ -459,6 +459,7 @@
   <string name="recording_mirror">Tamaño del espejo</string>
   <string name="recording_mirror_note">Como lo muestra el espejo: archivos más pequeños</string>
   <string name="recording_low_space">Queda poco espacio en disco: %1$s libres. La grabación sigue.</string>
+  <string name="recording_low_space_toast">Queda poco espacio en disco: %1$s libres. La grabación de %2$s sigue.</string>
   <string name="size_gigabytes">%1$d GB</string>
   <string name="size_megabytes">%1$d MB</string>
   <string name="recording_failed_full_resolution">%1$s no puede grabar su pantalla a resolución completa. Prueba con el tamaño del espejo.</string>

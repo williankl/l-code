@@ -89,6 +89,7 @@ import dev.lemonadecode.workspace.strings.recording_full
 import dev.lemonadecode.workspace.strings.recording_full_note
 import dev.lemonadecode.workspace.strings.recording_kept_in
 import dev.lemonadecode.workspace.strings.recording_low_space
+import dev.lemonadecode.workspace.strings.recording_low_space_toast
 import dev.lemonadecode.workspace.strings.recording_mirror
 import dev.lemonadecode.workspace.strings.recording_mirror_note
 import dev.lemonadecode.workspace.strings.recording_saved
@@ -364,6 +365,7 @@ internal object DevicesMapper {
       canOpenWindow = device.availability == DeviceAvailability.Ready || windowOpen,
       windowOpen = windowOpen,
       recordingElapsed = (recording as? ScreenRecording.Recording)?.let { elapsed(nowMillis - it.startedAtMillis) },
+      recordingLowSpace = (recording as? ScreenRecording.Recording)?.spaceLeft?.let { Res.string.recording_low_space.asLemonadeCodeString(space(it)) },
     )
   }
 
@@ -503,6 +505,9 @@ internal object DevicesMapper {
       )
     },
   )
+
+  /** The toast when the disk [deviceName] is recorded to starts running low; said again only once it has recovered and runs low again. */
+  fun lowSpaceToast(deviceName: String, spaceLeft: Long): LemonadeCodeString = Res.string.recording_low_space_toast.asLemonadeCodeString(space(spaceLeft), deviceName)
 
   /** Free space in whole gigabytes, or in megabytes under one: "2 GB", "850 MB". */
   fun space(bytes: Long): LemonadeCodeString = if (bytes >= Gigabyte) {

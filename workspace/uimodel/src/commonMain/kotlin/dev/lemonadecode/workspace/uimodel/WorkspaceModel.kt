@@ -27,6 +27,8 @@ public data class WorkspaceModel(
   val error: LemonadeCodeString? = null,
   /** A short confirmation shown at the bottom for a moment, e.g. after copying a path. */
   val toast: LemonadeCodeString? = null,
+  /** The [toast] warns rather than confirms, e.g. that the disk is running low: it shows no tick. */
+  val toastWarning: Boolean = false,
   val eventSink: (WorkspaceEvent) -> Unit = {},
 )
 

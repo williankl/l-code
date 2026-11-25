@@ -431,6 +431,7 @@
   <string name="recording_mirror">Mirror size</string>
   <string name="recording_mirror_note">As the mirror shows it: smaller files</string>
   <string name="recording_low_space">Disk space is low: %1$s left. The recording goes on.</string>
+  <string name="recording_low_space_toast">Disk space is low: %1$s left. The recording of %2$s goes on.</string>
   <string name="size_gigabytes">%1$d GB</string>
   <string name="size_megabytes">%1$d MB</string>
   <string name="recording_failed_full_resolution">%1$s can’t record its screen at full resolution. Try the mirror size.</string>

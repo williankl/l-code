@@ -101,6 +101,8 @@ internal data class WorkspaceViewState(
   val imports: ImportViewState? = null,
   val error: LemonadeCodeString? = null,
   val toast: LemonadeCodeString? = null,
+  /** The toast warns rather than confirms. */
+  val toastWarning: Boolean = false,
   /** The size the last screen recording was asked for, offered first next time. */
   val lastRecording: RecordingResolution? = null,
 )

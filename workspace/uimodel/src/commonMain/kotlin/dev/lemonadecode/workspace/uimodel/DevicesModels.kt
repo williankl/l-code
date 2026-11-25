@@ -158,6 +158,8 @@ public data class DeviceRowModel(
   val windowOpen: Boolean = false,
   /** Its screen is being recorded, for so long, e.g. "0:42"; null while it isn't. */
   val recordingElapsed: String? = null,
+  /** While it's recorded, that the disk is running low; the time shows in the caution colour, and this on hover. */
+  val recordingLowSpace: LemonadeCodeString? = null,
 )
 
 /** A device mirrored in a window of its own: its page, the same as in the Devices panel. */

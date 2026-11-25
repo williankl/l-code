@@ -46,6 +46,7 @@ import dev.lemonadecode.workspace.impl.ClosingSession
 import dev.lemonadecode.workspace.impl.Composer
 import dev.lemonadecode.workspace.impl.DevicePageState
 import dev.lemonadecode.workspace.impl.DeviceWindowState
+import dev.lemonadecode.workspace.impl.DevicesMapper
 import dev.lemonadecode.workspace.impl.DevicesStep
 import dev.lemonadecode.workspace.impl.DevicesViewState
 import dev.lemonadecode.workspace.impl.ImportViewState
@@ -151,6 +152,11 @@ public enum class WorkspaceShowcase(
     widthDp = 760,
     heightDp = 800,
     part = ShowcasePart.Devices,
+  ),
+  RecordingLowDiskList(
+    "8f·toast",
+    "Recording on, disk running low, panel on the list",
+    "The recording goes on off its page: the warning shows as a toast wherever you are, and the device's time in the list turns to the caution colour.",
   ),
   DeviceRecordingSaved(
     "8f·saved",
@@ -480,6 +486,23 @@ private fun sceneFor(showcase: WorkspaceShowcase): Scene = when (showcase) {
   WorkspaceShowcase.DeviceLowDiskWarning -> devicesScene(
     DevicesViewState(step = DevicesStep.Device, page = DevicePageState(ShowcaseDevices.pixel.id)),
     recordings = mapOf(ShowcaseDevices.pixel.id to ScreenRecording.Recording(startedAtMillis = Now - 754_000, spaceLeft = 1_600_000_000L)),
+  )
+  WorkspaceShowcase.RecordingLowDiskList -> scene(
+    settings = AppSettings(mobilePlugin = true),
+    view = {
+      copy(
+        devices = DevicesViewState(),
+        devicesWindow = DevicesWindow.Docked,
+        toast = DevicesMapper.lowSpaceToast(ShowcaseDevices.pixel.name, 1_600_000_000L),
+        toastWarning = true,
+      )
+    },
+    mobile = MobileInput(
+      tools = ShowcaseDevices.tools,
+      devices = ShowcaseDevices.connected,
+      recordings = mapOf(ShowcaseDevices.pixel.id to ScreenRecording.Recording(startedAtMillis = Now - 754_000, spaceLeft = 1_600_000_000L)),
+      nowMillis = Now,
+    ),
   )
   WorkspaceShowcase.DeviceRecordingSaved -> devicesScene(
     DevicesViewState(step = DevicesStep.Device, page = DevicePageState(ShowcaseDevices.pixel.id)),

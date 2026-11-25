@@ -165,6 +165,7 @@ internal object WorkspaceModelMapper {
       deviceWindows = DevicesMapper.windows(input.mobile, view, input.settings.devicesLayout, agent = agent),
       error = view.error,
       toast = view.toast,
+      toastWarning = view.toastWarning,
       eventSink = eventSink,
     )
   }

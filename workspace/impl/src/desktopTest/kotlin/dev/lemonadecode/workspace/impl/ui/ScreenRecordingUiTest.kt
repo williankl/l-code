@@ -108,6 +108,12 @@ class ScreenRecordingUiTest {
   }
 
   @Test
+  fun `a device whose recording's disk runs low says so in the list`() = show(WorkspaceShowcase.RecordingLowDiskList) {
+    onNodeWithContentDescription("Stop recording 12:34. Disk space is low: 1 GB left. The recording goes on.").assertExists()
+    onNodeWithText("Disk space is low: 1 GB left. The recording of Pixel 8 goes on.").assertExists()
+  }
+
+  @Test
   fun `a screen that comes as screenshots can't be recorded`() = show(
     WorkspaceShowcase.DeviceSideBySide,
     edit = { model ->

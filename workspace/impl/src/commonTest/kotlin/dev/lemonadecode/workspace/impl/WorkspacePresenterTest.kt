@@ -59,6 +59,7 @@ import dev.lemonadecode.workspace.strings.mirror_size
 import dev.lemonadecode.workspace.strings.recording_failed_no_video
 import dev.lemonadecode.workspace.strings.recording_failed_partly
 import dev.lemonadecode.workspace.strings.recording_low_space
+import dev.lemonadecode.workspace.strings.recording_low_space_toast
 import dev.lemonadecode.workspace.strings.recording_saved
 import dev.lemonadecode.workspace.strings.recording_saved_device_gone
 import dev.lemonadecode.workspace.strings.recording_saved_toast
@@ -644,6 +645,37 @@ class WorkspacePresenterTest {
       val low = awaitItemWhere { it.page()?.recording?.lowSpace != null }
       assertEquals(warning, low.page()?.recording?.lowSpace)
       assertNull(low.error, "the app has no warning banner; the line under the screen says it")
+    }
+  }
+
+  @Test
+  fun `a disk running low is a warning toast, even with the Devices panel closed, once per time it runs low`() = runTest {
+    withSession()
+    settings.update { it.copy(mobilePlugin = true) }
+    mobile.setDevices(ShowcaseDevices.connected)
+    val pixel = ShowcaseDevices.pixel.id
+    fun warning(left: Int) = Res.string.recording_low_space_toast.asLemonadeCodeString(Res.string.size_gigabytes.asLemonadeCodeString(left), "Pixel 8")
+    presenter.test {
+      awaitItem()
+      // Recording goes on with the panel closed.
+      mobile.recordings.value = mapOf(pixel to ScreenRecording.Recording(Now))
+      mobile.recordings.value = mapOf(pixel to ScreenRecording.Recording(Now, spaceLeft = 1_600_000_000L))
+      val low = awaitItemWhere { it.toast != null }
+      assertNull(low.devices, "the panel is closed")
+      assertEquals(warning(1), low.toast)
+      assertTrue(low.toastWarning)
+      awaitItemWhere { it.toast == null }
+      // Lower still: already said.
+      mobile.recordings.value = mapOf(pixel to ScreenRecording.Recording(Now, spaceLeft = 900_000_000L))
+      // Room again, then low again: said again.
+      mobile.recordings.value = mapOf(pixel to ScreenRecording.Recording(Now))
+      mobile.recordings.value = mapOf(pixel to ScreenRecording.Recording(Now, spaceLeft = 1_200_000_000L))
+      val again = awaitItemWhere { it.toast != null }
+      assertEquals(warning(1), again.toast, "no toast came at 900 MB")
+      assertTrue(again.toastWarning)
+      // A confirmation after it is no warning.
+      again.eventSink(WorkspaceEvent.CopiedFilePath("/tmp/a"))
+      assertEquals(false, awaitItemWhere { it.toast == Res.string.file_path_copied.asLemonadeCodeString("/tmp/a") }.toastWarning)
     }
   }
 

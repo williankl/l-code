@@ -54,6 +54,12 @@ What Lemonade Code doesn't do yet. Want something that isn't here?
 - **An encoder that pads its size counts as refusing full resolution.** One that rounds the size
   up, e.g. to a multiple of 16, without saying it crops back, gives pictures of another size than
   asked, which reads as a refusal.
+- **Unplugged before the first full-size picture.** Unplugging the phone in the moment before its
+  first picture at full resolution can be reported as "can't record at full resolution" rather than
+  as the phone going away. Nothing is saved either way.
+- **A refusal after a turn is named "video lost".** When the screen turns and the device refuses
+  its full size the other way round, the recording ends as "stopped sending video", keeping the
+  first file, rather than naming the refusal.
 - **A screen that turns off while recording ends it.** The phone sends no video with its screen
   off, so at `screenrecord`'s next restart, within three minutes, the stream doesn't start again and
   the recording stops as "stopped sending video".

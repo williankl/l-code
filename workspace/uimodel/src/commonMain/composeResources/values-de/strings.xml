@@ -431,6 +431,7 @@
   <string name="recording_mirror">Spiegelgröße</string>
   <string name="recording_mirror_note">So, wie die Spiegelung ihn zeigt: kleinere Dateien</string>
   <string name="recording_low_space">Wenig Speicherplatz: noch %1$s frei. Die Aufnahme läuft weiter.</string>
+  <string name="recording_low_space_toast">Wenig Speicherplatz: noch %1$s frei. Die Aufnahme von %2$s läuft weiter.</string>
   <string name="size_gigabytes">%1$d GB</string>
   <string name="size_megabytes">%1$d MB</string>
   <string name="recording_failed_full_resolution">%1$s kann den Bildschirm nicht in voller Auflösung aufnehmen. Versuch es mit der Spiegelgröße.</string>

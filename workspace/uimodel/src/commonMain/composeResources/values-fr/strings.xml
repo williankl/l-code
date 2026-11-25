@@ -459,6 +459,7 @@
   <string name="recording_mirror">Taille du miroir</string>
   <string name="recording_mirror_note">Comme le miroir l’affiche : des fichiers plus petits</string>
   <string name="recording_low_space">Espace disque faible : %1$s restants. L’enregistrement continue.</string>
+  <string name="recording_low_space_toast">Espace disque faible : %1$s restants. L’enregistrement de %2$s continue.</string>
   <string name="size_gigabytes">%1$d Go</string>
   <string name="size_megabytes">%1$d Mo</string>
   <string name="recording_failed_full_resolution">%1$s ne peut pas enregistrer son écran en pleine résolution. Essayez la taille du miroir.</string>

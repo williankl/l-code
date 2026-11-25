@@ -61,10 +61,11 @@ variables live in Settings → Secrets and variables → Actions.
 - Make the repository public. Homebrew and users download the builds from the release, and a
   private repository's release files need a login.
 
-### macOS signing (needed for Homebrew)
+### macOS signing
 
-Without it the Mac builds are unsigned: they still get built and attached, but macOS blocks them
-until the user clicks Open Anyway in System Settings.
+Optional. Without it the Mac builds aren't notarized: they still get built and attached, but macOS
+blocks an app copied from the DMG until the user clicks Open Anyway in System Settings. Homebrew
+installs open without that step (see [Homebrew](#homebrew)).
 
 1. Join the Apple Developer Program.
 2. Create a **Developer ID Application** certificate (Xcode → Settings → Accounts, or the developer
@@ -89,8 +90,7 @@ helper), which notarization would otherwise reject.
 
 1. Create a public repository `williankl/homebrew-tap` (the name must start with `homebrew-`).
 2. Create a fine-grained token with Contents read and write on that repository only, and save it as
-   the `HOMEBREW_TAP_TOKEN` secret. Do this once Mac signing works, so the tap never points at
-   unsigned builds.
+   the `HOMEBREW_TAP_TOKEN` secret.
 
 Publishing writes `Casks/lemonade-code.rb` there (from `packaging/homebrew/write-cask.sh`). Users
 install with:
@@ -99,8 +99,15 @@ install with:
 brew install --cask williankl/tap/lemonade-code
 ```
 
+**Without Mac signing.** Homebrew quarantines every cask it downloads, and Gatekeeper blocks a
+quarantined app that isn't notarized. So the cask removes the quarantine flag from the installed
+app (`postflight_steps`) and tells the user so (`caveats`). On `brew upgrade`, Homebrew warns that
+the app's signer changed, because an ad-hoc signature differs in every build; the app still opens.
+Once the builds are notarized, delete both stanzas from `write-cask.sh`.
+
 Later the cask can go to Homebrew's main repository (`brew install --cask lemonade-code`), once the
-project meets their [notability bar](https://docs.brew.sh/Acceptable-Casks).
+builds are notarized and the project meets their
+[notability bar](https://docs.brew.sh/Acceptable-Casks).
 
 ### Snap Store and Ubuntu App Center
 

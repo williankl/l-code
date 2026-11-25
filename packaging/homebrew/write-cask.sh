@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 # Prints the Homebrew cask for a release. publish.yml writes it to the tap as
-# Casks/lemonade-code.rb; the same file can later be submitted to Homebrew's main repository.
+# Casks/lemonade-code.rb.
+#
+# The Mac builds aren't notarized, so Gatekeeper would block the copy Homebrew installs: Homebrew
+# quarantines every cask download. The cask removes that flag from the app (postflight_steps) and
+# says so (caveats). Drop both once the DMGs are signed and notarized; only then can the cask be
+# submitted to Homebrew's main repository.
 #
 # Usage: write-cask.sh <version> <owner/repo> <arm64 dmg> <x64 dmg>
 set -euo pipefail
@@ -34,8 +39,22 @@ cask "lemonade-code" do
     strategy :github_latest
   end
 
+  depends_on :macos
+
   app "Lemonade Code.app"
 
+  # Not notarized, so Gatekeeper would block the quarantined app.
+  postflight_steps do
+    run "/usr/bin/xattr",
+        args:         ["-dr", "com.apple.quarantine", "{{appdir}}/Lemonade Code.app"],
+        must_succeed: false
+  end
+
   zap trash: "~/Library/Application Support/Lemonade Code"
+
+  caveats <<~EOS
+    Lemonade Code isn't notarized by Apple. This cask removes macOS's quarantine flag from the
+    app so it opens without a Gatekeeper prompt.
+  EOS
 end
 EOF

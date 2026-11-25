@@ -64,7 +64,7 @@ class SettingsServiceImplTest {
 
   @Test
   fun `a record keeps every setting as it was`() {
-    val settings = AppSettings(keepAwake = true, statusSounds = false, theme = ThemePreference.System, mobilePlugin = true, animations = false)
+    val settings = AppSettings(keepAwake = true, statusSounds = false, theme = ThemePreference.System, mobilePlugin = true, animations = false, copyOnSelect = true)
     assertEquals(settings, settings.toRecord().toDomain())
     assertEquals(AppSettings(), SettingsRecord().toDomain())
   }
@@ -79,5 +79,20 @@ class SettingsServiceImplTest {
     service.update { it.copy(animations = false) }
     val reloaded = SettingsServiceImpl(store, backgroundScope)
     assertFalse(reloaded.settings.first { it.keepAwake }.animations)
+  }
+
+  @Test
+  fun `copy on select is off until turned on, and stays on`() = runTest {
+    // Settings saved before copy on select existed have no value for it.
+    val store = FakePreferenceStore(mapOf("settings" to buildJsonObject { put("keepAwake", JsonPrimitive(true)) }))
+    val service = SettingsServiceImpl(store, backgroundScope)
+    assertFalse(service.settings.first { it.keepAwake }.copyOnSelect)
+    assertFalse(SettingsServiceImpl(FakePreferenceStore(), backgroundScope).settings.value.copyOnSelect)
+
+    service.update { it.copy(copyOnSelect = true) }
+
+    assertEquals(JsonPrimitive(true), store.snapshot().getValue("settings").jsonObject["copyOnSelect"])
+    val reloaded = SettingsServiceImpl(store, backgroundScope)
+    assertTrue(reloaded.settings.first { it.keepAwake }.copyOnSelect)
   }
 }

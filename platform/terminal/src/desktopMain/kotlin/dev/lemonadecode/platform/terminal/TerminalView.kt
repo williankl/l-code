@@ -116,7 +116,9 @@ public interface TerminalClipboard {
  * click for a word, triple click for a line, shift-click to extend; ⌘C copies and ⌘A selects all
  * (Ctrl+Shift+C / Ctrl+Shift+A elsewhere); ⌘V / Ctrl+Shift+V pastes; the wheel scrolls back.
  * Links, written out or marked by the program, underline under the mouse; Ctrl- or ⌘-click hands
- * them to [onOpenLink].
+ * them to [onOpenLink]. With [copyOnSelect], a selection made with the mouse is copied as soon as
+ * it's finished, and what's copied, that way or with the copy key, loses the indentation its lines
+ * share.
  */
 @Composable
 public fun TerminalView(
@@ -127,6 +129,7 @@ public fun TerminalView(
   focusRequester: FocusRequester = remember { FocusRequester() },
   clipboard: TerminalClipboard = TerminalClipboard.System,
   onOpenLink: (String) -> Unit = ::openInBrowser,
+  copyOnSelect: Boolean = false,
 ) {
   val version by session.version.collectAsState()
   val measurer = rememberTextMeasurer()
@@ -143,6 +146,15 @@ public fun TerminalView(
   var composing by remember(session) { mutableStateOf("") }
   val cursorAnchor = remember { CursorAnchor() }
 
+  /**
+   * Writes [selected] to [clipboard], for the copy key and the mouse alike. With [copyOnSelect] it
+   * loses the indentation its lines share, and blank text isn't written.
+   */
+  fun copyToClipboard(selected: TerminalSelection) {
+    val text = selected.text(trimIndent = copyOnSelect, lineAt = session::lineText)
+    if (!copyOnSelect || text.isNotBlank()) clipboard.write(text)
+  }
+
   BoxWithConstraints(
     modifier = modifier
       .background(colors.background)
@@ -150,7 +162,8 @@ public fun TerminalView(
         val keys = TerminalKeys(
           session = session,
           paste = { clipboard.read() },
-          copy = { selection?.takeUnless { it.isEmpty }?.let { clipboard.write(it.text(session::lineText)) } != null },
+          // A call, not ::copyToClipboard: Compose would keep that reference with the setting it first saw.
+          copy = { selection?.takeUnless { it.isEmpty }?.let { copyToClipboard(it) } != null },
           selectAll = { selection = session.everything() },
         )
         when (handleKey(event, keys)) {
@@ -176,9 +189,13 @@ public fun TerminalView(
       .focusRequester(focusRequester)
       .focusable()
       .pointerHoverIcon(if (hovered != null) PointerIcon.Hand else PointerIcon.Text)
-      .pointerInput(session, cell, onOpenLink) {
+      .pointerInput(session, cell, onOpenLink, copyOnSelect, clipboard) {
         val clicks = ClickCounter(viewConfiguration.doubleTapTimeoutMillis, viewConfiguration.touchSlop)
         var dragging = false
+        // Where the last single press went down, and whether the pointer has since gone far enough
+        // from it to drag.
+        var pressedAt = Offset.Zero
+        var moved = false
         // Wheel movement not yet reported to the program: trackpads turn it in fractions.
         var wheelTurns = 0f
 
@@ -201,6 +218,12 @@ public fun TerminalView(
           val columns = max(2, (size.width / width).toInt())
           val rows = max(2, (size.height / height).toInt())
           return floor(position.x / width).toInt().coerceIn(0, columns - 1) to floor(position.y / height).toInt().coerceIn(0, rows - 1)
+        }
+
+        /** Copies the finished selection when [copyOnSelect] asks for it. */
+        fun copySelection() {
+          val finished = selection ?: return
+          if (copyOnSelect) copyToClipboard(finished)
         }
 
         awaitPointerEventScope {
@@ -227,25 +250,32 @@ public fun TerminalView(
                     val at = pointAt(change.position, nearest = true)
                     selection = if (event.keyboardModifiers.isShiftPressed && current != null) current.copy(focus = at) else TerminalSelection(at, at)
                     dragging = true
+                    pressedAt = change.position
+                    moved = false
                   }
                   2 -> {
                     val at = pointAt(change.position, nearest = false)
                     selection = TerminalSelection.word(at.line, at.column, session.lineText(at.line)?.text.orEmpty())
                     dragging = false
+                    copySelection()
                   }
                   else -> {
                     selection = TerminalSelection.line(pointAt(change.position, nearest = false).line, columns)
                     dragging = false
+                    copySelection()
                   }
                 }
                 change.consume()
               }
               PointerEventType.Move -> if (dragging && event.buttons.isPrimaryPressed) {
-                // Dragging past the top or bottom edge scrolls, so a selection can run longer than the view.
-                val history = session.scrollbackLines
-                if (change.position.y < 0) scrollBack = (scrollBack + 1).coerceAtMost(history)
-                if (change.position.y > size.height) scrollBack = (scrollBack - 1).coerceAtLeast(0)
-                selection = selection?.copy(focus = pointAt(change.position, nearest = true))
+                moved = moved || (change.position - pressedAt).getDistance() >= DragStartDistance.toPx()
+                if (moved) {
+                  // Dragging past the top or bottom edge scrolls, so a selection can run longer than the view.
+                  val history = session.scrollbackLines
+                  if (change.position.y < 0) scrollBack = (scrollBack + 1).coerceAtMost(history)
+                  if (change.position.y > size.height) scrollBack = (scrollBack - 1).coerceAtLeast(0)
+                  selection = selection?.copy(focus = pointAt(change.position, nearest = true))
+                }
                 hovered = null
                 change.consume()
               } else {
@@ -255,7 +285,7 @@ public fun TerminalView(
               PointerEventType.Exit -> hovered = null
               PointerEventType.Release -> if (dragging) {
                 dragging = false
-                if (selection?.isEmpty == true) selection = null
+                if (selection?.isEmpty == true) selection = null else copySelection()
               }
               PointerEventType.Scroll -> {
                 val delta = change.scrollDelta.y
@@ -548,6 +578,12 @@ private class GlyphFit(
 private const val FitTolerance = 0.01f
 
 private const val WheelLines = 3
+
+/**
+ * How far the pointer must go from where it was pressed before the press becomes a drag, so a
+ * click whose pointer wobbles selects nothing. The touch slop would be too far: over two cells.
+ */
+private val DragStartDistance = 4.dp
 
 private val UnderlineGap = 1.dp
 private val UnderlineThickness = 1.dp

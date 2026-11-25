@@ -14,7 +14,18 @@ class TerminalSelectionTest {
     LineText("nothing to commit", wrapped = false),
   )
 
+  private val indented = listOf(
+    LineText("⏺ Here is the fix:    ", wrapped = false),
+    LineText("", wrapped = false),
+    LineText("  fun main() {", wrapped = false),
+    LineText("      run()", wrapped = false),
+    LineText("", wrapped = false),
+    LineText("  }", wrapped = false),
+  )
+
   private fun text(selection: TerminalSelection) = selection.text { lines.getOrNull(it) }
+
+  private fun trimmed(selection: TerminalSelection, from: List<LineText> = indented) = selection.text(trimIndent = true) { from.getOrNull(it) }
 
   @Test
   fun `a drag inside one line takes just those cells`() {
@@ -52,5 +63,60 @@ class TerminalSelectionTest {
   @Test
   fun `a triple click takes the line`() {
     assertEquals("nothing to commit", text(TerminalSelection.line(4, width = 22)))
+  }
+
+  @Test
+  fun `trimming drops the indentation every line shares`() {
+    assertEquals("fun main() {\n    run()\n\n}", trimmed(TerminalSelection(TextPoint(2, 0), TextPoint(5, 3))))
+  }
+
+  @Test
+  fun `a line the selection starts partway through is indented by where it starts`() {
+    assertEquals("fun main() {\n    run()\n\n}", trimmed(TerminalSelection(TextPoint(2, 2), TextPoint(5, 3))))
+    assertEquals("main() {\n    run()\n\n}", trimmed(TerminalSelection(TextPoint(2, 6), TextPoint(5, 3))))
+  }
+
+  @Test
+  fun `nothing is trimmed when a line starts at the left edge`() {
+    assertEquals("⏺ Here is the fix:\n\n  fun main() {\n      run()", trimmed(TerminalSelection(TextPoint(0, 0), TextPoint(3, 11))))
+  }
+
+  @Test
+  fun `a blank first or last line is left out`() {
+    assertEquals("fun main() {\n    run()", trimmed(TerminalSelection(TextPoint(1, 0), TextPoint(4, 0))))
+    assertEquals("    run()\n\n}", trimmed(TerminalSelection(TextPoint(2, 14), TextPoint(5, 3))))
+  }
+
+  @Test
+  fun `one indented line loses its indentation, and a word keeps its place`() {
+    assertEquals("run()", trimmed(TerminalSelection.line(3, width = 22)))
+    assertEquals("main", trimmed(TerminalSelection.word(2, column = 7, text = indented[2].text)))
+  }
+
+  @Test
+  fun `rows of one wrapped line share its indentation`() {
+    val wrapped = listOf(
+      LineText("    a long indented li", wrapped = true),
+      LineText("ne that wraps", wrapped = false),
+      LineText("    next", wrapped = false),
+    )
+    assertEquals("a long indented line that wraps\nnext", trimmed(TerminalSelection(TextPoint(0, 0), TextPoint(2, 8)), wrapped))
+  }
+
+  @Test
+  fun `a selection that starts on a wrapped line's later row is indented by where it falls in the whole line`() {
+    val wrapped = listOf(
+      LineText("    a long indented li", wrapped = true),
+      LineText("ne that wraps", wrapped = false),
+      LineText("    next", wrapped = false),
+      LineText("    last", wrapped = false),
+    )
+    assertEquals("ne that wraps\nnext\nlast", trimmed(TerminalSelection(TextPoint(1, 0), TextPoint(3, 8)), wrapped))
+    assertEquals("that wraps\nnext\nlast", trimmed(TerminalSelection(TextPoint(1, 3), TextPoint(3, 8)), wrapped))
+  }
+
+  @Test
+  fun `a selection of only spaces trims to nothing`() {
+    assertEquals("", trimmed(TerminalSelection(TextPoint(3, 0), TextPoint(3, 4))))
   }
 }

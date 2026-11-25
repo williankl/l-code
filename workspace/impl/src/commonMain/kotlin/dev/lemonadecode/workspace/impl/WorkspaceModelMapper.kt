@@ -151,6 +151,7 @@ internal object WorkspaceModelMapper {
         mobile = SettingsMapper.mobile(input.settings.mobilePlugin, input.mobile.devices),
         updates = updates,
         animations = input.settings.animations,
+        copyOnSelect = input.settings.copyOnSelect,
         imports = ImportMapper.model(input.importSources, view.imports, input.homeDirectory),
       ),
       newSubSession = newSubSession(selected, view.subSessionMenu ?: input.settings.subSessionLocation, view.subSessionMenu != null, input),

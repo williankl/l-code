@@ -113,7 +113,7 @@ public enum class WorkspaceShowcase(
     "Closing a session in a worktree",
     "No other session uses the worktree of generating-bugs, so closing it asks whether to delete that too. It has uncommitted changes; its branch stays either way.",
   ),
-  SettingsList("8a", "Settings list", "Seven rows show their current value; the gear's dot says an update is out. Open one to change it."),
+  SettingsList("8a", "Settings list", "Eight rows show their current value; the gear's dot says an update is out. Open one to change it."),
   SettingsLanguage("8b", "Language, Deutsch chosen", "Each language in its own name, with its flag. The whole app follows at once."),
   SettingsPlugins("8c", "Plugins › Mobile", "The Mobile plugin mirrors Android and iOS screens, pairs devices and reads their logs."),
   SettingsUpdates("8d", "Updates, 1.9.0 available", "What's new, then Update now. It downloads, then a restart finishes it."),

@@ -100,10 +100,12 @@ brew install --cask williankl/tap/lemonade-code
 ```
 
 **Without Mac signing.** Homebrew quarantines every cask it downloads, and Gatekeeper blocks a
-quarantined app that isn't notarized. So the cask removes the quarantine flag from the installed
-app (`postflight_steps`) and tells the user so (`caveats`). On `brew upgrade`, Homebrew warns that
-the app's signer changed, because an ad-hoc signature differs in every build; the app still opens.
-Once the builds are notarized, delete both stanzas from `write-cask.sh`.
+quarantined app that isn't notarized. So the cask removes the quarantine flag from the app before
+moving it into place (`preflight_steps`) and tells the user so (`caveats`). It does this before the
+move because macOS can stop an install step from changing an app that is already installed. On
+`brew upgrade`, Homebrew warns that the app's signer changed, because an ad-hoc signature differs in
+every build; the app still opens. Once the builds are notarized, delete both stanzas from
+`write-cask.sh`.
 
 Later the cask can go to Homebrew's main repository (`brew install --cask lemonade-code`), once the
 builds are notarized and the project meets their

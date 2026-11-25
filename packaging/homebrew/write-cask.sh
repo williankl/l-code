@@ -3,9 +3,9 @@
 # Casks/lemonade-code.rb.
 #
 # The Mac builds aren't notarized, so Gatekeeper would block the copy Homebrew installs: Homebrew
-# quarantines every cask download. The cask removes that flag from the app (postflight_steps) and
-# says so (caveats). Drop both once the DMGs are signed and notarized; only then can the cask be
-# submitted to Homebrew's main repository.
+# quarantines every cask download. The cask removes that flag from the app before installing it
+# (preflight_steps) and says so (caveats). Drop both once the DMGs are signed and notarized; only
+# then can the cask be submitted to Homebrew's main repository.
 #
 # Usage: write-cask.sh <version> <owner/repo> <arm64 dmg> <x64 dmg>
 set -euo pipefail
@@ -43,10 +43,11 @@ cask "lemonade-code" do
 
   app "Lemonade Code.app"
 
-  # Not notarized, so Gatekeeper would block the quarantined app.
-  postflight_steps do
+  # Not notarized, so Gatekeeper would block the quarantined app. Cleared in staging, because
+  # macOS can stop an install step from changing the app once it is installed.
+  preflight_steps do
     run "/usr/bin/xattr",
-        args:         ["-dr", "com.apple.quarantine", "{{appdir}}/Lemonade Code.app"],
+        args:         ["-dr", "com.apple.quarantine", "{{staged_path}}/Lemonade Code.app"],
         must_succeed: false
   end
 

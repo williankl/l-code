@@ -63,9 +63,10 @@ drawer, and a dot on the toggle tells you when one of them needs input.
 and follows the pointer, its sub-sessions fade where they were because they move with it, and a line
 shows where it will go. Let go and it glides into place; **Esc** puts it back. A session moves among
 its siblings: the top-level sessions, or the sub-sessions of the same parent. A sub-session stays
-under the session it came from, since its folder, branch and diff all start there. Where dragging
-isn't handy, as on a touch screen, **Move up** and **Move down** in its right-click menu do the same
-a place at a time. The order is kept, like everything else, the next time the app opens.
+under the session it came from, since its folder, branch and diff all start there. **Move up** and
+**Move down** in its right-click menu do the same one place at a time, for the collapsed rail, which
+can't be dragged, and for screen readers, which reach the menu through the session's options. The
+order is kept, like everything else, the next time the app opens.
 
 <img src="images/drag-session.png" width="100%" alt="checkout-flake lifted out of the sidebar, its sub-session faded, and a line under scratch where it will go">
 

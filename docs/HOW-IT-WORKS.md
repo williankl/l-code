@@ -137,8 +137,7 @@ session stays closed, the worktree stays where it was, and the error banner says
 When you quit, Lemonade Code saves every session to `sessions.json`, next to your settings: its name,
 its place in the tree, the folder it was in, and the last 1,000 lines it showed. They're saved in the
 order the sidebar shows them, each followed by its sub-sessions, so sessions dragged into a new order
-come back in it. Then it ends
-the sessions and whatever was running in them.
+come back in it. Then it ends the sessions and whatever was running in them.
 
 At the next launch each session opens again in a fresh shell in the same folder, with its old output
 above the new prompt. If that folder is gone, it starts at home instead.

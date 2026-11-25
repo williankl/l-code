@@ -28,6 +28,7 @@ import dev.lemonadecode.platform.sound.Chime
 import dev.lemonadecode.platform.sound.testing.FakeSoundPlayer
 import dev.lemonadecode.review.fake.FakeReviewService
 import dev.lemonadecode.sessions.api.SessionError
+import dev.lemonadecode.sessions.api.SessionService
 import dev.lemonadecode.sessions.fake.FakeSessionService
 import dev.lemonadecode.settings.fake.FakeSettingsService
 import dev.lemonadecode.updates.fake.FakeUpdateService
@@ -74,6 +75,8 @@ import dev.lemonadecode.workspace.uimodel.WorkspaceEvent
 import dev.lemonadecode.workspace.uimodel.WorkspaceModel
 import dev.lemonadecode.workspace.uimodel.WorkspaceView
 import dev.lemonadecode.workspace.uimodel.WorktreeBranchModel
+import kotlinx.coroutines.ExperimentalForInheritanceCoroutinesApi
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -1157,6 +1160,52 @@ class WorkspacePresenterTest {
       folded.eventSink(WorkspaceEvent.DropSession("cf"))
       awaitItemWhere { it.drag == null }
       assertEquals(listOf("ar", "r1", "d2", "cf"), order(), "after api-ratelimit and everything under it")
+    }
+  }
+
+  @Test
+  fun `a session that changes as it's picked up starts where it is, with no line`() = runTest {
+    withFamily()
+    // Every read of the sessions while picking up finds checkout-flake a little different: its
+    // agent reporting in between any two reads.
+    val changing = ChangingBetweenReads(sessions)
+    val presenter = WorkspacePresenter(
+      changing,
+      reviews,
+      settings,
+      object : HomeDirectory {
+        override val path: String = ShowcaseFixtures.Home
+      },
+      updates,
+      mobile,
+      sounds,
+    ) { Now }
+    presenter.test {
+      val first = awaitItem()
+      changing.session = SessionId("cf")
+      first.eventSink(WorkspaceEvent.StartSessionDrag("cf"))
+      changing.session = null
+      assertEquals(SessionDragModel("cf", drop = null), awaitItemWhere { it.drag != null }.drag, "it's the second of two, where it was")
+    }
+  }
+
+  /**
+   * [fake], except that while [session] is set each read of the sessions' current value finds it
+   * with a different agent name, as if it reported between any two reads. What's collected doesn't
+   * change, so nothing recomposes because of it.
+   */
+  @OptIn(ExperimentalForInheritanceCoroutinesApi::class)
+  private class ChangingBetweenReads(private val fake: FakeSessionService) : SessionService by fake {
+    var session: SessionId? = null
+    private var reads = 0
+
+    override val sessions: StateFlow<List<Session>> = object : StateFlow<List<Session>> by fake.sessions {
+      override val value: List<Session>
+        get() {
+          val id = session ?: return fake.sessions.value
+          reads++
+          return fake.sessions.value.map { if (it.id == id) it.copy(agent = "claude $reads") else it }
+        }
     }
   }
 

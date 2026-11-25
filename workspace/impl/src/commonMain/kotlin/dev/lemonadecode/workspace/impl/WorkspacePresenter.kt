@@ -431,9 +431,9 @@ public class WorkspacePresenter internal constructor(
             toastTimer.restart(scope) { update { state -> if (state.toast === message) state.copy(toast = null) else state } }
           }
 
+          // Found by id: its status or folder may have changed since it was read.
           is WorkspaceEvent.StartSessionDrag -> sessionOf(event.sessionId)?.let { session ->
-            val index = SessionOrder.siblings(sessionService.sessions.value, session.id).indexOf(session)
-            update { it.closingPopovers().copy(renaming = null, sessionDrag = SessionDrag(session.id, index)) }
+            update { it.closingPopovers().copy(renaming = null, sessionDrag = SessionDrag(session.id, siblingIndex(session.id))) }
           }
           is WorkspaceEvent.DragSession -> update { state ->
             val drag = state.sessionDrag?.takeIf { it.sessionId.value == event.sessionId }

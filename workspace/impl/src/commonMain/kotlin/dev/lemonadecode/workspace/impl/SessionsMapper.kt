@@ -37,7 +37,7 @@ internal object SessionsMapper {
     style: NavigationStyle,
     folded: Set<SessionId>,
     home: String,
-    drag: SessionDrag? = null,
+    drag: SessionDrag?,
   ): SessionNavigationModel = when (style) {
     NavigationStyle.Flat -> SessionNavigationModel.Flat(
       sessions.map { session ->
@@ -123,7 +123,7 @@ internal object SessionsMapper {
     home: String,
     renaming: Boolean,
     newWorktree: WorktreeBranchModel? = null,
-    siblings: List<Session> = listOf(session),
+    siblings: List<Session>,
   ): SessionMenuModel {
     val folder = abbreviateHome(session.workingDirectory, home)
     return SessionMenuModel(

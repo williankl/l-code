@@ -100,7 +100,7 @@ internal object WorkspaceModelMapper {
         expanded = input.settings.sidebarExpanded,
         sidebarWidth = clampSidebarWidth(input.settings.sidebarWidth),
         drawerOpen = view.drawerOpen,
-        navigation = SessionsMapper.navigation(sessions, selected, view.navigationStyle, view.folded, input.homeDirectory, view.sessionDrag),
+        navigation = SessionsMapper.navigation(sessions, selected, view.navigationStyle, view.folded, input.homeDirectory, drag = view.sessionDrag),
         tiles = SessionsMapper.tiles(sessions, selected),
         menu = view.sessionMenu?.let { id -> sessions.firstOrNull { it.id == id } }?.let { session ->
           SessionsMapper.menu(

@@ -138,7 +138,11 @@ public enum class WorkspaceShowcase(
     "Dragging a session into place",
     "checkout-flake is lifted out of the tree; its sub-session, which moves with it, fades where it was. The line under scratch is where letting go puts it: a session moves among its siblings.",
   ),
-  MovingInMenu("6f", "Move up and Move down", "The menu moves review-2 a place at a time among its siblings, for touch screens. It's the last one, so only Move up is on."),
+  MovingInMenu(
+    "6f",
+    "Move up and Move down",
+    "The menu moves review-2 one place at a time among its siblings, for the rail, which can't be dragged, and for screen readers. It's the last one, so only Move up is on.",
+  ),
   ;
 
   public fun model(eventSink: (WorkspaceEvent) -> Unit = {}): WorkspaceModel = WorkspaceModelMapper.map(scene.input, eventSink)

@@ -206,8 +206,9 @@ private fun SessionMenuItems(
       }
     },
   )
-  // Dragging the row does the same; this is for touch, and for one step at a time. The menu stays
-  // open on the row as it moves.
+  // Dragging a tree row does the same. This moves one place at a time, for the rail's tiles, which
+  // can't be dragged, and for assistive technology, which opens the menu through Session options.
+  // The menu stays open on the row as it moves.
   if (menu.canMoveUp || menu.canMoveDown) {
     ContextMenuDivider()
     ContextMenuItem(

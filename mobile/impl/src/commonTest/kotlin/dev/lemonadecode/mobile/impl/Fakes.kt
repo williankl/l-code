@@ -113,6 +113,11 @@ internal class FakeDeviceFiles : DeviceFiles {
   private var recordings = 0
 
   override suspend fun recordingPath(deviceName: String): String = "/home/me/Videos/Lemonade Code/$deviceName-${++recordings}.mp4"
+
+  /** The free space the disk recordings go to has, in bytes; null when it can't be told. */
+  var freeSpace: Long? = 500_000_000_000L
+
+  override suspend fun recordingSpace(): Long? = freeSpace
 }
 
 /** Video files the recorder writes, kept in memory: what each was given, and how it ended. */
@@ -128,9 +133,12 @@ internal class FakeVideoFiles : VideoFiles {
   /** Set to make each file opened from now on fail on its nth picture, as a full disk would. */
   var writeFailureAt: Int? = null
 
+  /** Set to make the files opened from now on hold their pictures in memory, none reaching the disk. */
+  var nothingReachesDisk = false
+
   override fun mp4(path: String, width: Int, height: Int, parameterSets: ByteArray): VideoFile {
     failure?.let { error(it) }
-    return FakeVideoFile(path, width, height, parameterSets, finishFailure, writeFailureAt).also { opened += it }
+    return FakeVideoFile(path, width, height, parameterSets, finishFailure, writeFailureAt, !nothingReachesDisk).also { opened += it }
   }
 }
 
@@ -141,6 +149,7 @@ internal class FakeVideoFile(
   val parameterSets: ByteArray,
   private val finishFailure: String? = null,
   private val writeFailureAt: Int? = null,
+  private val picturesReachDisk: Boolean = true,
 ) : VideoFile {
   /** Each picture kept: its first NAL unit's type, when it shows from in milliseconds, and whether it's a key frame. */
   val pictures = mutableListOf<Triple<Int, Long, Boolean>>()
@@ -158,6 +167,8 @@ internal class FakeVideoFile(
     if (++written == writeFailureAt) error("No space left on device")
     pictures += Triple(nalTypes(accessUnit).first(), atMicros / 1_000, keyFrame)
   }
+
+  override val reachedDisk: Boolean get() = picturesReachDisk && pictures.isNotEmpty()
 
   override fun discardLast() {
     val _ = pictures.removeAt(pictures.lastIndex)
@@ -196,13 +207,16 @@ internal class FakeScreenDecoders : ScreenDecoders {
   var opened = 0
   var closed = 0
 
+  /** The size its pictures say they are, as the stream's would; 2 by 1 unless set. */
+  var size: Pair<Int, Int> = 2 to 1
+
   override fun h264(): ScreenDecoder {
     opened++
     return object : ScreenDecoder {
       override fun decode(accessUnit: ByteArray): List<ScreenPicture.Bgra> {
         units += accessUnit
         val pictures = units.count(::holdsSlice)
-        return if (holdsSlice(accessUnit)) listOf(ScreenPicture.Bgra(ByteArray(8) { if (it == 0) pictures.toByte() else 0 }, 2, 1, 8)) else emptyList()
+        return if (holdsSlice(accessUnit)) listOf(ScreenPicture.Bgra(ByteArray(8) { if (it == 0) pictures.toByte() else 0 }, size.first, size.second, 8)) else emptyList()
       }
 
       override fun close() {

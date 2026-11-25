@@ -21,10 +21,12 @@ import dev.lemonadecode.domain.mobile.NearbyKind
 import dev.lemonadecode.domain.mobile.QrMatrix
 import dev.lemonadecode.domain.mobile.QrPairing
 import dev.lemonadecode.domain.mobile.RecordingFailure
+import dev.lemonadecode.domain.mobile.RecordingResolution
 import dev.lemonadecode.domain.mobile.RecordingStop
 import dev.lemonadecode.domain.mobile.ScreenPicture
 import dev.lemonadecode.domain.mobile.ScreenRecording
 import dev.lemonadecode.domain.mobile.ScreenUnavailable
+import dev.lemonadecode.domain.mobile.ScreenVideoSize
 import dev.lemonadecode.domain.settings.DevicesLayout
 import dev.lemonadecode.platform.localization.LemonadeCodeString
 import dev.lemonadecode.platform.localization.asLemonadeCodeString
@@ -76,9 +78,19 @@ import dev.lemonadecode.workspace.strings.pair_error_wrong_code
 import dev.lemonadecode.workspace.strings.pair_step
 import dev.lemonadecode.workspace.strings.pair_step_platform
 import dev.lemonadecode.workspace.strings.pair_title
+import dev.lemonadecode.workspace.strings.recording_failed_full_resolution
 import dev.lemonadecode.workspace.strings.recording_failed_no_video
+import dev.lemonadecode.workspace.strings.recording_failed_no_whole_picture
 import dev.lemonadecode.workspace.strings.recording_failed_partly
+import dev.lemonadecode.workspace.strings.recording_failed_unsupported
 import dev.lemonadecode.workspace.strings.recording_failed_unwritable
+import dev.lemonadecode.workspace.strings.recording_failed_video_lost
+import dev.lemonadecode.workspace.strings.recording_full
+import dev.lemonadecode.workspace.strings.recording_full_note
+import dev.lemonadecode.workspace.strings.recording_kept_in
+import dev.lemonadecode.workspace.strings.recording_low_space
+import dev.lemonadecode.workspace.strings.recording_mirror
+import dev.lemonadecode.workspace.strings.recording_mirror_note
 import dev.lemonadecode.workspace.strings.recording_saved
 import dev.lemonadecode.workspace.strings.recording_saved_device_gone
 import dev.lemonadecode.workspace.strings.recording_saved_partly
@@ -91,6 +103,9 @@ import dev.lemonadecode.workspace.strings.screen_failed_detail
 import dev.lemonadecode.workspace.strings.screen_failed_title
 import dev.lemonadecode.workspace.strings.screen_not_supported_detail
 import dev.lemonadecode.workspace.strings.screen_not_supported_title
+import dev.lemonadecode.workspace.strings.sentences_two
+import dev.lemonadecode.workspace.strings.size_gigabytes
+import dev.lemonadecode.workspace.strings.size_megabytes
 import dev.lemonadecode.workspace.uimodel.DeviceConnectionModel
 import dev.lemonadecode.workspace.uimodel.DeviceGroupModel
 import dev.lemonadecode.workspace.uimodel.DeviceLogsModel
@@ -111,6 +126,9 @@ import dev.lemonadecode.workspace.uimodel.MirrorControlsModel
 import dev.lemonadecode.workspace.uimodel.MobilePlatformModel
 import dev.lemonadecode.workspace.uimodel.NearbyDeviceModel
 import dev.lemonadecode.workspace.uimodel.QrCodeModel
+import dev.lemonadecode.workspace.uimodel.RecordingChoiceModel
+import dev.lemonadecode.workspace.uimodel.RecordingOptionModel
+import dev.lemonadecode.workspace.uimodel.RecordingResolutionModel
 import dev.lemonadecode.workspace.uimodel.SavedRecordingModel
 import dev.lemonadecode.workspace.uimodel.ScreenPictureModel
 import dev.lemonadecode.workspace.uimodel.ScreenRecordingModel
@@ -134,6 +152,10 @@ internal data class MobileInput(
   val recordings: Map<DeviceId, ScreenRecording> = emptyMap(),
   /** Now, in milliseconds since the epoch, for how long a recording has run. */
   val nowMillis: Long = 0,
+  /** The home folder, written `~` in where a recording went. */
+  val home: String = "",
+  /** The size the last recording was asked for here, offered first next time. */
+  val lastRecording: RecordingResolution? = null,
 )
 
 /** The docked Devices panel's widths in dp: for the list, pairing and tabs, and for a device's screen and logs together. */
@@ -403,26 +425,52 @@ internal object DevicesMapper {
       ),
       screenDetail = screenDetail,
       logs = logs(input.logs[device.id], state, agent, apps = logApps(device, state, input.apps[device.id])),
-      recording = if (DeviceCapability.Record in caps) recording(input.recordings[device.id], frame, input.nowMillis) else null,
+      recording = if (DeviceCapability.Record in caps) {
+        recording(
+          recording = input.recordings[device.id],
+          frame = frame,
+          nowMillis = input.nowMillis,
+          deviceName = device.name,
+          home = input.home,
+          choosing = state.recordingChoiceOpen,
+          last = input.lastRecording,
+        )
+      } else {
+        null
+      },
     )
   }
 
   /**
    * The record button of a device that can record its screen, from how its [recording] goes and
    * the [frame] it shows: a recording needs the screen as video, which comes decoded, not as
-   * screenshots, which come as encoded pictures.
+   * screenshots, which come as encoded pictures. While [choosing], it offers the sizes to record
+   * at, the screen's own and the mirror's, [last] first; a failure says why, as [recordingEnded]
+   * does for [deviceName].
    */
-  fun recording(recording: ScreenRecording?, frame: DeviceScreen.Frame?, nowMillis: Long): ScreenRecordingModel {
+  fun recording(
+    recording: ScreenRecording?,
+    frame: DeviceScreen.Frame?,
+    nowMillis: Long,
+    deviceName: String = "",
+    home: String = "",
+    choosing: Boolean = false,
+    last: RecordingResolution? = null,
+  ): ScreenRecordingModel {
     val running = recording as? ScreenRecording.Recording
+    val unavailable = when {
+      running != null -> null
+      frame == null -> Res.string.mirror_loading
+      frame.picture !is ScreenPicture.Bgra -> Res.string.mirror_record_screenshots
+      else -> null
+    }
     return ScreenRecordingModel(
       recording = running != null,
       elapsed = running?.let { elapsed(nowMillis - it.startedAtMillis) },
-      unavailable = when {
-        running != null -> null
-        frame == null -> Res.string.mirror_loading
-        frame.picture !is ScreenPicture.Bgra -> Res.string.mirror_record_screenshots
-        else -> null
-      }?.asLemonadeCodeString(),
+      unavailable = unavailable?.asLemonadeCodeString(),
+      choice = frame?.takeIf { choosing && running == null && unavailable == null }?.let { recordingChoice(it, last) },
+      lowSpace = running?.spaceLeft?.let { Res.string.recording_low_space.asLemonadeCodeString(space(it)) },
+      problem = (recording as? ScreenRecording.Failed)?.let { recordingEnded(it, deviceName, home)?.first },
       saved = when {
         recording is ScreenRecording.Saved -> savedRecording(
           files = recording.files,
@@ -437,6 +485,40 @@ internal object DevicesMapper {
         else -> null
       },
     )
+  }
+
+  /** The two sizes [frame]'s screen can be recorded at: its own, and the mirror's; [last] is the one picked last. */
+  private fun recordingChoice(frame: DeviceScreen.Frame, last: RecordingResolution?): RecordingChoiceModel = RecordingChoiceModel(
+    listOf(
+      Triple(RecordingResolution.Full, Res.string.recording_full, Res.string.recording_full_note),
+      Triple(RecordingResolution.Mirror, Res.string.recording_mirror, Res.string.recording_mirror_note),
+    ).map { (resolution, title, note) ->
+      val (width, height) = ScreenVideoSize.of(resolution, frame.width, frame.height)
+      RecordingOptionModel(
+        resolution = resolution.toModel(),
+        title = title.asLemonadeCodeString(),
+        size = Res.string.mirror_size.asLemonadeCodeString(width, height),
+        note = note.asLemonadeCodeString(),
+        last = resolution == last,
+      )
+    },
+  )
+
+  /** Free space in whole gigabytes, or in megabytes under one: "2 GB", "850 MB". */
+  fun space(bytes: Long): LemonadeCodeString = if (bytes >= Gigabyte) {
+    Res.string.size_gigabytes.asLemonadeCodeString((bytes / Gigabyte).toInt())
+  } else {
+    Res.string.size_megabytes.asLemonadeCodeString((bytes.coerceAtLeast(0) / Megabyte).toInt())
+  }
+
+  fun RecordingResolution.toModel(): RecordingResolutionModel = when (this) {
+    RecordingResolution.Full -> RecordingResolutionModel.Full
+    RecordingResolution.Mirror -> RecordingResolutionModel.Mirror
+  }
+
+  fun RecordingResolutionModel.toDomain(): RecordingResolution = when (this) {
+    RecordingResolutionModel.Full -> RecordingResolution.Full
+    RecordingResolutionModel.Mirror -> RecordingResolution.Mirror
   }
 
   private fun savedRecording(files: List<String>, label: LemonadeCodeString): SavedRecordingModel = SavedRecordingModel(
@@ -467,12 +549,28 @@ internal object DevicesMapper {
       RecordingStop.DeviceGone -> Res.string.recording_saved_device_gone
       RecordingStop.PluginOff -> Res.string.recording_saved_plugin_off
     }.asLemonadeCodeString(name, folderOf(ending.files.first(), home)) to false
-    is ScreenRecording.Failed -> when {
-      ending.reason == RecordingFailure.NoVideo -> Res.string.recording_failed_no_video.asLemonadeCodeString(name)
-      ending.files.isNotEmpty() -> Res.string.recording_failed_partly.asLemonadeCodeString(folderOf(ending.files.first(), home))
-      else -> Res.string.recording_failed_unwritable.asLemonadeCodeString()
-    } to true
+    is ScreenRecording.Failed -> {
+      val kept = ending.files.firstOrNull()?.let { Res.string.recording_kept_in.asLemonadeCodeString(folderOf(it, home)) }
+
+      // What went wrong, then where what was recorded before it is.
+      fun withKept(reason: LemonadeCodeString) = kept?.let { Res.string.sentences_two.asLemonadeCodeString(reason, it) } ?: reason
+      when (ending.reason) {
+        RecordingFailure.NoVideo -> Res.string.recording_failed_no_video.asLemonadeCodeString(name)
+        RecordingFailure.NoWholePicture -> Res.string.recording_failed_no_whole_picture.asLemonadeCodeString(name)
+        RecordingFailure.FullResolutionRefused -> withKept(Res.string.recording_failed_full_resolution.asLemonadeCodeString(name))
+        RecordingFailure.VideoLost -> withKept(Res.string.recording_failed_video_lost.asLemonadeCodeString(name))
+        RecordingFailure.UnsupportedVideo -> withKept(Res.string.recording_failed_unsupported.asLemonadeCodeString(name))
+        is RecordingFailure.Unwritable -> if (ending.files.isNotEmpty()) {
+          Res.string.recording_failed_partly.asLemonadeCodeString(folderOf(ending.files.first(), home))
+        } else {
+          Res.string.recording_failed_unwritable.asLemonadeCodeString()
+        }
+      } to true
+    }
   }
+
+  /** What the disk running low during a recording says once, as it starts to. */
+  fun lowSpaceWarning(spaceLeft: Long): LemonadeCodeString = Res.string.recording_low_space.asLemonadeCodeString(space(spaceLeft))
 
   /** The folder [path] is in, with the home folder [home] written `~`. */
   private fun folderOf(path: String, home: String): String = abbreviateHome(path.substring(0, maxOf(path.lastIndexOf('/'), path.lastIndexOf('\\'), 0)), home)
@@ -660,6 +758,9 @@ internal object DevicesMapper {
   }
 
   private fun QrMatrix.toModel(): QrCodeModel = QrCodeModel(size, List(size * size) { isDark(it % size, it / size) })
+
+  private const val Gigabyte = 1_000_000_000L
+  private const val Megabyte = 1_000_000L
 
   /** What a file URI's path keeps as it is; the rest is percent-encoded. */
   private const val UriPathCharacters = "/-._~:"

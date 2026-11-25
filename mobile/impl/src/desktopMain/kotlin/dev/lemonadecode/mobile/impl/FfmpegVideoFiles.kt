@@ -54,6 +54,15 @@ private class FfmpegMp4File(
 
   private val onQuit = Thread({ finishOnQuit() }, "lemonade-code-recording")
 
+  /** Where the header ends, and how far the file has reached the disk whole. */
+  private var headerEnd = 0L
+  private var onDisk = 0L
+
+  // The muxer keeps a fragment in memory until a key frame or a picture a second later comes; once
+  // one is flushed whole, the file holds pictures.
+  override val reachedDisk: Boolean
+    @Synchronized get() = onDisk > headerEnd
+
   private class Held(val accessUnit: ByteArray, val atMicros: Long, val keyFrame: Boolean)
 
   init {
@@ -81,8 +90,12 @@ private class FfmpegMp4File(
       val header = avformat.avformat_write_header(context, options)
       avutil.av_dict_free(options)
       check(header >= 0) { "FFmpeg couldn't start $path ($header)" }
-      // On disk at once, so the file opens even if nothing more makes it there.
+      // On disk at once, so the file opens even if nothing more makes it there; a disk too full for
+      // even that fails it here.
       avformat.avio_flush(io)
+      check(io.error() >= 0) { "Couldn't write to $path (${errorText(io.error())})" }
+      headerEnd = avformat.avio_tell(io)
+      onDisk = headerEnd
       Runtime.getRuntime().addShutdownHook(onQuit)
     } catch (e: Throwable) {
       release()
@@ -161,6 +174,7 @@ private class FfmpegMp4File(
     val io = context.pb()
     avformat.avio_flush(io)
     check(io.error() >= 0) { "Couldn't write to $path (${errorText(io.error())})" }
+    onDisk = avformat.avio_tell(io)
   }
 
   /** FFmpeg's words for [code], e.g. "No space left on device". */

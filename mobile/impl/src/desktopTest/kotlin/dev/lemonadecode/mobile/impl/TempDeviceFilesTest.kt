@@ -66,7 +66,11 @@ class TempDeviceFilesTest {
   fun `on Linux, recordings go to the videos folder the desktop names, in the user's language`() {
     val userDirs = "# Written by xdg-user-dirs-update\nXDG_DESKTOP_DIR=\"\$HOME/Schreibtisch\"\nXDG_VIDEOS_DIR=\"\$HOME/Vídeos\"\n"
     assertEquals("/home/ana/Vídeos", xdgVideosFolder("/home/ana", environment = null, userDirs = userDirs))
-    assertEquals("/media/data/Filme", xdgVideosFolder("/home/ana", environment = "/media/data/Filme", userDirs = userDirs))
+    // As xdg-user-dir reads it: the file wins over the environment, its last line wins, `export` or not.
+    assertEquals("/home/ana/Vídeos", xdgVideosFolder("/home/ana", environment = "/media/data/Filme", userDirs = userDirs))
+    assertEquals("/media/data/Filme", xdgVideosFolder("/home/ana", environment = "/media/data/Filme", userDirs = "XDG_DESKTOP_DIR=\"\$HOME/Desktop\"\n"))
+    assertEquals("/home/ana/Filme", xdgVideosFolder("/home/ana", environment = null, userDirs = userDirs + "XDG_VIDEOS_DIR=\"\$HOME/Filme\"\n"))
+    assertEquals("/home/ana/Clips", xdgVideosFolder("/home/ana", environment = null, userDirs = "export XDG_VIDEOS_DIR=\"\$HOME/Clips\"\n"))
     assertEquals("/home/ana/Videos", xdgVideosFolder("/home/ana", environment = null, userDirs = "XDG_VIDEOS_DIR=\"\${HOME}/Videos/\""))
     assertNull(xdgVideosFolder("/home/ana", environment = null, userDirs = "XDG_VIDEOS_DIR=\"\$HOME/\""), "the home folder itself means none")
     assertNull(xdgVideosFolder("/home/ana", environment = null, userDirs = null))

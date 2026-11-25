@@ -18,10 +18,12 @@ import dev.lemonadecode.domain.mobile.MobileTool
 import dev.lemonadecode.domain.mobile.MobileTools
 import dev.lemonadecode.domain.mobile.NearbyDevice
 import dev.lemonadecode.domain.mobile.QrPairing
+import dev.lemonadecode.domain.mobile.RecordingResolution
 import dev.lemonadecode.domain.mobile.RecordingStop
 import dev.lemonadecode.domain.mobile.ScreenPicture
 import dev.lemonadecode.domain.mobile.ScreenRecording
 import dev.lemonadecode.domain.mobile.ScreenUnavailable
+import dev.lemonadecode.domain.mobile.ScreenVideoSize
 import dev.lemonadecode.mobile.api.MobileService
 import dev.lemonadecode.platform.architecture.LemonadeCodeCoroutineDispatchers
 import dev.lemonadecode.platform.architecture.WallClock
@@ -34,6 +36,7 @@ import dev.lemonadecode.settings.api.SettingsService
 import dev.zacsweers.metro.ContributesBinding
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.BufferOverflow
@@ -117,6 +120,14 @@ internal class MobileServiceImpl(
       settings.settings.map { it.mobilePlugin }.distinctUntilChanged().collectLatest { on -> if (on) follow() }
     }
     scope.launch { mutableDevices.collect { logBook.retain() } }
+    // A recording at full resolution ended: the mirror goes back to its own size.
+    scope.launch {
+      var before = emptySet<DeviceId>()
+      recorder.atFullResolution.collect { now ->
+        (before - now).forEach { val _ = restarts.tryEmit(it) }
+        before = now
+      }
+    }
     // A device that goes away while recorded keeps what was recorded until then. Turning the
     // plugin off empties the list too, and says so.
     scope.launch {
@@ -211,6 +222,7 @@ internal class MobileServiceImpl(
     capture = { capture(id) },
     turned = turns.filter { it == id }.map { },
     restart = restarts.filter { it == id }.map { },
+    onFallback = { recorder.onVideoLost(id) },
   ).buffer(Channel.RENDEZVOUS)
 
   /** The screen's size now when [id] is an Android device ready to be recorded; null otherwise. */
@@ -222,22 +234,47 @@ internal class MobileServiceImpl(
     return size
   }
 
-  /** [id]'s screen as a video, [width] by [height] device pixels: recorded smaller, and decoded off the caller's thread. */
+  /**
+   * [id]'s screen as a video, [width] by [height] device pixels, decoded off the caller's thread:
+   * recorded smaller, or at its own size while a recording asks for that. A device that fails at
+   * its own size, or makes it smaller, has refused it: the recording says so and ends, and the
+   * mirror goes back to its own size.
+   */
   private fun recording(id: DeviceId, width: Int, height: Int): Flow<ScreenPicture.Bgra> = flow {
     val device = device(id) ?: return@flow
     val adb = currentTools()?.adb ?: return@flow
-    val (recordedWidth, recordedHeight) = recordingSize(width, height)
+    val resolution = recorder.resolutionOf(id) ?: RecordingResolution.Mirror
+    val full = resolution == RecordingResolution.Full
+    val (recordedWidth, recordedHeight) = ScreenVideoSize.of(resolution, width, height)
     val quiet = if (device.connection == DeviceConnection.Wifi) WifiQuietFlush else QuietFlush
     val pictures = android.recordScreen(adb, device, recordedWidth, recordedHeight)
-    emitAll(
-      decodeVideo(
-        pictures,
-        decoders,
-        quiet,
-        onUnit = { recorder.onPicture(id, recordedWidth, recordedHeight, it) },
-        onCutShort = { recorder.onCutShort(id) },
-      ),
-    )
+    var sized = false
+    try {
+      emitAll(
+        decodeVideo(
+          pictures,
+          decoders,
+          quiet,
+          onUnit = { unit, decoded ->
+            val first = decoded.firstOrNull()
+            if (full && !sized && first != null) {
+              sized = true
+              if (first.width != recordedWidth || first.height != recordedHeight) throw FullSizeRefused()
+            }
+            recorder.onPicture(id, recordedWidth, recordedHeight, unit)
+          },
+          onCutShort = { recorder.onCutShort(id) },
+        ),
+      )
+    } catch (e: CancellationException) {
+      throw e
+    } catch (e: Throwable) {
+      // At its own size, a stream that fails before its first picture, or comes smaller, is refused.
+      if (full && (e is FullSizeRefused || !sized)) recorder.onRefused(id)
+      throw e
+    } finally {
+      recorder.onStreamEnded(id)
+    }
   }
     .flowOn(dispatchers.default)
     // Each picture is a few megabytes; when they come faster than they're shown, only the newest waits.
@@ -279,14 +316,15 @@ internal class MobileServiceImpl(
 
   override val recordings: StateFlow<Map<DeviceId, ScreenRecording>> get() = recorder.recordings
 
-  override suspend fun startRecording(id: DeviceId): LemonadeCodeResult<Unit, MobileError> = onDevice(
+  override suspend fun startRecording(id: DeviceId, resolution: RecordingResolution): LemonadeCodeResult<Unit, MobileError> = onDevice(
     id,
     android = { _, device ->
       when {
         device.availability != DeviceAvailability.Ready || DeviceCapability.Record !in device.capabilities -> LemonadeCodeResult.failure(MobileError.DeviceGone)
         else -> {
-          // The video the mirror streams now started earlier; a new one starts with a picture of its own.
-          if (recorder.start(id, device.name)) {
+          // The video the mirror streams now started earlier, at the mirror's size; a new one starts
+          // with a picture of its own, at the size asked for.
+          if (recorder.start(id, device.name, resolution)) {
             val _ = restarts.tryEmit(id)
           }
           LemonadeCodeResult.success(Unit)
@@ -359,6 +397,9 @@ internal class MobileServiceImpl(
     }
 
   override suspend fun disconnect(id: DeviceId): LemonadeCodeResult<Unit, MobileError> = onDevice(id, android::disconnect)
+
+  /** The device made the stream smaller than its own size. */
+  private class FullSizeRefused : Exception("The device recorded its screen smaller than asked")
 
   private companion object {
     /** How often the tools are looked for again while one is missing, so installing it later works. */

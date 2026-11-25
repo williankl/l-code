@@ -208,7 +208,7 @@ class ScreenStreamTest {
     val units = mutableListOf<ByteArray>()
     var cutShort = 0
     val idr = picture(idr = true)
-    decodeVideo(chunks.receiveAsFlow(), FakeScreenDecoders(), onUnit = { units += it }, onCutShort = { cutShort++ }).test {
+    decodeVideo(chunks.receiveAsFlow(), FakeScreenDecoders(), onUnit = { unit, _ -> units += unit }, onCutShort = { cutShort++ }).test {
       chunks.send(idr.copyOfRange(0, 6))
       assertEquals(1, awaitItem().pixels[0].toInt())
       assertEquals(1, units.size)
@@ -224,7 +224,7 @@ class ScreenStreamTest {
   fun `each access unit is handed over as it's decoded, to be recorded`() = runTest {
     val chunks = Channel<ByteArray>(Channel.UNLIMITED)
     val units = mutableListOf<ByteArray>()
-    decodeVideo(chunks.receiveAsFlow(), FakeScreenDecoders(), onUnit = { units += it }).test {
+    decodeVideo(chunks.receiveAsFlow(), FakeScreenDecoders(), onUnit = { unit, _ -> units += unit }).test {
       chunks.send(nal(7, 0x42) + nal(8, 0xCE) + picture(idr = true) + picture())
       assertEquals(1, awaitItem().pixels[0].toInt())
       assertEquals(2, awaitItem().pixels[0].toInt())

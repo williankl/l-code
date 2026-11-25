@@ -170,9 +170,13 @@ public class WorkspacePresenter internal constructor(
     val seenRecordings = remember { mutableMapOf<DeviceId, ScreenRecording>() }
     LaunchedEffect(mobileRecordings) {
       for ((id, recording) in mobileRecordings) {
+        val before = seenRecordings[id]
         if (recording is ScreenRecording.Recording) {
           mobileService.devices.value.firstOrNull { it.id == id }?.let { recordingNames[id] = it.name }
-        } else if (seenRecordings[id] is ScreenRecording.Recording) {
+          // The disk starts running low: said once, where it shows whichever window is in front.
+          val left = recording.spaceLeft
+          if (left != null && (before as? ScreenRecording.Recording)?.spaceLeft == null) view = view.copy(error = DevicesMapper.lowSpaceWarning(left))
+        } else if (before is ScreenRecording.Recording) {
           val (message, failed) = DevicesMapper.recordingEnded(recording, recordingNames[id] ?: id.value, homeDirectory.path) ?: continue
           if (failed) {
             view = view.copy(error = message)
@@ -259,17 +263,25 @@ public class WorkspacePresenter internal constructor(
                 }
               }
             }
-            WorkspaceEvent.ToggleScreenRecording -> scope.launch {
-              if (mobileService.recordings.value[device] is ScreenRecording.Recording) {
-                // How it ended shows once it has.
-                val _ = mobileService.stopRecording(device)
-              } else {
-                when (val started = mobileService.startRecording(device)) {
+            WorkspaceEvent.ToggleScreenRecording -> if (mobileService.recordings.value[device] is ScreenRecording.Recording) {
+              // How it ended shows once it has.
+              scope.launch { val _ = mobileService.stopRecording(device) }
+            } else {
+              // What size to record at is asked each time.
+              updatePage(window) { it.copy(recordingChoiceOpen = !it.recordingChoiceOpen) }
+            }
+            is WorkspaceEvent.StartScreenRecording -> {
+              val resolution = event.resolution.toDomain()
+              updatePage(window) { it.copy(recordingChoiceOpen = false) }
+              update { it.copy(lastRecording = resolution) }
+              scope.launch {
+                when (val started = mobileService.startRecording(device, resolution)) {
                   is LemonadeCodeResult.Success -> Unit
                   is LemonadeCodeResult.Failure -> fail(DevicesMapper.errorText(started.error))
                 }
               }
             }
+            WorkspaceEvent.DismissRecordingChoice -> updatePage(window) { it.copy(recordingChoiceOpen = false) }
             WorkspaceEvent.DismissSavedRecording -> mobileService.dismissRecording(device)
             is WorkspaceEvent.SetLogFilter -> updatePage(window) { it.copy(logFilter = event.filter) }
             WorkspaceEvent.ToggleLogSearch -> updatePage(window) { it.copy(logSearch = !it.logSearch, logQuery = if (it.logSearch) "" else it.logQuery) }
@@ -782,6 +794,8 @@ public class WorkspacePresenter internal constructor(
         cable = cablePairing,
         recordings = mobileRecordings,
         nowMillis = recordingNow,
+        home = homeDirectory.path,
+        lastRecording = view.lastRecording,
       ),
       nowMillis = clock.nowMillis(),
       systemLanguage = SettingsMapper.languageFor(systemLanguageTag()),

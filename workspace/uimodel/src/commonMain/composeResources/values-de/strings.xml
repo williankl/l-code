@@ -356,6 +356,20 @@
   <string name="recording_failed_no_video">%1$s konnte nicht aufgenommen werden: Es kam kein Video.</string>
   <string name="recording_failed_unwritable">Die Aufnahme konnte nicht gespeichert werden.</string>
   <string name="recording_failed_partly">Die Aufnahme konnte nicht ganz geschrieben werden. Was geschrieben wurde, liegt in %1$s.</string>
+  <string name="recording_choose_title">Bildschirm aufnehmen in</string>
+  <string name="recording_full">Volle Auflösung</string>
+  <string name="recording_full_note">Die eigene Größe des Telefons: am schärfsten, größere Dateien</string>
+  <string name="recording_mirror">Spiegelgröße</string>
+  <string name="recording_mirror_note">So, wie die Spiegelung ihn zeigt: kleinere Dateien</string>
+  <string name="recording_low_space">Wenig Speicherplatz: noch %1$s frei. Die Aufnahme läuft weiter.</string>
+  <string name="size_gigabytes">%1$d GB</string>
+  <string name="size_megabytes">%1$d MB</string>
+  <string name="recording_failed_full_resolution">%1$s kann den Bildschirm nicht in voller Auflösung aufnehmen. Versuch es mit der Spiegelgröße.</string>
+  <string name="recording_failed_video_lost">%1$s sendet kein Video mehr, deshalb wurde die Aufnahme beendet.</string>
+  <string name="recording_failed_unsupported">%1$s hat Bilder außer der Reihe gesendet, die sich nicht so speichern lassen, deshalb wurde die Aufnahme beendet.</string>
+  <string name="recording_failed_no_whole_picture">Beendet, bevor %1$s ein ganzes Bild gesendet hat, deshalb wurde nichts gespeichert.</string>
+  <string name="recording_kept_in">Das Aufgenommene liegt in %1$s.</string>
+  <string name="sentences_two">%1$s %2$s</string>
 
   <!-- Devices › logs -->
   <string name="logs_all">Alle</string>

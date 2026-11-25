@@ -396,6 +396,20 @@
   <string name="recording_failed_no_video">Zariadenie %1$s sa nepodarilo nahrať: neposlalo video.</string>
   <string name="recording_failed_unwritable">Nahrávku sa nepodarilo uložiť.</string>
   <string name="recording_failed_partly">Celú nahrávku sa nepodarilo zapísať. To, čo sa zapísalo, je v priečinku %1$s.</string>
+  <string name="recording_choose_title">Nahrávať obrazovku v</string>
+  <string name="recording_full">Plnom rozlíšení</string>
+  <string name="recording_full_note">Vlastná veľkosť telefónu: najostrejšie, väčšie súbory</string>
+  <string name="recording_mirror">Veľkosti zrkadla</string>
+  <string name="recording_mirror_note">Tak, ako ju ukazuje zrkadlo: menšie súbory</string>
+  <string name="recording_low_space">Na disku je málo miesta: zostáva %1$s. Nahrávanie pokračuje.</string>
+  <string name="size_gigabytes">%1$d GB</string>
+  <string name="size_megabytes">%1$d MB</string>
+  <string name="recording_failed_full_resolution">Zariadenie %1$s nevie nahrávať obrazovku v plnom rozlíšení. Skúste veľkosť zrkadla.</string>
+  <string name="recording_failed_video_lost">Zariadenie %1$s prestalo posielať video, preto sa nahrávanie zastavilo.</string>
+  <string name="recording_failed_unsupported">Zariadenie %1$s poslalo snímky mimo poradia, ktoré sa nedajú uložiť tak, ako prichádzajú, preto sa nahrávanie zastavilo.</string>
+  <string name="recording_failed_no_whole_picture">Zastavené skôr, ako zariadenie %1$s poslalo celú snímku, preto sa nič neuložilo.</string>
+  <string name="recording_kept_in">To, čo sa nahralo, je v priečinku %1$s.</string>
+  <string name="sentences_two">%1$s %2$s</string>
 
   <!-- Devices › logs -->
   <string name="logs_all">Všetko</string>

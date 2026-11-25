@@ -15,6 +15,7 @@ import dev.lemonadecode.domain.mobile.MobilePlatform
 import dev.lemonadecode.domain.mobile.MobileTools
 import dev.lemonadecode.domain.mobile.NearbyDevice
 import dev.lemonadecode.domain.mobile.QrPairing
+import dev.lemonadecode.domain.mobile.RecordingResolution
 import dev.lemonadecode.domain.mobile.ScreenRecording
 import dev.lemonadecode.mobile.api.MobileService
 import dev.lemonadecode.platform.core.LemonadeCodeResult
@@ -118,10 +119,10 @@ public class FakeMobileService(
     return LemonadeCodeResult.Success(screenshotPath)
   }
 
-  override suspend fun startRecording(id: DeviceId): LemonadeCodeResult<Unit, MobileError> {
-    actions += "record ${id.value}"
+  override suspend fun startRecording(id: DeviceId, resolution: RecordingResolution): LemonadeCodeResult<Unit, MobileError> {
+    actions += "record ${id.value} ${resolution.name.lowercase()}"
     if (mutableDevices.value.none { it.id == id }) return LemonadeCodeResult.Failure(MobileError.DeviceGone)
-    recordings.value += id to ScreenRecording.Recording(recordingStartsAt)
+    recordings.value += id to ScreenRecording.Recording(recordingStartsAt, resolution)
     return LemonadeCodeResult.Success(Unit)
   }
 

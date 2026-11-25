@@ -17,6 +17,8 @@ import dev.lemonadecode.workspace.ui.DeviceWindowContent
 import dev.lemonadecode.workspace.ui.TerminalTranscript
 import dev.lemonadecode.workspace.ui.WorkspaceContent
 import dev.lemonadecode.workspace.uimodel.DevicesContentModel
+import dev.lemonadecode.workspace.uimodel.RecordingResolutionModel
+import dev.lemonadecode.workspace.uimodel.SavedRecordingModel
 import dev.lemonadecode.workspace.uimodel.ScreenRecordingModel
 import dev.lemonadecode.workspace.uimodel.WorkspaceEvent
 import dev.lemonadecode.workspace.uimodel.WorkspaceModel
@@ -70,6 +72,39 @@ class ScreenRecordingUiTest {
       onNodeWithText("● 0:42", substring = true).assertExists()
       expect(WorkspaceEvent.ToggleScreenRecording) { onNodeWithContentDescription("Stop recording").performClick() }
     }
+  }
+
+  @Test
+  fun `the size to record at is picked from above the button`() = show(WorkspaceShowcase.DeviceRecordingChoice) {
+    onNodeWithText("1080 × 2400").assertExists()
+    onNodeWithText("576 × 1280").assertExists()
+    expect(WorkspaceEvent.StartScreenRecording(RecordingResolutionModel.Full)) { onNodeWithText("Full resolution").performClick() }
+    expect(WorkspaceEvent.StartScreenRecording(RecordingResolutionModel.Mirror)) { onNodeWithText("Mirror size").performClick() }
+  }
+
+  @Test
+  fun `a disk running low is said under the screen while it records`() = show(WorkspaceShowcase.DeviceLowDiskWarning) {
+    onNodeWithText("Disk space is low: 1 GB left. The recording goes on.").assertExists()
+    onNodeWithContentDescription("Stop recording").assertExists()
+  }
+
+  @Test
+  fun `a recording that went wrong says why under the screen, and finds what it kept`() = show(
+    WorkspaceShowcase.DeviceSideBySide,
+    edit = { model ->
+      val page = model.devices?.content as DevicesContentModel.Device
+      val failed = ScreenRecordingModel(
+        problem = "Pixel 8 stopped sending video, so the recording stopped.".asLemonadeCodeString(),
+        saved = SavedRecordingModel("Part of the recording saved".asLemonadeCodeString(), "/Users/me/Movies/Lemonade Code/a.mp4", "file:///Users/me/Movies/Lemonade%20Code/a.mp4"),
+      )
+      model.copy(devices = model.devices?.copy(content = page.copy(recording = failed)))
+    },
+  ) {
+    onNodeWithText("Pixel 8 stopped sending video, so the recording stopped.").assertExists()
+    onNodeWithText("Show in folder").performClick()
+    waitForIdle()
+    assertEquals(listOf("file:///Users/me/Movies/Lemonade%20Code/a.mp4"), opened)
+    expect(WorkspaceEvent.DismissSavedRecording) { onNodeWithContentDescription("Dismiss").performClick() }
   }
 
   @Test

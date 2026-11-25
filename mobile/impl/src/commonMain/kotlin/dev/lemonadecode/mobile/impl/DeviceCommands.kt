@@ -67,6 +67,9 @@ internal interface DeviceFiles {
    * and the file is made empty at once, so no other recording takes the same name.
    */
   suspend fun recordingPath(deviceName: String): String
+
+  /** The free space, in bytes, of the disk recordings are saved to; null when it can't be told. */
+  suspend fun recordingSpace(): Long?
 }
 
 /** Draws text as a QR code. */

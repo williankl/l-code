@@ -6,6 +6,7 @@ import dev.zacsweers.metro.ContributesBinding
 import dev.zacsweers.metro.Inject
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.nio.file.Files
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
@@ -49,6 +50,12 @@ internal class TempDeviceFiles(
     reserveFile(folder, screenshotName(deviceName, LocalDateTime.now().format(Timestamp)), "mp4").absolutePath
   }
 
+  override suspend fun recordingSpace(): Long? = withContext(dispatchers.io) {
+    val folder = recordingsFolder
+    val _ = folder.mkdirs()
+    runCatching { Files.getFileStore(folder.toPath()).usableSpace }.getOrNull()
+  }
+
   private fun folder(name: String): File {
     val folder = File(root, name)
     val _ = folder.mkdirs()
@@ -88,18 +95,19 @@ private fun defaultRecordingsFolder(): File {
 }
 
 /**
- * The videos folder of a Linux desktop, as `xdg-user-dir VIDEOS` finds it: [environment]'s
- * `XDG_VIDEOS_DIR`, else the one in [userDirs], the text of `user-dirs.dirs`, with `$HOME` filled
- * in as [home]. Null when neither names one, or it's the home folder itself, which means none.
+ * The videos folder of a Linux desktop, as `xdg-user-dir VIDEOS` finds it: that script reads
+ * [userDirs], the text of `user-dirs.dirs`, as shell, so its last `XDG_VIDEOS_DIR=` line wins,
+ * `export` or not, over [environment]'s. `$HOME` is filled in as [home]. Null when neither names
+ * one, or it's the home folder itself, which means none.
  */
 internal fun xdgVideosFolder(home: String, environment: String?, userDirs: String?): String? {
-  val named = environment?.takeIf { it.isNotBlank() }
-    ?: userDirs?.lineSequence()
-      ?.map { it.trim() }
-      ?.firstOrNull { it.startsWith("XDG_VIDEOS_DIR=") }
-      ?.substringAfter('=')
-      ?.trim()
-      ?.removeSurrounding("\"")
+  val named = userDirs?.lineSequence()
+    ?.map { it.trim().removePrefix("export ").trim() }
+    ?.lastOrNull { it.startsWith("XDG_VIDEOS_DIR=") }
+    ?.substringAfter('=')
+    ?.trim()
+    ?.removeSurrounding("\"")
+    ?: environment?.takeIf { it.isNotBlank() }
     ?: return null
   val path = named.replace("\${HOME}", home).replace("\$HOME", home).trimEnd('/')
   return path.takeIf { it.startsWith("/") && it != home.trimEnd('/') }

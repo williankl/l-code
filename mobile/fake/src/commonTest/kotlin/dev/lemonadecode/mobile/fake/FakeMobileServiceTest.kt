@@ -65,6 +65,6 @@ class FakeMobileServiceTest {
 
     mobile.dismissRecording(pixel)
     assertEquals(emptyMap(), mobile.recordings.value)
-    assertEquals(listOf("stop recording 38021FDH2000AB", "record 38021FDH2000AB", "stop recording 38021FDH2000AB", "dismiss recording 38021FDH2000AB"), mobile.actions)
+    assertEquals(listOf("stop recording 38021FDH2000AB", "record 38021FDH2000AB mirror", "stop recording 38021FDH2000AB", "dismiss recording 38021FDH2000AB"), mobile.actions)
   }
 }

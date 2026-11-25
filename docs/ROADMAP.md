@@ -33,6 +33,14 @@ What Lemonade Code doesn't do yet. Want something that isn't here?
   only Android screens can be recorded.
 - **One video per way the screen faces.** Turning the phone while recording goes on in a second
   video, since players don't follow a video that changes size.
+- **Recording at the edges of a cut-short picture.** When the stream goes quiet, the mirror hands
+  over the picture in hand so the screen's last change shows. If more of that picture comes after,
+  it was cut short: the recording takes it back, and the video has a short gap there until the next
+  picture, over which players hold the one before. Three edge cases are left as they are:
+  - Stopping before more comes keeps that picture, cut short or not.
+  - A turn or a restart just after it ends the stream before more can come, so it's kept.
+  - When the last picture was taken back and none comes before Stop, the video ends at that
+    picture's time rather than at Stop.
 - **Tested against recorded tool output.** The Android and iOS support is checked against what
   `adb` and libimobiledevice print, not yet against every device.
 

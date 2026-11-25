@@ -262,16 +262,27 @@ Lemonade Code finds them on your `PATH`, in the Android SDK and in Homebrew's fo
   saying which device and log they came from. The camera button saves a screenshot and pastes its
   path, which Claude Code attaches as a picture. Nothing runs until you press Enter.
 - **Record the screen.** On Android, the red dot under the screen records it as an MP4, from the
-  video the mirror already streams, so nothing is encoded twice: the video is the mirror's size, at
-  most 1280 pixels on its longer side, not the phone's full resolution. While it records, the dot
-  turns into a stop button and the time counts up under the screen, and beside the device in the
-  list; the recording goes on while you look at something else. The video goes to `Lemonade Code`
-  in `~/Movies` on a Mac, in your videos folder on Linux and in `~/Videos` on Windows, named after
-  the device and the time, and **Show in folder** finds it. A recording carries on when
-  `screenrecord` starts again every few minutes, goes on in a second video when the screen turns,
-  and keeps what it has when the phone is unplugged or the plugin is turned off. If the disk fills
-  up, what was written is kept and can still be found. A device sending screenshots instead of video
-  can't be recorded, and says so.
+  video the mirror streams, so nothing is encoded twice. It asks first at what size: the phone's
+  full resolution, or the mirror's size, at most 1280 pixels on its longer side, for smaller files.
+  Each shows its size in pixels, and the one picked last has a tick. At full resolution the mirror
+  shows that full-size stream until the recording ends, which can cost it some frame rate. While it
+  records, the dot turns into a stop button and the time counts up under the screen, and beside the
+  device in the list; the recording goes on while you look at something else. The video goes to
+  `Lemonade Code` in `~/Movies` on a Mac, in your videos folder on Linux and in `~/Videos` on
+  Windows, named after the device and the time, and **Show in folder** finds it. A recording
+  carries on when `screenrecord` starts again every few minutes, goes on in a second video when
+  the screen turns, and keeps what it has when the phone is unplugged or the plugin is turned off.
+  There's no length limit: when the disk has less than 2 GB free, it warns and goes on, and if the
+  disk fills up, what was written is kept and can still be found.
+- **Told when a recording goes wrong.** A recording stops, keeping what it recorded, and says why
+  under the screen and in the window's banner, when:
+  - the video stops coming, because the mirror falls back on screenshots or the stream stays down
+    for 20 seconds
+  - the phone won't record at its full size
+  - the pictures come out of order
+
+  A screen that holds still sends nothing for as long as it's still, and that's fine. A device
+  sending screenshots instead of video can't start a recording, and says so.
 - **Pair new devices.** Pairing asks one thing per step: Android or iOS, then how. An Android phone
   scans a QR code, types a pairing code or is picked from the devices on your network with wireless
   debugging on. An iPhone is plugged in once and trusts this computer.

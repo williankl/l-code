@@ -376,6 +376,20 @@
   <string name="recording_failed_no_video">Impossible d’enregistrer %1$s : aucune vidéo reçue.</string>
   <string name="recording_failed_unwritable">Impossible de sauvegarder l’enregistrement.</string>
   <string name="recording_failed_partly">Impossible d’écrire tout l’enregistrement. Ce qui a été écrit est dans %1$s.</string>
+  <string name="recording_choose_title">Enregistrer l’écran en</string>
+  <string name="recording_full">Pleine résolution</string>
+  <string name="recording_full_note">La taille du téléphone lui-même : le plus net, des fichiers plus gros</string>
+  <string name="recording_mirror">Taille du miroir</string>
+  <string name="recording_mirror_note">Comme le miroir l’affiche : des fichiers plus petits</string>
+  <string name="recording_low_space">Espace disque faible : %1$s restants. L’enregistrement continue.</string>
+  <string name="size_gigabytes">%1$d Go</string>
+  <string name="size_megabytes">%1$d Mo</string>
+  <string name="recording_failed_full_resolution">%1$s ne peut pas enregistrer son écran en pleine résolution. Essayez la taille du miroir.</string>
+  <string name="recording_failed_video_lost">%1$s n’envoie plus de vidéo, l’enregistrement s’est donc arrêté.</string>
+  <string name="recording_failed_unsupported">%1$s a envoyé des images dans le désordre, impossibles à garder telles quelles, l’enregistrement s’est donc arrêté.</string>
+  <string name="recording_failed_no_whole_picture">Arrêté avant que %1$s n’envoie une image entière, rien n’a donc été gardé.</string>
+  <string name="recording_kept_in">Ce qui a été enregistré est dans %1$s.</string>
+  <string name="sentences_two">%1$s %2$s</string>
 
   <!-- Devices › logs -->
   <string name="logs_all">Tous</string>

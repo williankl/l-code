@@ -376,6 +376,20 @@
   <string name="recording_failed_no_video">No se pudo grabar %1$s: no envió vídeo.</string>
   <string name="recording_failed_unwritable">No se pudo guardar la grabación.</string>
   <string name="recording_failed_partly">No se pudo escribir toda la grabación. Lo escrito está en %1$s.</string>
+  <string name="recording_choose_title">Grabar la pantalla a</string>
+  <string name="recording_full">Resolución completa</string>
+  <string name="recording_full_note">El tamaño propio del teléfono: más nítido, archivos más grandes</string>
+  <string name="recording_mirror">Tamaño del espejo</string>
+  <string name="recording_mirror_note">Como lo muestra el espejo: archivos más pequeños</string>
+  <string name="recording_low_space">Queda poco espacio en disco: %1$s libres. La grabación sigue.</string>
+  <string name="size_gigabytes">%1$d GB</string>
+  <string name="size_megabytes">%1$d MB</string>
+  <string name="recording_failed_full_resolution">%1$s no puede grabar su pantalla a resolución completa. Prueba con el tamaño del espejo.</string>
+  <string name="recording_failed_video_lost">%1$s dejó de enviar vídeo, así que la grabación se detuvo.</string>
+  <string name="recording_failed_unsupported">%1$s envió imágenes fuera de orden, que no se pueden guardar tal como llegan, así que la grabación se detuvo.</string>
+  <string name="recording_failed_no_whole_picture">Se detuvo antes de que %1$s enviara una imagen completa, así que no se guardó nada.</string>
+  <string name="recording_kept_in">Lo grabado está en %1$s.</string>
+  <string name="sentences_two">%1$s %2$s</string>
 
   <!-- Devices › logs -->
   <string name="logs_all">Todos</string>

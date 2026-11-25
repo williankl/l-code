@@ -267,6 +267,31 @@ public data class ScreenRecordingModel(
   val unavailable: LemonadeCodeString? = null,
   /** The last recording saved, whole or in part, shown until it's dismissed or another starts. */
   val saved: SavedRecordingModel? = null,
+  /** Why the last recording failed, shown in red with what it saved, until dismissed or another starts. */
+  val problem: LemonadeCodeString? = null,
+  /** While it records, that the disk is running low, e.g. "Disk space is low: 1 GB left. The recording goes on." */
+  val lowSpace: LemonadeCodeString? = null,
+  /** The sizes to record at, offered by the button before it starts; null while the choice isn't open. */
+  val choice: RecordingChoiceModel? = null,
+)
+
+public enum class RecordingResolutionModel { Full, Mirror }
+
+/** The sizes a recording can be made at, asked each time before it starts. */
+@Immutable
+public data class RecordingChoiceModel(val options: List<RecordingOptionModel>)
+
+@Immutable
+public data class RecordingOptionModel(
+  val resolution: RecordingResolutionModel,
+  /** e.g. "Full resolution". */
+  val title: LemonadeCodeString,
+  /** e.g. "1080 × 2400", the size it records this device's screen at. */
+  val size: LemonadeCodeString,
+  /** What it's good for, e.g. "smaller files". */
+  val note: LemonadeCodeString,
+  /** The one picked last time. */
+  val last: Boolean = false,
 )
 
 /** A recording saved to disk, whole or as far as it was written, and where to find it. */

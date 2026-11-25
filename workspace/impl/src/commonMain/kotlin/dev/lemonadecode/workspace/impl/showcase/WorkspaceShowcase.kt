@@ -6,6 +6,7 @@ import dev.lemonadecode.domain.mobile.DeviceLogs
 import dev.lemonadecode.domain.mobile.DeviceScreen
 import dev.lemonadecode.domain.mobile.MobileDevice
 import dev.lemonadecode.domain.mobile.NearbyDevice
+import dev.lemonadecode.domain.mobile.RecordingResolution
 import dev.lemonadecode.domain.mobile.ScreenRecording
 import dev.lemonadecode.domain.review.BranchTip
 import dev.lemonadecode.domain.review.CommentStatus
@@ -121,6 +122,22 @@ public enum class WorkspaceShowcase(
     "8f·rec",
     "Device · recording the screen",
     "The red dot records the screen as an MP4. While it records it turns into a stop button counting the time.",
+    widthDp = 760,
+    heightDp = 800,
+    part = ShowcasePart.Devices,
+  ),
+  DeviceRecordingChoice(
+    "8f·size",
+    "Device · recording, which size",
+    "The red dot asks first: the phone's own resolution, or the mirror's smaller size, each with its size in pixels. The last one picked has a tick.",
+    widthDp = 760,
+    heightDp = 800,
+    part = ShowcasePart.Devices,
+  ),
+  DeviceLowDiskWarning(
+    "8f·disk",
+    "Device · recording, disk running low",
+    "Under 2 GB free on the disk the video goes to, the recording says so and goes on.",
     widthDp = 760,
     heightDp = 800,
     part = ShowcasePart.Devices,
@@ -420,6 +437,14 @@ private fun sceneFor(showcase: WorkspaceShowcase): Scene = when (showcase) {
     DevicesViewState(step = DevicesStep.Device, page = DevicePageState(ShowcaseDevices.pixel.id)),
     recordings = mapOf(ShowcaseDevices.pixel.id to ScreenRecording.Recording(startedAtMillis = Now - 42_000)),
   )
+  WorkspaceShowcase.DeviceRecordingChoice -> devicesScene(
+    DevicesViewState(step = DevicesStep.Device, page = DevicePageState(ShowcaseDevices.pixel.id, recordingChoiceOpen = true)),
+    lastRecording = RecordingResolution.Mirror,
+  )
+  WorkspaceShowcase.DeviceLowDiskWarning -> devicesScene(
+    DevicesViewState(step = DevicesStep.Device, page = DevicePageState(ShowcaseDevices.pixel.id)),
+    recordings = mapOf(ShowcaseDevices.pixel.id to ScreenRecording.Recording(startedAtMillis = Now - 754_000, spaceLeft = 1_600_000_000L)),
+  )
   WorkspaceShowcase.DeviceRecordingSaved -> devicesScene(
     DevicesViewState(step = DevicesStep.Device, page = DevicePageState(ShowcaseDevices.pixel.id)),
     recordings = mapOf(ShowcaseDevices.pixel.id to ShowcaseDevices.savedRecording),
@@ -518,6 +543,7 @@ private fun devicesScene(
   /** Devices mirrored in windows of their own; each shows [logs] and [screen] too. */
   windows: List<DeviceId> = emptyList(),
   recordings: Map<DeviceId, ScreenRecording> = emptyMap(),
+  lastRecording: RecordingResolution? = null,
 ) = scene(
   settings = AppSettings(mobilePlugin = true, devicesLayout = layout),
   view = { copy(devices = panel, devicesWindow = window, deviceWindows = windows.associateWith { DeviceWindowState(DevicePageState(it)) }) },
@@ -530,6 +556,8 @@ private fun devicesScene(
     nearby = nearby,
     recordings = recordings,
     nowMillis = Now,
+    home = ShowcaseFixtures.Home,
+    lastRecording = lastRecording,
   ),
 )
 

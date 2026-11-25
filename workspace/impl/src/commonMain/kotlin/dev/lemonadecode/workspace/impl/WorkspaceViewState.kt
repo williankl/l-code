@@ -4,6 +4,7 @@ import dev.lemonadecode.domain.mobile.DeviceId
 import dev.lemonadecode.domain.mobile.LogPackages
 import dev.lemonadecode.domain.mobile.MobileError
 import dev.lemonadecode.domain.mobile.MobilePlatform
+import dev.lemonadecode.domain.mobile.RecordingResolution
 import dev.lemonadecode.domain.review.FileContent
 import dev.lemonadecode.domain.session.SessionId
 import dev.lemonadecode.domain.session.SubSessionLocation
@@ -84,6 +85,8 @@ internal data class WorkspaceViewState(
   val closing: ClosingSession? = null,
   val error: LemonadeCodeString? = null,
   val toast: LemonadeCodeString? = null,
+  /** The size the last screen recording was asked for, offered first next time. */
+  val lastRecording: RecordingResolution? = null,
 )
 
 /**
@@ -139,6 +142,8 @@ internal data class DevicePageState(
   val logPackages: LogPackages = LogPackages.AppInFront,
   /** The choice of whose lines the log shows is open. */
   val logAppsOpen: Boolean = false,
+  /** The choice of what size to record the screen at is open. */
+  val recordingChoiceOpen: Boolean = false,
 )
 
 /** A device mirrored in a window of its own. */

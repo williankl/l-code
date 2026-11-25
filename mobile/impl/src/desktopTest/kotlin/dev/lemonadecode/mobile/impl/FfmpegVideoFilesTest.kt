@@ -103,7 +103,8 @@ class FfmpegVideoFilesTest {
   fun `a file that can't be opened leaves nothing behind, not even the name taken for it`() {
     val units = units()
     val reserved = File(folder, "Pixel-8-20261125-101403.mp4").apply { createNewFile() }
-    assertTrue(reserved.setWritable(false))
+    // Root, as in many CI containers, writes to it anyway: there's nothing to see there.
+    if (!reserved.setWritable(false) || reserved.canWrite()) return
     assertFailsWith<IllegalStateException> { FfmpegVideoFiles().mp4(reserved.path, 320, 200, checkNotNull(parameterSetsOf(units.first()))) }
     assertFalse(reserved.exists())
   }

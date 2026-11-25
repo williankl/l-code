@@ -216,6 +216,7 @@ import dev.lemonadecode.workspace.strings.pair_what
 import dev.lemonadecode.workspace.strings.paired_another
 import dev.lemonadecode.workspace.strings.paired_open
 import dev.lemonadecode.workspace.strings.paired_title
+import dev.lemonadecode.workspace.strings.recording_choose_title
 import dev.lemonadecode.workspace.strings.recording_show
 import dev.lemonadecode.workspace.strings.settings_back
 import dev.lemonadecode.workspace.uimodel.DeviceConnectionModel
@@ -238,6 +239,7 @@ import dev.lemonadecode.workspace.uimodel.MirrorControlsModel
 import dev.lemonadecode.workspace.uimodel.MobilePlatformModel
 import dev.lemonadecode.workspace.uimodel.PairingMethod
 import dev.lemonadecode.workspace.uimodel.QrCodeModel
+import dev.lemonadecode.workspace.uimodel.RecordingChoiceModel
 import dev.lemonadecode.workspace.uimodel.SavedRecordingModel
 import dev.lemonadecode.workspace.uimodel.ScreenPictureModel
 import dev.lemonadecode.workspace.uimodel.ScreenRecordingModel
@@ -266,6 +268,8 @@ private val ScreenPaneChrome = 112.dp
 
 /** The record button's dot and its stop square. */
 private val RecordSignSize = 12.dp
+
+private val RecordingChoiceWidth = 300.dp
 
 /**
  * The Devices panel: connected devices, one device's screen and logs, or a step of pairing. The
@@ -625,6 +629,25 @@ private fun ScreenPane(
           color = colors.content.contentSecondary,
         )
       }
+      device.recording?.lowSpace?.let { warning ->
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(spaces.spacing100)) {
+          LemonadeUi.Icon(icon = LemonadeIcons.TriangleAlert, contentDescription = null, size = LemonadeAssetSize.XSmall, tint = colors.content.contentCaution)
+          LemonadeUi.Text(text = warning.resolve(), textStyle = LemonadeTheme.typography.bodyXSmallRegular, color = colors.content.contentCaution)
+        }
+      }
+      device.recording?.problem?.let { problem ->
+        // Said here too, as a device's own window may be on another display than the banner.
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(spaces.spacing100)) {
+          LemonadeUi.Text(
+            text = problem.resolve(),
+            textStyle = LemonadeTheme.typography.bodyXSmallRegular,
+            textAlign = TextAlign.Center,
+            color = colors.content.contentCritical,
+            modifier = Modifier.weight(1f, fill = false),
+          )
+          if (device.recording?.saved == null) DismissRecordingButton(onEvent)
+        }
+      }
       device.recording?.saved?.let { SavedRecording(saved = it, onEvent = onEvent) }
     }
   }
@@ -765,7 +788,7 @@ private fun MirrorControls(
       .padding(LemonadeTheme.spaces.spacing100),
   ) {
     buttons.forEach { (button, event) -> MirrorButton(button, onClick = { onEvent(event) }) }
-    recording?.let { RecordButton(recording = it, onClick = { onEvent(WorkspaceEvent.ToggleScreenRecording) }) }
+    recording?.let { RecordButton(recording = it, onEvent = onEvent) }
     keyboard?.let { (button, event) -> MirrorButton(button, onClick = { onEvent(event) }) }
   }
 }
@@ -791,12 +814,70 @@ private fun MirrorButton(
 }
 
 /**
- * Records the screen, or stops recording it, shown in red while it records. It's off, saying why,
- * while the screen can't be recorded. Lemonade has no record or stop icons, so their signs are
- * drawn, in a button the size and shape of the others.
+ * Records the screen, asking at what size first, or stops recording it, shown in red while it
+ * records. It's off, saying why, while the screen can't be recorded. Lemonade has no record or
+ * stop icons, so their signs are drawn, in a button the size and shape of the others.
  */
 @Composable
 private fun RecordButton(
+  recording: ScreenRecordingModel,
+  onEvent: (WorkspaceEvent) -> Unit,
+) {
+  Box {
+    RecordSign(recording = recording, onClick = { onEvent(WorkspaceEvent.ToggleScreenRecording) })
+    RecordingChoicePopover(choice = recording.choice, onEvent = onEvent)
+  }
+}
+
+/**
+ * The sizes to record at, above the record button: the screen's own and the mirror's, each with
+ * its size in pixels; the one picked last carries a tick. Stays composed while it fades out.
+ */
+@Composable
+private fun RecordingChoicePopover(
+  choice: RecordingChoiceModel?,
+  onEvent: (WorkspaceEvent) -> Unit,
+) {
+  val spaces = LemonadeTheme.spaces
+  val colors = LemonadeTheme.colors
+  var shown by remember { mutableStateOf(choice) }
+  if (choice != null) shown = choice
+  AnchoredPopover(
+    visible = choice != null,
+    onDismissRequest = { onEvent(WorkspaceEvent.DismissRecordingChoice) },
+    width = RecordingChoiceWidth,
+    placement = TooltipPlacement.AboveStart,
+    padding = spaces.spacing300,
+    spacing = spaces.spacing200,
+    onEscape = { onEvent(WorkspaceEvent.DismissRecordingChoice) },
+  ) {
+    LemonadeUi.Text(
+      text = stringResource(Res.string.recording_choose_title),
+      textStyle = LemonadeTheme.typography.bodySmallSemiBold,
+      modifier = Modifier.padding(start = spaces.spacing200, end = spaces.spacing200, top = spaces.spacing100),
+    )
+    Column {
+      shown?.options.orEmpty().forEach { option ->
+        HoverRow(onClick = { onEvent(WorkspaceEvent.StartScreenRecording(option.resolution)) }, modifier = Modifier.semantics { selected = option.last }) {
+          Column(modifier = Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(spaces.spacing200)) {
+              LemonadeUi.Text(text = option.title.resolve(), textStyle = LemonadeTheme.typography.bodySmallMedium)
+              LemonadeUi.Text(text = option.size.resolve(), textStyle = LemonadeTheme.typography.bodyXSmallSemiBold, color = colors.content.contentSecondary)
+            }
+            LemonadeUi.Text(text = option.note.resolve(), textStyle = LemonadeTheme.typography.bodyXSmallRegular, color = colors.content.contentSecondary)
+          }
+          if (option.last) {
+            LemonadeUi.Icon(icon = LemonadeIcons.CircleCheck, contentDescription = null, size = LemonadeAssetSize.Small, tint = colors.content.contentBrand)
+          }
+        }
+      }
+    }
+  }
+}
+
+/** The button itself: a red dot, or a red square while it records. */
+@Composable
+private fun RecordSign(
   recording: ScreenRecordingModel,
   onClick: () -> Unit,
 ) {
@@ -859,17 +940,23 @@ private fun SavedRecording(
       )
     }
     LemonadeUi.Link(text = stringResource(Res.string.recording_show), onClick = { uriHandler.openUri(saved.revealUri) }, size = LemonadeLinkSize.Small)
-    val dismiss = stringResource(Res.string.action_dismiss)
-    HoverTooltip(text = dismiss, placement = TooltipPlacement.BelowEnd) {
-      LemonadeUi.IconButton(
-        icon = LemonadeIcons.Times,
-        contentDescription = dismiss,
-        onClick = { onEvent(WorkspaceEvent.DismissSavedRecording) },
-        variant = LemonadeButtonVariant.Neutral,
-        type = LemonadeButtonType.Ghost,
-        size = LemonadeButtonSize.XSmall,
-      )
-    }
+    DismissRecordingButton(onEvent)
+  }
+}
+
+/** × beside how the last recording ended: hides it. */
+@Composable
+private fun DismissRecordingButton(onEvent: (WorkspaceEvent) -> Unit) {
+  val dismiss = stringResource(Res.string.action_dismiss)
+  HoverTooltip(text = dismiss, placement = TooltipPlacement.BelowEnd) {
+    LemonadeUi.IconButton(
+      icon = LemonadeIcons.Times,
+      contentDescription = dismiss,
+      onClick = { onEvent(WorkspaceEvent.DismissSavedRecording) },
+      variant = LemonadeButtonVariant.Neutral,
+      type = LemonadeButtonType.Ghost,
+      size = LemonadeButtonSize.XSmall,
+    )
   }
 }
 

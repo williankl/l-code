@@ -2,6 +2,7 @@ package dev.lemonadecode.mobile.impl
 
 import dev.lemonadecode.domain.mobile.DeviceId
 import dev.lemonadecode.domain.mobile.RecordingFailure
+import dev.lemonadecode.domain.mobile.RecordingResolution
 import dev.lemonadecode.domain.mobile.RecordingStop
 import dev.lemonadecode.domain.mobile.ScreenRecording
 import kotlinx.coroutines.CancellationException
@@ -11,9 +12,14 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.selects.onTimeout
@@ -36,6 +42,12 @@ internal interface VideoFile {
 
   /** Takes back the picture written last, which turned out to be cut short: it isn't kept. */
   fun discardLast()
+
+  /**
+   * Some pictures are on disk already, in a fragment written whole, so the file plays even if it's
+   * never finished. Until then the pictures wait in memory.
+   */
+  val reachedDisk: Boolean
 
   /** Ends the file, its last picture shown until [atMicros]. */
   fun finish(atMicros: Long)
@@ -64,6 +76,12 @@ internal fun interface VideoFiles {
  * Each picture shows from the moment the mirror's decoding reached it until the next one, so a
  * screen that holds still holds still in the video too. A picture the mirror handed over early,
  * when the stream went quiet, may turn out to have been cut short ([onCutShort]); it's taken back.
+ *
+ * A recording never carries on silently when its video can't be trusted: it ends, keeping what it
+ * wrote, when the stream stays down for [StallLimit] ([onStreamEnded]; a still screen keeps its
+ * stream up), when the mirror gives up on video ([onVideoLost]), when the device won't record at
+ * its full size ([onRefused]), or when pictures come out of order. While it records, the free
+ * space of the disk it's written to is looked at every [SpaceCheck]; under [LowSpace] it says so.
  */
 internal class ScreenRecorder(
   private val scope: CoroutineScope,
@@ -81,7 +99,7 @@ internal class ScreenRecorder(
   private val sessions = MutableStateFlow<Map<DeviceId, Session>>(emptyMap())
   private val lock = Mutex()
 
-  private class Session(val messages: Channel<Message>)
+  private class Session(val messages: Channel<Message>, val resolution: RecordingResolution)
 
   private sealed interface Message {
     class Picture(val accessUnit: ByteArray, val width: Int, val height: Int, val at: ComparableTimeMark) : Message
@@ -89,33 +107,60 @@ internal class ScreenRecorder(
     /** The last picture was cut short. */
     data object CutShort : Message
 
+    /** The stream ended; another may follow, as when `screenrecord` starts again. */
+    class StreamEnded(val at: ComparableTimeMark) : Message
+
+    /** The device wouldn't stream at the size asked for. */
+    class Refused(val at: ComparableTimeMark) : Message
+
+    /** The mirror gave up on video. */
+    class VideoLost(val at: ComparableTimeMark) : Message
+
     class Stop(val at: ComparableTimeMark, val stop: RecordingStop, val done: CompletableDeferred<ScreenRecording>) : Message
   }
 
   /** The devices being recorded now. */
   val recording: Set<DeviceId> get() = sessions.value.keys
 
-  /** Starts recording [id], named [deviceName] in the file's name; false when it's being recorded already. */
-  suspend fun start(id: DeviceId, deviceName: String): Boolean = lock.withLock {
+  /** How big [id]'s recording is, while it records; its stream is to be that size. */
+  fun resolutionOf(id: DeviceId): RecordingResolution? = sessions.value[id]?.resolution
+
+  /** The devices recorded at full resolution now, whose stream is at their own size until they stop. */
+  val atFullResolution: Flow<Set<DeviceId>> = sessions
+    .map { all -> all.filterValues { it.resolution == RecordingResolution.Full }.keys }
+    .distinctUntilChanged()
+
+  /** Starts recording [id] at [resolution], named [deviceName] in the file's name; false when it's being recorded already. */
+  suspend fun start(id: DeviceId, deviceName: String, resolution: RecordingResolution = RecordingResolution.Mirror): Boolean = lock.withLock {
     if (id in sessions.value) return@withLock false
-    val messages = Channel<Message>(Channel.UNLIMITED)
+    // A stop that's never taken, e.g. as the app closes, is let go rather than left waiting.
+    val messages = Channel<Message>(Channel.UNLIMITED) { (it as? Message.Stop)?.done?.cancel() }
     val startedAt = timeSource.markNow()
-    sessions.update { it + (id to Session(messages)) }
-    mutableRecordings.update { it + (id to ScreenRecording.Recording(clock())) }
-    scope.launch(io) { record(id, deviceName, startedAt, messages) }
+    val recording = ScreenRecording.Recording(clock(), resolution)
+    sessions.update { it + (id to Session(messages, resolution)) }
+    mutableRecordings.update { it + (id to recording) }
+    scope.launch(io) { record(id, deviceName, recording, startedAt, messages) }
     true
   }
 
   /** One picture of [id]'s video, [width] by [height], as an access unit; kept only while [id] is recorded. */
-  fun onPicture(id: DeviceId, width: Int, height: Int, accessUnit: ByteArray) {
-    val session = sessions.value[id] ?: return
-    val _ = session.messages.trySend(Message.Picture(accessUnit, width, height, timeSource.markNow()))
-  }
+  fun onPicture(id: DeviceId, width: Int, height: Int, accessUnit: ByteArray) = send(id, Message.Picture(accessUnit, width, height, timeSource.markNow()))
 
   /** The last picture of [id]'s video, handed over when its stream went quiet, was only part of one. */
-  fun onCutShort(id: DeviceId) {
+  fun onCutShort(id: DeviceId) = send(id, Message.CutShort)
+
+  /** [id]'s video stream ended; one that doesn't start again within [StallLimit] ends the recording. */
+  fun onStreamEnded(id: DeviceId) = send(id, Message.StreamEnded(timeSource.markNow()))
+
+  /** [id] wouldn't stream at its full size, failing or making it smaller. */
+  fun onRefused(id: DeviceId) = send(id, Message.Refused(timeSource.markNow()))
+
+  /** [id]'s mirror gave up on video and shows screenshots instead. */
+  fun onVideoLost(id: DeviceId) = send(id, Message.VideoLost(timeSource.markNow()))
+
+  private fun send(id: DeviceId, message: Message) {
     val session = sessions.value[id] ?: return
-    val _ = session.messages.trySend(Message.CutShort)
+    val _ = session.messages.trySend(message)
   }
 
   /** Stops recording [id] and saves it; [stop] says why. Null when it wasn't recorded. */
@@ -133,15 +178,41 @@ internal class ScreenRecorder(
   /** Forgets how [id]'s last recording ended. */
   fun dismiss(id: DeviceId) = mutableRecordings.update { all -> if (all[id] is ScreenRecording.Recording) all else all - id }
 
+  /** Writes [id]'s pictures until it ends, and meanwhile watches the disk's free space. */
+  private suspend fun record(id: DeviceId, deviceName: String, recording: ScreenRecording.Recording, startedAt: ComparableTimeMark, messages: Channel<Message>) = coroutineScope {
+    val watcher = launch { watchSpace(id, messages, recording) }
+    try {
+      write(id, deviceName, recording.resolution, startedAt, messages)
+    } finally {
+      watcher.cancel()
+    }
+  }
+
+  /** Says, while [id] records into [messages], whether its disk is running low; it goes on either way. */
+  private suspend fun watchSpace(id: DeviceId, messages: Channel<Message>, recording: ScreenRecording.Recording) {
+    while (true) {
+      val left = runCatching { files.recordingSpace() }.getOrNull()
+      val low = left?.takeIf { it < LowSpace }
+      lock.withLock {
+        if (sessions.value[id]?.messages === messages) mutableRecordings.update { it + (id to recording.copy(spaceLeft = low)) }
+      }
+      delay(SpaceCheck)
+    }
+  }
+
   /**
-   * Writes [id]'s pictures as they come until it's stopped, or until no video has come for
-   * [FirstVideoWait]. However it ends, the stop asked for is answered, with the files written so far.
+   * Writes [id]'s pictures as they come until it's stopped or can't go on. However it ends, the
+   * stop asked for is answered, with the files written so far.
    */
   @OptIn(ExperimentalCoroutinesApi::class)
-  private suspend fun record(id: DeviceId, deviceName: String, startedAt: ComparableTimeMark, messages: Channel<Message>) {
+  private suspend fun write(id: DeviceId, deviceName: String, resolution: RecordingResolution, startedAt: ComparableTimeMark, messages: Channel<Message>) {
     var part: Part? = null
     val saved = mutableListOf<String>()
     var stop: Message.Stop? = null
+    // A stream's first picture came, even if it was cut short then.
+    var sawVideo = false
+    // The stream is down since then, between `screenrecord`'s runs or for good.
+    var downSince: ComparableTimeMark? = null
 
     /** Finishes the file being written at [at] and keeps it; one nothing was kept in is deleted. */
     fun close(at: ComparableTimeMark) {
@@ -151,23 +222,48 @@ internal class ScreenRecorder(
       part = null
       if (!current.isEmpty) saved += current.path
     }
+
+    /** Ends as [reason], keeping the files written, the one in hand finished at [at]. */
+    fun failing(reason: RecordingFailure, at: ComparableTimeMark): ScreenRecording {
+      close(at)
+      return ScreenRecording.Failed(reason, saved.toList())
+    }
     try {
       val ending = try {
         var result: ScreenRecording? = null
         while (result == null) {
-          val message = if (part == null) {
+          // A still screen sends nothing for as long as it's still; only a stream that's down, or none yet, has a deadline.
+          val deadline = when {
+            !sawVideo -> FirstVideoWait - startedAt.elapsedNow()
+            else -> downSince?.let { StallLimit - it.elapsedNow() }
+          }
+          val message = if (deadline == null) {
+            messages.receive()
+          } else {
             select<Message?> {
               messages.onReceive { it }
-              onTimeout((FirstVideoWait - startedAt.elapsedNow()).coerceAtLeast(Duration.ZERO)) { null }
+              onTimeout(deadline.coerceAtLeast(Duration.ZERO)) { null }
             }
-          } else {
-            messages.receive()
           }
           when (message) {
-            null -> result = ScreenRecording.Failed(RecordingFailure.NoVideo)
+            null -> result = when {
+              sawVideo -> failing(RecordingFailure.VideoLost, timeSource.markNow())
+              // At its own size, a device that sends nothing is one that can't.
+              resolution == RecordingResolution.Full -> ScreenRecording.Failed(RecordingFailure.FullResolutionRefused)
+              else -> ScreenRecording.Failed(RecordingFailure.NoVideo)
+            }
             is Message.Picture -> {
+              // Written as they come, pictures have to show in the order they come: no B-frames.
+              if (!sliceTypes(message.accessUnit).all { it % 5 in KeptSliceTypes }) {
+                result = failing(RecordingFailure.UnsupportedVideo, message.at)
+                continue
+              }
               val current = part
               val starts = startsStream(message.accessUnit)
+              if (starts) {
+                sawVideo = true
+                downSince = null
+              }
               // Until a stream starts, its pictures can't be decoded on their own.
               if ((current == null || current.isEmpty) && !starts) continue
               if (current == null || (starts && (message.width != current.width || message.height != current.height))) {
@@ -177,13 +273,17 @@ internal class ScreenRecorder(
               part?.write(message)
             }
             Message.CutShort -> part?.discardLast()
+            is Message.StreamEnded -> if (downSince == null) downSince = message.at
+            is Message.Refused -> result = failing(RecordingFailure.FullResolutionRefused, message.at)
+            is Message.VideoLost -> result = failing(RecordingFailure.VideoLost, message.at)
             is Message.Stop -> {
               stop = message
               close(message.at)
-              result = if (saved.isEmpty()) {
-                ScreenRecording.Failed(RecordingFailure.NoVideo)
-              } else {
-                ScreenRecording.Saved(saved.toList(), (message.at - startedAt).inWholeMilliseconds, message.stop)
+              result = when {
+                saved.isNotEmpty() -> ScreenRecording.Saved(saved.toList(), (message.at - startedAt).inWholeMilliseconds, message.stop)
+                // Its only picture was cut short, and the stop came before a whole one.
+                sawVideo -> ScreenRecording.Failed(RecordingFailure.NoWholePicture)
+                else -> ScreenRecording.Failed(RecordingFailure.NoVideo)
               }
             }
           }
@@ -192,16 +292,28 @@ internal class ScreenRecorder(
       } catch (e: CancellationException) {
         throw e
       } catch (e: Throwable) {
-        // The file being written plays as far as it reached the disk, so it's kept with the whole ones.
-        val partial = part?.takeUnless { it.isEmpty }?.path
-        ScreenRecording.Failed(RecordingFailure.Unwritable(e.message ?: e.toString()), saved + listOfNotNull(partial))
+        // The file being written plays as far as it reached the disk; one with nothing there goes.
+        val partial = part?.takeIf { !it.isEmpty && it.file.reachedDisk }?.path
+        part?.takeIf { it.path != partial }?.let { val _ = runCatching { it.file.delete() } }
+        part = null
+        val reason = if (e is UnsupportedVideoException) RecordingFailure.UnsupportedVideo else RecordingFailure.Unwritable(e.message ?: e.toString())
+        ScreenRecording.Failed(reason, saved + listOfNotNull(partial))
       }
       end(id, messages, ending)
       stop?.done?.complete(ending)
-    } finally {
-      // Cancelled, e.g. the app is closing, or failed: what was written is kept as far as it went.
-      part?.let { withContext(NonCancellable) { val _ = runCatching { it.finish(timeSource.markNow()) } } }
-      stop?.done?.cancel()
+    } catch (e: CancellationException) {
+      // The app is closing: what was written is kept as far as it went, and no stop is left waiting.
+      withContext(NonCancellable) {
+        part?.let { current ->
+          val _ = runCatching { if (current.isEmpty) current.file.delete() else current.finish(timeSource.markNow()) }
+        }
+        lock.withLock {
+          if (sessions.value[id]?.messages === messages) sessions.update { it - id }
+        }
+        messages.cancel()
+        stop?.done?.cancel()
+      }
+      throw e
     }
   }
 
@@ -220,7 +332,7 @@ internal class ScreenRecorder(
   }
 
   private suspend fun open(deviceName: String, first: Message.Picture): Part {
-    val parameterSets = checkNotNull(parameterSetsOf(first.accessUnit)) { "The video has no parameter sets" }
+    val parameterSets = parameterSetsOf(first.accessUnit) ?: throw UnsupportedVideoException()
     val path = files.recordingPath(deviceName)
     return Part(videos.mp4(path, first.width, first.height, parameterSets), path, first.width, first.height)
   }
@@ -266,6 +378,9 @@ internal class ScreenRecorder(
   }
 }
 
+/** A stream's first picture came without its parameter sets. */
+private class UnsupportedVideoException : Exception("The video's first picture has no parameter sets")
+
 /** The types of the NAL units in [accessUnit], an Annex B access unit, in order. */
 internal fun nalTypes(accessUnit: ByteArray): List<Int> = nalStarts(accessUnit).map { (_, header) -> accessUnit[header].toInt() and NalTypeMask }
 
@@ -302,8 +417,81 @@ private fun nalStarts(bytes: ByteArray): List<Pair<Int, Int>> {
   return starts
 }
 
+/**
+ * Each slice's `slice_type` in [accessUnit]: 0 P, 1 B, 2 I, 3 SP, 4 SI, and 5 more when every
+ * slice of the picture is of that type. Read from the slice header's start, which emulation
+ * prevention bytes can't change in practice but are skipped anyway.
+ */
+internal fun sliceTypes(accessUnit: ByteArray): List<Int> = nalStarts(accessUnit).mapNotNull { (_, header) ->
+  val type = accessUnit[header].toInt() and NalTypeMask
+  if (type != NalSlice && type != NalIdrSlice) return@mapNotNull null
+  val bits = BitReader(accessUnit, header + 1)
+  // first_mb_in_slice, then slice_type.
+  if (bits.unsignedExpGolomb() == null) null else bits.unsignedExpGolomb()
+}
+
+/** Reads bits of a NAL unit's payload from [start], leaving out emulation prevention bytes. */
+private class BitReader(private val bytes: ByteArray, start: Int) {
+  private var at = start
+  private var bit = 0
+  private var zeros = 0
+
+  private fun nextBit(): Int? {
+    if (bit == 0) {
+      // `00 00 03` keeps a start code out of the payload; the 03 isn't data.
+      if (zeros >= 2 && at < bytes.size && bytes[at] == EmulationPrevention) {
+        at++
+        zeros = 0
+      }
+      if (at >= bytes.size) return null
+      zeros = if (bytes[at] == ZeroByte) zeros + 1 else 0
+    }
+    val value = (bytes[at].toInt() shr (7 - bit)) and 1
+    bit++
+    if (bit == 8) {
+      bit = 0
+      at++
+    }
+    return value
+  }
+
+  /** An `ue(v)`: n zero bits, a one, then n bits; null when the unit ends first. */
+  fun unsignedExpGolomb(): Int? {
+    var leading = 0
+    while (true) {
+      val next = nextBit() ?: return null
+      if (next == 1) break
+      if (++leading > MaxExpGolombZeros) return null
+    }
+    var value = 0
+    repeat(leading) { value = (value shl 1) or (nextBit() ?: return null) }
+    return (1 shl leading) - 1 + value
+  }
+}
+
 /** How long a recording waits for the first picture of a stream before it gives up: the device sends no video. */
 internal val FirstVideoWait: Duration = 10.seconds
+
+/**
+ * How long a recording's stream may stay down, its runs failing to start again, before the
+ * recording stops. `screenrecord` starts again within a second; a still screen keeps its stream up.
+ */
+internal val StallLimit: Duration = 20.seconds
+
+/** How often the free space of the disk a recording goes to is looked at. */
+internal val SpaceCheck: Duration = 10.seconds
+
+/**
+ * Under this much free space, in bytes, a recording warns that the disk is running low: 2 GB,
+ * about half an hour of video moving all the time at the 8 Mb/s the stream is sent at over USB.
+ */
+internal const val LowSpace: Long = 2_000_000_000L
+
+/** `slice_type`s kept as they come, modulo 5: P and I. B, SP and SI pictures aren't. */
+private val KeptSliceTypes = setOf(0, 2)
+
+private const val MaxExpGolombZeros = 31
+private const val EmulationPrevention: Byte = 3
 
 /** Pictures that arrive together are spread this far apart, as a video's pictures can't share a time. */
 private const val MinPictureGapMicros = 1_000L

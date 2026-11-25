@@ -115,8 +115,15 @@ public enum class ScreenUnavailable {
 
 /** A recording of a device's screen to a video file: under way, or how it ended. */
 public sealed interface ScreenRecording {
-  /** Under way since [startedAtMillis], in milliseconds since the epoch. */
-  public data class Recording(val startedAtMillis: Long) : ScreenRecording
+  /**
+   * Under way since [startedAtMillis], in milliseconds since the epoch, at [resolution].
+   * [spaceLeft] is set, in bytes, while the disk it's written to is running low; it goes on.
+   */
+  public data class Recording(
+    val startedAtMillis: Long,
+    val resolution: RecordingResolution = RecordingResolution.Mirror,
+    val spaceLeft: Long? = null,
+  ) : ScreenRecording
 
   /**
    * Saved as [files], absolute paths in the order they were recorded: one, and one more each time
@@ -138,6 +145,15 @@ public sealed interface ScreenRecording {
   ) : ScreenRecording
 }
 
+/** How big a recording is. */
+public enum class RecordingResolution {
+  /** The device's own size, as sharp as its screen. */
+  Full,
+
+  /** The size the mirror streams at, longer side at most 1280 pixels: smaller files. */
+  Mirror,
+}
+
 /** What stopped a recording that was saved. */
 public enum class RecordingStop {
   /** Stopped from here. */
@@ -153,6 +169,18 @@ public enum class RecordingStop {
 public sealed interface RecordingFailure {
   /** The device sent no video to record, e.g. its screen comes as screenshots. */
   public data object NoVideo : RecordingFailure
+
+  /** Stopped before a whole picture came: the only one did, cut short. */
+  public data object NoWholePicture : RecordingFailure
+
+  /** The device can't record its screen at its full size: `screenrecord` failed at it, or made it smaller. */
+  public data object FullResolutionRefused : RecordingFailure
+
+  /** The video stopped coming, e.g. the mirror fell back on screenshots, so the recording stopped. */
+  public data object VideoLost : RecordingFailure
+
+  /** The video has pictures out of order (B-frames) or of kinds that can't be kept as they come. */
+  public data object UnsupportedVideo : RecordingFailure
 
   /** The video file couldn't be written, e.g. the disk is full; [message] is the error's own text, for logs. */
   public data class Unwritable(val message: String) : RecordingFailure

@@ -2,10 +2,16 @@ package dev.lemonadecode.mobile.impl
 
 import dev.lemonadecode.domain.mobile.DeviceId
 import dev.lemonadecode.domain.mobile.RecordingFailure
+import dev.lemonadecode.domain.mobile.RecordingResolution
 import dev.lemonadecode.domain.mobile.RecordingStop
 import dev.lemonadecode.domain.mobile.ScreenRecording
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
@@ -16,9 +22,11 @@ import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
 class ScreenRecorderTest {
@@ -30,9 +38,11 @@ class ScreenRecorderTest {
   /** The first picture of a stream: its parameter sets, then a key frame. */
   private val streamStart = parameterSets + picture(idr = true)
 
-  private fun TestScope.recorder() = ScreenRecorder(
-    scope = backgroundScope,
-    files = FakeDeviceFiles(),
+  private val files = FakeDeviceFiles()
+
+  private fun TestScope.recorder(scope: CoroutineScope = backgroundScope) = ScreenRecorder(
+    scope = scope,
+    files = files,
     videos = videos,
     io = StandardTestDispatcher(testScheduler),
     timeSource = testScheduler.timeSource,
@@ -270,6 +280,179 @@ class ScreenRecorderTest {
     assertEquals(listOf("/home/me/Videos/Lemonade Code/Pixel 8-1.mp4"), (stopping.await() as ScreenRecording.Saved).files)
     assertEquals(ScreenRecording.Recording(1_793_600_000_000), recorder.recordings.value[pixel])
     assertEquals(setOf(pixel), recorder.recording)
+  }
+
+  @Test
+  fun `a recording at full resolution says so while it records, and its stream goes back when it ends`() = runTest {
+    val recorder = recorder()
+    val full = mutableListOf<Set<DeviceId>>()
+    backgroundScope.launch { recorder.atFullResolution.collect { full += it } }
+    runCurrent()
+    assertTrue(recorder.start(pixel, "Pixel 8", RecordingResolution.Full))
+    runCurrent()
+    assertEquals(RecordingResolution.Full, recorder.resolutionOf(pixel))
+    assertEquals(ScreenRecording.Recording(1_793_600_000_000, RecordingResolution.Full), recorder.recordings.value[pixel])
+    send(recorder, streamStart, width = 1080, height = 2400)
+    val _ = recorder.stop(pixel)
+    runCurrent()
+    assertEquals(null, recorder.resolutionOf(pixel))
+    assertEquals(listOf(emptySet(), setOf(pixel), emptySet()), full)
+    assertEquals(1080 to 2400, videos.opened.single().let { it.width to it.height })
+  }
+
+  @Test
+  fun `a device that sends nothing at its full size has refused it`() = runTest {
+    val recorder = recorder()
+    assertTrue(recorder.start(pixel, "Pixel 8", RecordingResolution.Full))
+    advanceTimeBy(FirstVideoWait)
+    runCurrent()
+    assertEquals(ScreenRecording.Failed(RecordingFailure.FullResolutionRefused), recorder.recordings.value[pixel])
+  }
+
+  @Test
+  fun `a device that refuses its full size after a turn keeps the video it made before`() = runTest {
+    val recorder = recorder()
+    assertTrue(recorder.start(pixel, "Pixel 8", RecordingResolution.Full))
+    send(recorder, streamStart, width = 1080, height = 2400)
+    send(recorder, picture(), after = 100, width = 1080, height = 2400)
+    advanceTimeBy(100.milliseconds)
+    recorder.onRefused(pixel)
+    runCurrent()
+
+    assertEquals(
+      ScreenRecording.Failed(RecordingFailure.FullResolutionRefused, listOf("/home/me/Videos/Lemonade Code/Pixel 8-1.mp4")),
+      recorder.recordings.value[pixel],
+    )
+    assertEquals(200L, videos.opened.single().finishedAt)
+  }
+
+  @Test
+  fun `a still screen sends nothing for minutes and the recording goes on`() = runTest {
+    val recorder = recorder()
+    assertTrue(recorder.start(pixel, "Pixel 8"))
+    send(recorder, streamStart)
+    // screenrecord starts again every few minutes, within a second.
+    advanceTimeBy(3.minutes)
+    recorder.onStreamEnded(pixel)
+    send(recorder, streamStart, after = 600)
+    advanceTimeBy(5.minutes)
+    runCurrent()
+    assertIs<ScreenRecording.Recording>(recorder.recordings.value[pixel])
+  }
+
+  @Test
+  fun `a stream that stays down stops the recording, keeping what it recorded`() = runTest {
+    val recorder = recorder()
+    assertTrue(recorder.start(pixel, "Pixel 8"))
+    send(recorder, streamStart)
+    send(recorder, picture(), after = 100)
+    advanceTimeBy(100.milliseconds)
+    recorder.onStreamEnded(pixel)
+    advanceTimeBy(StallLimit - 1.milliseconds)
+    runCurrent()
+    assertIs<ScreenRecording.Recording>(recorder.recordings.value[pixel], "a stream down for a moment is fine")
+    advanceTimeBy(1.milliseconds)
+    runCurrent()
+
+    val failed = ScreenRecording.Failed(RecordingFailure.VideoLost, listOf("/home/me/Videos/Lemonade Code/Pixel 8-1.mp4"))
+    assertEquals(failed, recorder.recordings.value[pixel])
+    assertEquals(emptySet(), recorder.recording)
+  }
+
+  @Test
+  fun `the mirror giving up on video stops the recording, keeping what it recorded`() = runTest {
+    val recorder = recorder()
+    assertTrue(recorder.start(pixel, "Pixel 8"))
+    send(recorder, streamStart)
+    advanceTimeBy(2.seconds)
+    recorder.onVideoLost(pixel)
+    runCurrent()
+    assertEquals(ScreenRecording.Failed(RecordingFailure.VideoLost, listOf("/home/me/Videos/Lemonade Code/Pixel 8-1.mp4")), recorder.recordings.value[pixel])
+    assertEquals(2_000L, videos.opened.single().finishedAt)
+  }
+
+  @Test
+  fun `pictures out of order stop the recording rather than scramble it, keeping what came before`() = runTest {
+    val recorder = recorder()
+    assertTrue(recorder.start(pixel, "Pixel 8"))
+    send(recorder, streamStart)
+    send(recorder, picture(), after = 100)
+    // A B-frame: shown before a picture that comes after it.
+    send(recorder, nal(1, 0xA0, 0x84, 0x21), after = 100)
+
+    assertEquals(ScreenRecording.Failed(RecordingFailure.UnsupportedVideo, listOf("/home/me/Videos/Lemonade Code/Pixel 8-1.mp4")), recorder.recordings.value[pixel])
+    assertEquals(2, videos.opened.single().pictures.size, "the B-frame isn't written")
+  }
+
+  @Test
+  fun `the disk running low is said while the recording goes on, and no longer once there's room`() = runTest {
+    files.freeSpace = 1_500_000_000L
+    val recorder = recorder()
+    assertTrue(recorder.start(pixel, "Pixel 8"))
+    send(recorder, streamStart)
+    assertEquals(ScreenRecording.Recording(1_793_600_000_000, spaceLeft = 1_500_000_000L), recorder.recordings.value[pixel])
+    files.freeSpace = 40_000_000_000L
+    advanceTimeBy(SpaceCheck)
+    runCurrent()
+    assertEquals(ScreenRecording.Recording(1_793_600_000_000), recorder.recordings.value[pixel])
+    // Space that can't be told isn't low.
+    files.freeSpace = null
+    advanceTimeBy(SpaceCheck)
+    runCurrent()
+    assertEquals(ScreenRecording.Recording(1_793_600_000_000), recorder.recordings.value[pixel])
+  }
+
+  @Test
+  fun `a write that fails before any picture reached the disk reports no file, and leaves none`() = runTest {
+    videos.nothingReachesDisk = true
+    videos.writeFailureAt = 2
+    val recorder = recorder()
+    assertTrue(recorder.start(pixel, "Pixel 8"))
+    send(recorder, streamStart)
+    send(recorder, picture(), after = 100)
+
+    assertEquals(ScreenRecording.Failed(RecordingFailure.Unwritable("No space left on device")), recorder.recordings.value[pixel])
+    assertTrue(videos.opened.single().deleted)
+  }
+
+  @Test
+  fun `stopped before a whole picture came, it says so rather than that no video came`() = runTest {
+    val recorder = recorder()
+    assertTrue(recorder.start(pixel, "Pixel 8"))
+    send(recorder, streamStart)
+    recorder.onCutShort(pixel)
+    runCurrent()
+    assertEquals(ScreenRecording.Failed(RecordingFailure.NoWholePicture), recorder.stop(pixel))
+    assertTrue(videos.opened.single().deleted)
+  }
+
+  @Test
+  fun `when the app closes, every stop waiting is let go, the recording is forgotten and an empty file deleted`() = runTest {
+    val scope = CoroutineScope(backgroundScope.coroutineContext + Job())
+    val recorder = recorder(scope)
+    assertTrue(recorder.start(pixel, "Pixel 8"))
+    send(recorder, streamStart)
+    recorder.onCutShort(pixel)
+    runCurrent()
+    val stopping = async(start = CoroutineStart.UNDISPATCHED) { runCatching { recorder.stop(pixel) } }
+    scope.cancel()
+    runCurrent()
+
+    assertTrue(stopping.await().exceptionOrNull() is CancellationException, "the stop isn't left waiting")
+    assertEquals(emptySet(), recorder.recording)
+    assertTrue(videos.opened.single().deleted)
+    // A stop asked for afterwards doesn't wait for anything.
+    withTimeout(1.seconds) { val _ = recorder.stop(pixel) }
+  }
+
+  @Test
+  fun `slice types are read from slice headers, past emulation prevention bytes`() {
+    assertEquals(listOf(7), sliceTypes(picture(idr = true)))
+    assertEquals(listOf(1), sliceTypes(nal(1, 0xA0, 0x84)))
+    assertEquals(listOf(6), sliceTypes(nal(1, 0x9C, 0x84)))
+    assertEquals(emptyList(), sliceTypes(nal(7, 0x42)))
+    // first_mb_in_slice 65535, its zeros split by a 03 that isn't data; then slice_type 0 (P).
+    assertEquals(listOf(0), sliceTypes(byteArrayOf(0, 0, 1, 0x41, 0, 0, 3, 0x80.toByte(), 0x00, 0x40)))
   }
 
   @Test

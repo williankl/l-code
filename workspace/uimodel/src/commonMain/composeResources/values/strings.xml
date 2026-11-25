@@ -356,6 +356,20 @@
   <string name="recording_failed_no_video">Couldn’t record %1$s: it sent no video.</string>
   <string name="recording_failed_unwritable">Couldn’t save the recording.</string>
   <string name="recording_failed_partly">Couldn’t write the whole recording. What was written is in %1$s.</string>
+  <string name="recording_choose_title">Record the screen at</string>
+  <string name="recording_full">Full resolution</string>
+  <string name="recording_full_note">The phone’s own size: sharpest, bigger files</string>
+  <string name="recording_mirror">Mirror size</string>
+  <string name="recording_mirror_note">As the mirror shows it: smaller files</string>
+  <string name="recording_low_space">Disk space is low: %1$s left. The recording goes on.</string>
+  <string name="size_gigabytes">%1$d GB</string>
+  <string name="size_megabytes">%1$d MB</string>
+  <string name="recording_failed_full_resolution">%1$s can’t record its screen at full resolution. Try the mirror size.</string>
+  <string name="recording_failed_video_lost">%1$s stopped sending video, so the recording stopped.</string>
+  <string name="recording_failed_unsupported">%1$s sent pictures out of order, which can’t be saved as they come, so the recording stopped.</string>
+  <string name="recording_failed_no_whole_picture">Stopped before %1$s sent a whole picture, so nothing was saved.</string>
+  <string name="recording_kept_in">What was recorded is in %1$s.</string>
+  <string name="sentences_two">%1$s %2$s</string>
 
   <!-- Devices › logs -->
   <string name="logs_all">All</string>

@@ -4,6 +4,7 @@ import dev.lemonadecode.domain.mobile.DeviceApp
 import dev.lemonadecode.domain.mobile.LogPackages
 import dev.lemonadecode.domain.mobile.MobileError
 import dev.lemonadecode.domain.mobile.RecordingFailure
+import dev.lemonadecode.domain.mobile.RecordingResolution
 import dev.lemonadecode.domain.mobile.RecordingStop
 import dev.lemonadecode.domain.mobile.ScreenRecording
 import dev.lemonadecode.domain.review.DiffState
@@ -39,12 +40,15 @@ import dev.lemonadecode.workspace.impl.showcase.ShowcaseFixtures
 import dev.lemonadecode.workspace.strings.Res
 import dev.lemonadecode.workspace.strings.error_worktree_delete
 import dev.lemonadecode.workspace.strings.file_path_copied
+import dev.lemonadecode.workspace.strings.mirror_size
 import dev.lemonadecode.workspace.strings.recording_failed_no_video
 import dev.lemonadecode.workspace.strings.recording_failed_partly
+import dev.lemonadecode.workspace.strings.recording_low_space
 import dev.lemonadecode.workspace.strings.recording_saved
 import dev.lemonadecode.workspace.strings.recording_saved_device_gone
 import dev.lemonadecode.workspace.strings.recording_saved_toast
 import dev.lemonadecode.workspace.strings.session_path_copied
+import dev.lemonadecode.workspace.strings.size_gigabytes
 import dev.lemonadecode.workspace.strings.time_hours_ago
 import dev.lemonadecode.workspace.strings.update_failed_checksum
 import dev.lemonadecode.workspace.strings.updates_up_to_date
@@ -66,6 +70,7 @@ import dev.lemonadecode.workspace.uimodel.LanguageOption
 import dev.lemonadecode.workspace.uimodel.LogFilter
 import dev.lemonadecode.workspace.uimodel.MobilePlatformModel
 import dev.lemonadecode.workspace.uimodel.PairingMethod
+import dev.lemonadecode.workspace.uimodel.RecordingResolutionModel
 import dev.lemonadecode.workspace.uimodel.ReleaseNotesModel
 import dev.lemonadecode.workspace.uimodel.ScreenRecordingModel
 import dev.lemonadecode.workspace.uimodel.SessionMenuModel
@@ -477,8 +482,16 @@ class WorkspacePresenterTest {
       awaitItemWhere { it.devices != null }.eventSink(WorkspaceEvent.SelectDevice(pixel))
       val shown = awaitItemWhere { it.page()?.screen is DeviceScreenModel.Frame }
       assertEquals(ScreenRecordingModel(), shown.page()?.recording)
+      // Recording asks what size first, each time.
       shown.eventSink(WorkspaceEvent.ToggleScreenRecording)
+      val choosing = awaitItemWhere { it.page()?.recording?.choice != null }
+      val options = choosing.page()?.recording?.choice?.options.orEmpty()
+      assertEquals(listOf(RecordingResolutionModel.Full, RecordingResolutionModel.Mirror), options.map { it.resolution })
+      assertEquals(listOf(Res.string.mirror_size.asLemonadeCodeString(1080, 2400), Res.string.mirror_size.asLemonadeCodeString(576, 1280)), options.map { it.size })
+      assertEquals(listOf(false, false), options.map { it.last }, "nothing was picked before")
+      choosing.eventSink(WorkspaceEvent.StartScreenRecording(RecordingResolutionModel.Mirror))
       val recording = awaitItemWhere { it.page()?.recording?.recording == true }
+      assertNull(recording.page()?.recording?.choice)
       assertEquals("0:05", recording.page()?.recording?.elapsed)
 
       // Back to the list: the recording goes on, so the screen streams on, and the row says so.
@@ -494,8 +507,46 @@ class WorkspacePresenterTest {
       assertEquals(Res.string.recording_saved.asLemonadeCodeString("0:05"), saved.page()?.recording?.saved?.label)
 
       saved.eventSink(WorkspaceEvent.DismissSavedRecording)
-      awaitItemWhere { it.page()?.recording?.saved == null }
-      assertEquals(listOf("record $pixel", "stop recording $pixel", "dismiss recording $pixel"), mobile.actions)
+      val dismissed = awaitItemWhere { it.page()?.recording?.saved == null }
+      assertEquals(listOf("record $pixel mirror", "stop recording $pixel", "dismiss recording $pixel"), mobile.actions)
+
+      // Next time the choice ticks the size picked last; closing it records nothing.
+      dismissed.eventSink(WorkspaceEvent.ToggleScreenRecording)
+      val again = awaitItemWhere { it.page()?.recording?.choice != null }
+      assertEquals(listOf(false, true), again.page()?.recording?.choice?.options?.map { it.last })
+      again.eventSink(WorkspaceEvent.DismissRecordingChoice)
+      awaitItemWhere { it.page()?.recording?.choice == null }
+      assertEquals(3, mobile.actions.size)
+    }
+  }
+
+  @Test
+  fun `full resolution is asked of the service, and a disk running low warns once while it goes on`() = runTest {
+    withSession()
+    settings.update { it.copy(mobilePlugin = true) }
+    mobile.setDevices(ShowcaseDevices.connected)
+    mobile.screens.value = mapOf(ShowcaseDevices.pixel.id to ShowcaseDevices.screen())
+    val pixel = ShowcaseDevices.pixel.id
+    fun WorkspaceModel.page() = devices?.content as? DevicesContentModel.Device
+    presenter.test {
+      awaitItem().eventSink(WorkspaceEvent.ToggleDevices)
+      awaitItemWhere { it.devices != null }.eventSink(WorkspaceEvent.SelectDevice(pixel.value))
+      awaitItemWhere { it.page()?.screen is DeviceScreenModel.Frame }.eventSink(WorkspaceEvent.ToggleScreenRecording)
+      awaitItemWhere { it.page()?.recording?.choice != null }.eventSink(WorkspaceEvent.StartScreenRecording(RecordingResolutionModel.Full))
+      awaitItemWhere { it.page()?.recording?.recording == true }
+      assertEquals(listOf("record ${pixel.value} full"), mobile.actions)
+
+      mobile.recordings.value = mapOf(pixel to ScreenRecording.Recording(Now, RecordingResolution.Full, spaceLeft = 1_600_000_000L))
+      val low = awaitItemWhere { it.error != null }
+      val warning = Res.string.recording_low_space.asLemonadeCodeString(Res.string.size_gigabytes.asLemonadeCodeString(1))
+      assertEquals(warning, low.error)
+      assertEquals(warning, low.page()?.recording?.lowSpace)
+      // Said once: dismissed, it stays away while the disk stays low, and the page keeps saying it.
+      low.eventSink(WorkspaceEvent.DismissError)
+      awaitItemWhere { it.error == null }
+      mobile.recordings.value = mapOf(pixel to ScreenRecording.Recording(Now, RecordingResolution.Full, spaceLeft = 900_000_000L))
+      val lower = awaitItemWhere { it.page()?.recording?.lowSpace != warning && it.page()?.recording?.lowSpace != null }
+      assertNull(lower.error)
     }
   }
 
@@ -510,7 +561,7 @@ class WorkspacePresenterTest {
     presenter.test {
       awaitItem().eventSink(WorkspaceEvent.ToggleDevices)
       awaitItemWhere { it.devices != null }.eventSink(WorkspaceEvent.SelectDevice(pixel.value))
-      awaitItemWhere { (it.devices?.content as? DevicesContentModel.Device)?.screen is DeviceScreenModel.Frame }.eventSink(WorkspaceEvent.ToggleScreenRecording)
+      awaitItemWhere { (it.devices?.content as? DevicesContentModel.Device)?.screen is DeviceScreenModel.Frame }.eventSink(WorkspaceEvent.StartScreenRecording(RecordingResolutionModel.Mirror))
       awaitItemWhere { it.recording() }
 
       // Unplugged: the service stops it and keeps what was recorded.

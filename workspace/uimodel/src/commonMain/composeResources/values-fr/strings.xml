@@ -206,6 +206,11 @@
     <item quantity="many">%1$d dossiers n’existent plus, donc leurs sessions sont revenues dans votre dossier personnel</item>
     <item quantity="other">%1$d dossiers n’existent plus, donc leurs sessions sont revenues dans votre dossier personnel</item>
   </plurals>
+  <plurals name="archived_some_stayed">
+    <item quantity="one">%1$d sous-session reste dans Archivées, car son shell n’a pas pu démarrer</item>
+    <item quantity="many">%1$d sous-sessions restent dans Archivées, car un shell n’a pas pu démarrer</item>
+    <item quantity="other">%1$d sous-sessions restent dans Archivées, car un shell n’a pas pu démarrer</item>
+  </plurals>
   <string name="no_open_sessions_title">Aucune session ouverte</string>
   <string name="no_open_sessions_detail">Ouvrez un nouveau terminal ou restaurez une session archivée depuis la barre latérale.</string>
 

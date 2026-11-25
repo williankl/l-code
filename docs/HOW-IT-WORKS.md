@@ -152,11 +152,17 @@ just without their latest output.
 **Archived sessions** are kept in the same file. Archiving a session saves it and its sub-sessions
 the same way, with what each terminal showed and the conversation to resume, plus its branch and
 the siblings it sat between, then ends their shells. Nothing starts for them at launch. Restoring
-one opens each again in a fresh shell, exactly as at launch, and puts it back before the sibling it
-sat before, or after the one it sat after; under its parent if that's open, else at the top. If a
-folder is gone, that session starts at home and isn't resumed, since a Claude Code conversation
-belongs to the folder it was in. A `sessions.json` from before archiving has none, and loads as it
-always did.
+one opens each again in a fresh shell, the way launch does, and puts it back before the sibling it
+sat before, or after the one it sat after; under its parent if that's open, else at the top. Unlike
+launch, a session whose folder has gone starts at home without resuming its agent, since a Claude
+Code conversation belongs to the folder it was in.
+
+Each session leaves the archive only as it joins the open ones, in the same step, so whatever is
+saved meanwhile, or when the app quits part way, still has every session in one list or the other.
+A sub-session whose shell can't start stays archived, with those under it, and the error banner
+says so; if the first one can't, the whole archive stays where it was. A sub-session that's still
+starting when its parent is archived goes into that archive too. A `sessions.json` from before
+archiving has none, and loads as it always did; one that lists a session twice brings it back once.
 
 ## Keep awake
 

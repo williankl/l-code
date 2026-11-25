@@ -206,6 +206,11 @@
     <item quantity="many">%1$d pastas já não existem, por isso as suas sessões reabriram na tua pasta pessoal</item>
     <item quantity="other">%1$d pastas já não existem, por isso as suas sessões reabriram na tua pasta pessoal</item>
   </plurals>
+  <plurals name="archived_some_stayed">
+    <item quantity="one">%1$d subsessão continua em Arquivadas porque a sua shell não arrancou</item>
+    <item quantity="many">%1$d subsessões continuam em Arquivadas porque uma shell não arrancou</item>
+    <item quantity="other">%1$d subsessões continuam em Arquivadas porque uma shell não arrancou</item>
+  </plurals>
   <string name="no_open_sessions_title">Não há sessões abertas</string>
   <string name="no_open_sessions_detail">Abre um novo terminal ou restaura uma sessão arquivada na barra lateral.</string>
 

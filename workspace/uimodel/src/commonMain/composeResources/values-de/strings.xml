@@ -194,6 +194,10 @@
     <item quantity="one">%1$d Ordner existiert nicht mehr, daher ist seine Sitzung in deinem Benutzerordner zurück</item>
     <item quantity="other">%1$d Ordner existieren nicht mehr, daher sind ihre Sitzungen in deinem Benutzerordner zurück</item>
   </plurals>
+  <plurals name="archived_some_stayed">
+    <item quantity="one">%1$d Untersitzung bleibt unter „Archiviert“, weil ihre Shell nicht starten konnte</item>
+    <item quantity="other">%1$d Untersitzungen bleiben unter „Archiviert“, weil eine Shell nicht starten konnte</item>
+  </plurals>
   <string name="no_open_sessions_title">Keine offenen Sitzungen</string>
   <string name="no_open_sessions_detail">Öffne ein neues Terminal oder stelle eine archivierte Sitzung aus der Seitenleiste wieder her.</string>
 

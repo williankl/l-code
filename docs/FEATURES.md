@@ -223,6 +223,8 @@ never touches a worktree or a branch.
 | You archive the last open session | The main panel says nothing is open and offers a new terminal; the archived ones wait in the sidebar |
 | A sub-session's parent is closed or archived while it's archived | It comes back at the top of the tree. With its parent open, it comes back under it |
 | Its folder is gone when you restore it | It opens in your home folder, without resuming its agent, and a message names the folder |
+| A sub-session's shell can't start when you restore it | That sub-session, and those under it, stay under Archived, and a message says how many |
+| You archive a session while one of its sub-sessions is still starting | The new sub-session goes into the archive with it |
 | Closing another session would leave unused a worktree an archived session is in | The worktree isn't offered for deletion, since the archived session still needs it |
 
 Archived sessions have no status, make no sound and don't keep the computer awake.

@@ -36,6 +36,7 @@ import dev.lemonadecode.workspace.impl.showcase.ShowcaseFixtures
 import dev.lemonadecode.workspace.strings.Res
 import dev.lemonadecode.workspace.strings.archived_restored_at_home
 import dev.lemonadecode.workspace.strings.archived_restored_at_home_many
+import dev.lemonadecode.workspace.strings.archived_some_stayed
 import dev.lemonadecode.workspace.strings.error_launch
 import dev.lemonadecode.workspace.strings.error_worktree_delete
 import dev.lemonadecode.workspace.strings.file_path_copied
@@ -1101,6 +1102,21 @@ class WorkspacePresenterTest {
       val failed = awaitItemWhere { it.error != null }
       assertEquals(Res.string.error_launch.asLemonadeCodeString("no terminal"), failed.error)
       assertEquals(listOf("cf"), failed.sessions.archived?.rows?.map { it.id })
+    }
+  }
+
+  @Test
+  fun `sub-sessions whose shell can't start stay archived, and the banner says how many`() = runTest {
+    withFamily()
+    sessions.failingToStart = setOf(SessionId("r1"))
+    presenter.test {
+      awaitItem().eventSink(WorkspaceEvent.ArchiveSession("ar"))
+      awaitItemWhere { it.sessions.archived != null }.eventSink(WorkspaceEvent.RestoreArchivedSession("ar"))
+      val partly = awaitItemWhere { it.error != null }
+      assertEquals(Res.plurals.archived_some_stayed.asLemonadeCodeString(2, 2), partly.error, "review-1, and atomic-refill under it")
+      assertEquals("api-ratelimit", partly.header?.name)
+      assertEquals(listOf("r1"), partly.sessions.archived?.rows?.map { it.id })
+      assertEquals(1, partly.sessions.archived?.rows?.single()?.subSessionCount)
     }
   }
 

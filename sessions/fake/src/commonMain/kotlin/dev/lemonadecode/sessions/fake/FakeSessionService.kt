@@ -189,19 +189,26 @@ public class FakeSessionService(initial: List<Session> = emptyList()) : SessionS
     archivedState.update { listOf(ArchivedSession(sessions.first(), sessions.drop(1))) + it }
   }
 
+  /** Sessions whose shell [unarchive] can't start: they, and those under them, stay archived where they were. */
+  public var failingToStart: Set<SessionId> = emptySet()
+
   /** Puts the sessions back last, under the parent if it's there; a folder in [missingFolders] comes back at home. */
   override suspend fun unarchive(id: SessionId): LemonadeCodeResult<Unarchived, SessionError> {
     unarchivedIds += id
     unarchiveResult?.let { return it }
     val archive = archivedState.value.firstOrNull { it.id == id } ?: return LemonadeCodeResult.failure(SessionError.UnknownSession)
-    archivedState.update { list -> list - archive }
-    val missing = archive.sessions.filter { it.workingDirectory in missingFolders }.associate { it.id to it.workingDirectory }
-    val back = archive.sessions.map { session ->
+    val stayed = mutableSetOf<SessionId>()
+    archive.sessions.forEach { if (it.id in failingToStart || it.parentId in stayed) stayed += it.id }
+    if (id in stayed) return LemonadeCodeResult.failure(SessionError.LaunchFailed("no shell"))
+    val kept = archive.sessions.filter { it.id in stayed }
+    archivedState.update { list -> list.mapNotNull { if (it !== archive) it else kept.takeIf(List<Session>::isNotEmpty)?.let { left -> ArchivedSession(left.first(), left.drop(1)) } } }
+    val missing = archive.sessions.filter { it.id !in stayed && it.workingDirectory in missingFolders }.associate { it.id to it.workingDirectory }
+    val back = archive.sessions.filterNot { it.id in stayed }.map { session ->
       val moved = if (session.id in missing) session.copy(workingDirectory = homeFolder) else session
       if (session.id == id && state.value.none { it.id == session.parentId }) moved.copy(parentId = null, placement = SessionPlacement.Root) else moved
     }
     state.update { it + back }
-    return LemonadeCodeResult.success(Unarchived(id, missing))
+    return LemonadeCodeResult.success(Unarchived(id, missing, kept.map { it.id }))
   }
 
   override suspend fun worktreeOf(id: SessionId): LinkedWorktree? {

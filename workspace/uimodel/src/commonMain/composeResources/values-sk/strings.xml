@@ -218,6 +218,12 @@
     <item quantity="many">%1$d priečinkov už neexistuje, preto sa ich relácie vrátili do vášho domovského priečinka</item>
     <item quantity="other">%1$d priečinkov už neexistuje, preto sa ich relácie vrátili do vášho domovského priečinka</item>
   </plurals>
+  <plurals name="archived_some_stayed">
+    <item quantity="one">%1$d podrelácia zostala v Archivovaných, lebo jej shell sa nepodarilo spustiť</item>
+    <item quantity="few">%1$d podrelácie zostali v Archivovaných, lebo shell sa nepodarilo spustiť</item>
+    <item quantity="many">%1$d podrelácií zostalo v Archivovaných, lebo shell sa nepodarilo spustiť</item>
+    <item quantity="other">%1$d podrelácií zostalo v Archivovaných, lebo shell sa nepodarilo spustiť</item>
+  </plurals>
   <string name="no_open_sessions_title">Žiadne otvorené relácie</string>
   <string name="no_open_sessions_detail">Otvorte nový terminál alebo obnovte archivovanú reláciu z bočného panela.</string>
 

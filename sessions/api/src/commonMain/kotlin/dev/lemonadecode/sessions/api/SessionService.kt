@@ -13,7 +13,7 @@ import kotlinx.coroutines.flow.StateFlow
 /**
  * Every open terminal, in display order: each sub-session sits right after its parent's
  * descendants. A session's folder, repository and branch follow the shell as it `cd`s. Archived
- * sessions aren't among them, so they have no status and make no sound.
+ * sessions aren't among them.
  */
 public interface SessionService {
   public val sessions: StateFlow<List<Session>>
@@ -61,13 +61,16 @@ public interface SessionService {
   /**
    * Puts the session and its sub-sessions away: their terminals end, and whatever runs in them, but
    * they're kept, across launches too, for [unarchive] to bring back. No worktree or branch is touched.
+   * A sub-session still starting goes with them once it has.
    */
   public fun archive(id: SessionId)
 
   /**
    * Brings an archived session and its sub-sessions back where they were, each in a fresh shell in its
    * folder with the output it showed, and an agent that was running resumed, as at launch. A session
-   * whose folder has gone since starts at home instead, without its agent, and says so.
+   * whose folder has gone since starts at home instead, without its agent, and says so. Each leaves
+   * the archive only as it comes back: a sub-session whose shell can't start stays archived, with
+   * those under it, and is named in [Unarchived.stillArchived]; if the first can't, nothing changes.
    */
   public suspend fun unarchive(id: SessionId): LemonadeCodeResult<Unarchived, SessionError>
 
@@ -108,11 +111,13 @@ public interface SessionService {
 
 /**
  * An archived session back in the tree as [id]. [missingFolders] are the folders that had gone, by
- * the session that was in them; those sessions started at home instead.
+ * the session that was in them; those sessions started at home instead. [stillArchived] are the
+ * sub-sessions whose shell couldn't start, and those under them: they stay archived.
  */
 public data class Unarchived(
   val id: SessionId,
   val missingFolders: Map<SessionId, String> = emptyMap(),
+  val stillArchived: List<SessionId> = emptyList(),
 )
 
 public sealed interface SessionError {

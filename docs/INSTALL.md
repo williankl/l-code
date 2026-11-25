@@ -27,6 +27,9 @@ For Apple Silicon and Intel Macs.
 brew install --cask williankl/tap/lemonade-code
 ```
 
+The Mac builds aren't notarized by Apple yet. The cask removes macOS's quarantine flag from the app
+so it opens straight away, and `brew` says so when it installs.
+
 **Or by hand:** download the DMG for your Mac from
 [Releases](https://github.com/williankl/loupe/releases/latest):
 
@@ -101,6 +104,9 @@ tar -xzf lemonade-code-<version>-linux-x64.tar.gz
 | Snap Store | Automatically, like every snap |
 
 Updating a .deb asks for your password, because the package is installed system-wide.
+
+After a Homebrew upgrade, `brew` may warn that the app's signer changed. That is expected until the
+builds are notarized, and the app still opens.
 
 ---
 

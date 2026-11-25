@@ -837,6 +837,97 @@ class WorkspaceContentUiTest {
   }
 
   @Test
+  fun `dragging a tree row up past its sibling picks it up and drops it there`() = show(WorkspaceShowcase.SessionTree) {
+    val reviewTwo = onNodeWithText("review-2")
+    val from = reviewTwo.fetchSemanticsNode().boundsInRoot.center
+    val to = onNodeWithText("review-1").fetchSemanticsNode().boundsInRoot.center
+    events.clear()
+    reviewTwo.performMouseInput {
+      moveTo(center)
+      press()
+      moveTo(center + Offset(0f, to.y - from.y), delayMillis = 50)
+      release()
+    }
+    waitForIdle()
+    assertEquals(
+      listOf(WorkspaceEvent.StartSessionDrag("r2"), WorkspaceEvent.DragSession("r2", 0), WorkspaceEvent.DropSession("r2")),
+      events,
+    )
+  }
+
+  @Test
+  fun `a drag goes no further than its siblings, and a small one changes nothing`() = show(WorkspaceShowcase.SessionTree) {
+    val watchMulti = onNodeWithText("watch-multi")
+    events.clear()
+    // atomic-refill's sub-sessions: watch-multi can only go above lua-script, however far it goes.
+    watchMulti.performMouseInput {
+      moveTo(center)
+      press()
+      moveBy(Offset(0f, -2_000f), delayMillis = 50)
+      release()
+    }
+    waitForIdle()
+    assertEquals(
+      listOf(WorkspaceEvent.StartSessionDrag("d5"), WorkspaceEvent.DragSession("d5", 0), WorkspaceEvent.DropSession("d5")),
+      events,
+    )
+
+    events.clear()
+    onNodeWithText("checkout-flake").performMouseInput {
+      moveTo(center)
+      press()
+      // Past the drag's threshold, short of the middle of scratch, the sibling below.
+      moveBy(Offset(0f, 24f), delayMillis = 50)
+      release()
+    }
+    waitForIdle()
+    assertEquals(listOf(WorkspaceEvent.StartSessionDrag("cf"), WorkspaceEvent.DropSession("cf")), events)
+  }
+
+  @Test
+  fun `a click still selects a tree row, and the right and middle buttons don't drag it`() = show(WorkspaceShowcase.SessionTree) {
+    expect(WorkspaceEvent.SelectSession("r2")) { onNodeWithText("review-2").performClick() }
+    assertEquals(listOf<WorkspaceEvent>(WorkspaceEvent.SelectSession("r2")), events)
+
+    events.clear()
+    onNodeWithText("review-2").performMouseInput {
+      moveTo(center)
+      press(MouseButton.Secondary)
+      moveBy(Offset(0f, -200f), delayMillis = 50)
+      release(MouseButton.Secondary)
+    }
+    waitForIdle()
+    assertEquals(listOf<WorkspaceEvent>(WorkspaceEvent.OpenSessionMenu("r2")), events)
+
+    events.clear()
+    onNodeWithText("scratch").performMouseInput {
+      moveTo(center)
+      press(MouseButton.Tertiary)
+      moveBy(Offset(0f, -200f), delayMillis = 50)
+      release(MouseButton.Tertiary)
+    }
+    waitForIdle()
+    assertEquals(emptyList(), events, "a middle click let go elsewhere closes nothing, and drags nothing")
+  }
+
+  @Test
+  fun `while a session is dragged its lifted row and the line show, and Escape calls it off`() = show(WorkspaceShowcase.DraggingSession) {
+    // The lifted copy isn't read out twice; the row itself stays, faded.
+    onAllNodesWithText("checkout-flake").assertCountEquals(1)
+    expect(WorkspaceEvent.CancelSessionDrag) { onAllNodes(isRoot())[0].performKeyInput { pressKey(Key.Escape) } }
+  }
+
+  @Test
+  fun `the menu moves a session up or down, and leaves out what can't happen`() = show(WorkspaceShowcase.MovingInMenu) {
+    expect(WorkspaceEvent.MoveSessionUp("r2")) { onNodeWithText("Move up").performClick() }
+    onNodeWithText("Move down").assertIsNotEnabled()
+    events.clear()
+    onNodeWithText("Move down").performClick()
+    waitForIdle()
+    assertEquals(emptyList(), events)
+  }
+
+  @Test
   fun `the session menu closes the session, like a middle click, even with no sub-session to offer`() {
     val menu = SessionMenuModel(
       sessionId = "cf",

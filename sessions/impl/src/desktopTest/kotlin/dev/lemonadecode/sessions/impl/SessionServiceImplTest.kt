@@ -207,6 +207,32 @@ class SessionServiceImplTest {
   }
 
   @Test
+  fun `a session moved among its siblings takes its sub-sessions along, and comes back in that order`() = runBlocking<Unit> {
+    git.checkoutResult = LemonadeCodeResult.success(GitCheckout(root = home.path, branch = "main"))
+    val first = service.openTerminal().getOrNull()!!
+    val sub = service.startSubSession(first, SubSessionLocation.SameFolder).getOrNull()!!
+    val second = service.openTerminal().getOrNull()!!
+    val third = service.openTerminal().getOrNull()!!
+    val thirdSub1 = service.startSubSession(third, SubSessionLocation.SameFolder).getOrNull()!!
+    val thirdSub2 = service.startSubSession(third, SubSessionLocation.SameFolder).getOrNull()!!
+    assertEquals(listOf(first, sub, second, third, thirdSub1, thirdSub2), service.sessions.value.map { it.id })
+
+    service.move(first, 2)
+    assertEquals(listOf(second, third, thirdSub1, thirdSub2, first, sub), service.sessions.value.map { it.id })
+    service.move(thirdSub2, 0)
+    assertEquals(listOf(second, third, thirdSub2, thirdSub1, first, sub), service.sessions.value.map { it.id })
+    // Only among its siblings: a sub-session never leaves its parent.
+    assertEquals(third, service.sessions.value.single { it.id == thirdSub2 }.parentId)
+
+    service.shutdown()
+    assertEquals(listOf(second, third, thirdSub2, thirdSub1, first, sub).map { it.value }, store.saved!!.sessions.map { it.id })
+    val next = newService(SessionRegistry())
+    assertEquals(6, next.restore())
+    assertEquals(listOf(second, third, thirdSub2, thirdSub1, first, sub), next.sessions.value.map { it.id })
+    assertEquals(first, next.sessions.value.single { it.id == sub }.parentId)
+  }
+
+  @Test
   fun `an agent running at quit is resumed on the next launch, one you quit isn't`() = runBlocking<Unit> {
     assertEquals(0, service.restore())
     val running = service.openTerminal().getOrNull()!!

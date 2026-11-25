@@ -82,6 +82,7 @@ import dev.lemonadecode.workspace.uimodel.DevicePageEvent
 import dev.lemonadecode.workspace.uimodel.DeviceWindowModel
 import dev.lemonadecode.workspace.uimodel.DevicesPanelModel
 import dev.lemonadecode.workspace.uimodel.DevicesWindow
+import dev.lemonadecode.workspace.uimodel.SessionNavigationModel
 import dev.lemonadecode.workspace.uimodel.SessionsPanelModel
 import dev.lemonadecode.workspace.uimodel.ThemeOption
 import dev.lemonadecode.workspace.uimodel.WorkspaceContentModel
@@ -509,6 +510,7 @@ private fun ErrorBanner(
 }
 
 private fun shortcutFor(model: WorkspaceModel, key: Key, command: Boolean): WorkspaceEvent? = when {
+  key == Key.Escape && (model.sessions.navigation as? SessionNavigationModel.Tree)?.drag != null -> WorkspaceEvent.CancelSessionDrag
   key == Key.Escape && model.sessions.menu?.rename != null -> WorkspaceEvent.CancelRenamingSession
   key == Key.Escape && model.sessions.menu != null -> WorkspaceEvent.DismissSessionMenu
   key == Key.Escape && model.settings.open -> WorkspaceEvent.SettingsBack

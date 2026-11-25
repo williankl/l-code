@@ -4,6 +4,7 @@ import dev.lemonadecode.domain.review.CommentStatus
 import dev.lemonadecode.domain.review.Review
 import dev.lemonadecode.domain.session.BranchName
 import dev.lemonadecode.domain.session.Session
+import dev.lemonadecode.domain.session.SessionOrder
 import dev.lemonadecode.domain.session.SessionStatus
 import dev.lemonadecode.domain.session.SubSessionLocation
 import dev.lemonadecode.domain.session.SubSessionPlan
@@ -99,7 +100,7 @@ internal object WorkspaceModelMapper {
         expanded = input.settings.sidebarExpanded,
         sidebarWidth = clampSidebarWidth(input.settings.sidebarWidth),
         drawerOpen = view.drawerOpen,
-        navigation = SessionsMapper.navigation(sessions, selected, view.navigationStyle, view.folded, input.homeDirectory),
+        navigation = SessionsMapper.navigation(sessions, selected, view.navigationStyle, view.folded, input.homeDirectory, drag = view.sessionDrag),
         tiles = SessionsMapper.tiles(sessions, selected),
         menu = view.sessionMenu?.let { id -> sessions.firstOrNull { it.id == id } }?.let { session ->
           SessionsMapper.menu(
@@ -110,6 +111,7 @@ internal object WorkspaceModelMapper {
             newWorktree = view.worktreeBranch?.takeIf { view.namingWorktree == session.id }?.let {
               worktreeBranch(it, input.menuWorktreePlan, view.takenBranch, input.homeDirectory)
             },
+            siblings = SessionOrder.siblings(sessions, session.id),
           )
         },
       ),

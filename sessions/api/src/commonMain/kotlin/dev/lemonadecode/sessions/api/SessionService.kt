@@ -75,6 +75,13 @@ public interface SessionService {
   public fun rename(id: SessionId, name: String?)
 
   /**
+   * Moves the session, with its sub-sessions, to [index] among its siblings: the sessions under the
+   * same parent, or the top-level ones, counted as they'll be once it has moved. It stays under its
+   * parent. The order is kept across launches.
+   */
+  public fun move(id: SessionId, index: Int)
+
+  /**
    * Brings back the sessions open when Lemonade Code last quit, each in a fresh shell in the folder it was
    * in, with the output it showed. An agent that was running is started again where it left off.
    * From then on the sessions are kept up to date on disk. Returns how many came back.

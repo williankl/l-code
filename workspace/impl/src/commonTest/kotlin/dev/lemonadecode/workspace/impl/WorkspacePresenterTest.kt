@@ -28,6 +28,7 @@ import dev.lemonadecode.platform.sound.Chime
 import dev.lemonadecode.platform.sound.testing.FakeSoundPlayer
 import dev.lemonadecode.review.fake.FakeReviewService
 import dev.lemonadecode.sessions.api.SessionError
+import dev.lemonadecode.sessions.api.SessionService
 import dev.lemonadecode.sessions.fake.FakeSessionService
 import dev.lemonadecode.settings.fake.FakeSettingsService
 import dev.lemonadecode.updates.fake.FakeUpdateService
@@ -59,6 +60,8 @@ import dev.lemonadecode.workspace.uimodel.LogFilter
 import dev.lemonadecode.workspace.uimodel.MobilePlatformModel
 import dev.lemonadecode.workspace.uimodel.PairingMethod
 import dev.lemonadecode.workspace.uimodel.ReleaseNotesModel
+import dev.lemonadecode.workspace.uimodel.SessionDragModel
+import dev.lemonadecode.workspace.uimodel.SessionDropModel
 import dev.lemonadecode.workspace.uimodel.SessionMenuModel
 import dev.lemonadecode.workspace.uimodel.SessionNavigationModel
 import dev.lemonadecode.workspace.uimodel.SessionRenameModel
@@ -72,6 +75,8 @@ import dev.lemonadecode.workspace.uimodel.WorkspaceEvent
 import dev.lemonadecode.workspace.uimodel.WorkspaceModel
 import dev.lemonadecode.workspace.uimodel.WorkspaceView
 import dev.lemonadecode.workspace.uimodel.WorktreeBranchModel
+import kotlinx.coroutines.ExperimentalForInheritanceCoroutinesApi
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -1172,6 +1177,158 @@ class WorkspacePresenterTest {
       awaitItemWhere { it.sessions.menu?.rename != null }.eventSink(WorkspaceEvent.RenameSession("cf", "checkout-flake "))
       awaitItemWhere { it.sessions.menu == null }
       assertEquals(emptyList(), sessions.renamed)
+    }
+  }
+
+  private val WorkspaceModel.drag: SessionDragModel? get() = (sessions.navigation as SessionNavigationModel.Tree).drag
+
+  private fun order(): List<String> = sessions.sessions.value.map { it.id.value }
+
+  @Test
+  fun `dragging a session shows where it would go among its siblings, and letting go moves it there`() = runTest {
+    withFamily()
+    presenter.test {
+      awaitItem().eventSink(WorkspaceEvent.OpenSessionMenu("cf"))
+      awaitItemWhere { it.sessions.menu != null }.eventSink(WorkspaceEvent.StartSessionDrag("cf"))
+      val picked = awaitItemWhere { it.drag != null }
+      assertEquals(SessionDragModel("cf", drop = null), picked.drag, "no line while it's where it was")
+      assertEquals(null, picked.sessions.menu, "picking a row up closes its menu")
+
+      picked.eventSink(WorkspaceEvent.DragSession("cf", 0))
+      val over = awaitItemWhere { it.drag?.drop != null }
+      assertEquals(SessionDropModel(rowId = "ar", below = false), over.drag?.drop)
+      assertTrue(sessions.moved.isEmpty(), "nothing moves before letting go")
+
+      over.eventSink(WorkspaceEvent.DropSession("cf"))
+      val dropped = awaitItemWhere { it.drag == null && it.sessions.tiles.first().id == "cf" }
+      assertEquals(listOf(SessionId("cf") to 0), sessions.moved)
+      assertEquals(listOf("cf", "ar", "r1", "d2"), order())
+      assertEquals(listOf("cf", "ar", "r1", "d2"), dropped.sessions.tiles.map { it.id })
+      assertEquals("api-ratelimit", dropped.header?.name, "the first session was showing, and still is")
+    }
+  }
+
+  @Test
+  fun `past the last sibling the line goes under the last row nested under it`() = runTest {
+    sessions.setSessions(
+      listOf(
+        ShowcaseFixtures.session("cf", "checkout-flake"),
+        ShowcaseFixtures.session("ar", "api-ratelimit"),
+        ShowcaseFixtures.session("r1", "review-1", parent = "ar"),
+        ShowcaseFixtures.session("d2", "atomic-refill", parent = "r1"),
+      ),
+    )
+    presenter.test {
+      awaitItem().eventSink(WorkspaceEvent.StartSessionDrag("cf"))
+      awaitItemWhere { it.drag != null }.eventSink(WorkspaceEvent.DragSession("cf", 1))
+      val past = awaitItemWhere { it.drag?.drop != null }
+      assertEquals(SessionDropModel(rowId = "d2", below = true), past.drag?.drop)
+
+      // Folded, what's nested under api-ratelimit isn't on show: the line goes under it.
+      past.eventSink(WorkspaceEvent.ToggleSessionFold("ar"))
+      val folded = awaitItemWhere { it.drag?.drop?.rowId == "ar" }
+      assertEquals(SessionDropModel(rowId = "ar", below = true), folded.drag?.drop)
+
+      folded.eventSink(WorkspaceEvent.DropSession("cf"))
+      awaitItemWhere { it.drag == null }
+      assertEquals(listOf("ar", "r1", "d2", "cf"), order(), "after api-ratelimit and everything under it")
+    }
+  }
+
+  @Test
+  fun `a session that changes as it's picked up starts where it is, with no line`() = runTest {
+    withFamily()
+    // Every read of the sessions while picking up finds checkout-flake a little different: its
+    // agent reporting in between any two reads.
+    val changing = ChangingBetweenReads(sessions)
+    val presenter = WorkspacePresenter(
+      changing,
+      reviews,
+      settings,
+      object : HomeDirectory {
+        override val path: String = ShowcaseFixtures.Home
+      },
+      updates,
+      mobile,
+      sounds,
+    ) { Now }
+    presenter.test {
+      val first = awaitItem()
+      changing.session = SessionId("cf")
+      first.eventSink(WorkspaceEvent.StartSessionDrag("cf"))
+      changing.session = null
+      assertEquals(SessionDragModel("cf", drop = null), awaitItemWhere { it.drag != null }.drag, "it's the second of two, where it was")
+    }
+  }
+
+  /**
+   * [fake], except that while [session] is set each read of the sessions' current value finds it
+   * with a different agent name, as if it reported between any two reads. What's collected doesn't
+   * change, so nothing recomposes because of it.
+   */
+  @OptIn(ExperimentalForInheritanceCoroutinesApi::class)
+  private class ChangingBetweenReads(private val fake: FakeSessionService) : SessionService by fake {
+    var session: SessionId? = null
+    private var reads = 0
+
+    override val sessions: StateFlow<List<Session>> = object : StateFlow<List<Session>> by fake.sessions {
+      override val value: List<Session>
+        get() {
+          val id = session ?: return fake.sessions.value
+          reads++
+          return fake.sessions.value.map { if (it.id == id) it.copy(agent = "claude $reads") else it }
+        }
+    }
+  }
+
+  @Test
+  fun `letting go where it started, or calling the drag off, moves nothing`() = runTest {
+    withFamily()
+    presenter.test {
+      awaitItem().eventSink(WorkspaceEvent.StartSessionDrag("r1"))
+      // The only sub-session of its parent: there's nowhere else for it to go.
+      val alone = awaitItemWhere { it.drag != null }
+      alone.eventSink(WorkspaceEvent.DragSession("r1", 3))
+      alone.eventSink(WorkspaceEvent.DropSession("r1"))
+      awaitItemWhere { it.drag == null }.eventSink(WorkspaceEvent.StartSessionDrag("cf"))
+
+      awaitItemWhere { it.drag != null }.eventSink(WorkspaceEvent.DragSession("cf", 0))
+      awaitItemWhere { it.drag?.drop != null }.eventSink(WorkspaceEvent.CancelSessionDrag)
+      val cancelled = awaitItemWhere { it.drag == null }
+      // A release still on its way after Esc.
+      cancelled.eventSink(WorkspaceEvent.DropSession("cf"))
+      cancelled.eventSink(WorkspaceEvent.DragSession("cf", 0))
+      assertEquals(emptyList(), sessions.moved)
+      assertEquals(listOf("ar", "r1", "d2", "cf"), order())
+    }
+  }
+
+  @Test
+  fun `the menu moves a session a place up or down among its siblings, and stays open on it`() = runTest {
+    withFamily()
+    presenter.test {
+      awaitItem().eventSink(WorkspaceEvent.OpenSessionMenu("cf"))
+      val last = awaitItemWhere { it.sessions.menu != null }
+      assertEquals(true, last.sessions.menu?.canMoveUp)
+      assertEquals(false, last.sessions.menu?.canMoveDown)
+
+      last.eventSink(WorkspaceEvent.MoveSessionUp("cf"))
+      val first = awaitItemWhere { it.sessions.menu?.canMoveDown == true }
+      assertEquals(listOf("cf", "ar", "r1", "d2"), order())
+      assertEquals("cf", first.sessions.menu?.sessionId, "the menu stays open on it, for another step")
+      assertEquals(false, first.sessions.menu?.canMoveUp)
+
+      // Already the first: up goes nowhere.
+      first.eventSink(WorkspaceEvent.MoveSessionUp("cf"))
+      first.eventSink(WorkspaceEvent.MoveSessionDown("cf"))
+      awaitItemWhere { it.sessions.menu?.canMoveUp == true }
+      assertEquals(listOf(SessionId("cf") to 0, SessionId("cf") to 1), sessions.moved)
+      assertEquals(listOf("ar", "r1", "d2", "cf"), order())
+
+      // A sub-session alone under its parent has nowhere to go.
+      first.eventSink(WorkspaceEvent.OpenSessionMenu("r1"))
+      val alone = awaitItemWhere { it.sessions.menu?.sessionId == "r1" }.sessions.menu!!
+      assertEquals(false to false, alone.canMoveUp to alone.canMoveDown)
     }
   }
 

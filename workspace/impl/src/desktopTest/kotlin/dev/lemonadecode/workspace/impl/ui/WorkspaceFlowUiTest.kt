@@ -1,11 +1,13 @@
 package dev.lemonadecode.workspace.impl.ui
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.DesktopComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.MouseButton
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasSetTextAction
@@ -256,6 +258,46 @@ class WorkspaceFlowUiTest {
       waitFor(hasText("api-ratelimit"))
       waitUntil(timeoutMillis = 5_000) { onAllNodes(hasText("flaky checkout")).fetchSemanticsNodes().isEmpty() }
       assertEquals(listOf(SessionId("cf")), sessions.closed)
+    }
+  }
+
+  @Test
+  fun `dragging a session up the tree puts it there with its sub-session, and the menu moves it back`() {
+    sessions.setSessions(
+      listOf(
+        ShowcaseFixtures.session("ar", "api-ratelimit"),
+        ShowcaseFixtures.session("cf", "checkout-flake"),
+        ShowcaseFixtures.session("cf1", "retry-on-timeout", parent = "cf"),
+      ),
+    )
+    fun order() = sessions.sessions.value.map { it.id.value }
+
+    // The rows in the sidebar, not the header's name of the one shown.
+    fun DesktopComposeUiTest.row(name: String) = onNode(hasText(name) and hasAnyAncestor(hasContentDescription("Sessions")))
+    flow {
+      val row = row("checkout-flake")
+      val from = row.fetchSemanticsNode().boundsInRoot.center
+      val to = row("api-ratelimit").fetchSemanticsNode().boundsInRoot.center
+      row.performMouseInput {
+        moveTo(center)
+        press()
+        moveTo(center + Offset(0f, to.y - from.y), delayMillis = 50)
+        release()
+      }
+      waitUntil(timeoutMillis = 5_000) { sessions.moved.isNotEmpty() }
+      assertEquals(listOf(SessionId("cf") to 0), sessions.moved)
+      assertEquals(listOf("cf", "cf1", "ar"), order())
+      // The tree draws the new order once the lifted row has glided into place.
+      waitUntil(timeoutMillis = 5_000) {
+        row("checkout-flake").fetchSemanticsNode().boundsInRoot.top < row("api-ratelimit").fetchSemanticsNode().boundsInRoot.top
+      }
+      onAllNodes(hasText("checkout-flake")).assertCountEquals(1)
+
+      row("checkout-flake").performMouseInput { rightClick(center) }
+      waitFor(hasText("Move down"))
+      onNodeWithText("Move down").performClick()
+      waitUntil(timeoutMillis = 5_000) { order() == listOf("ar", "cf", "cf1") }
+      assertEquals(listOf(SessionId("cf") to 0, SessionId("cf") to 1), sessions.moved)
     }
   }
 

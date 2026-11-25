@@ -56,6 +56,27 @@ public sealed interface WorkspaceEvent {
   /** The session's folder path is on the clipboard: confirms it with a toast. */
   public data class CopiedSessionPath(val path: String) : WorkspaceEvent
 
+  /** Picked up a session's row in the tree, to move it among its siblings. */
+  public data class StartSessionDrag(val sessionId: String) : WorkspaceEvent
+
+  /**
+   * The session being dragged would now go to [index] among its siblings, counted as they'll be
+   * once it has moved.
+   */
+  public data class DragSession(val sessionId: String, val index: Int) : WorkspaceEvent
+
+  /** Let go: the session, with its sub-sessions, moves to where the line showed. */
+  public data class DropSession(val sessionId: String) : WorkspaceEvent
+
+  /** Esc while dragging, or the drag was interrupted: nothing moves. */
+  public data object CancelSessionDrag : WorkspaceEvent
+
+  /** The session menu's Move up: one place up among its siblings, with its sub-sessions. */
+  public data class MoveSessionUp(val sessionId: String) : WorkspaceEvent
+
+  /** The session menu's Move down: one place down among its siblings, with its sub-sessions. */
+  public data class MoveSessionDown(val sessionId: String) : WorkspaceEvent
+
   /** Opens a new terminal at home. */
   public data object NewSession : WorkspaceEvent
 

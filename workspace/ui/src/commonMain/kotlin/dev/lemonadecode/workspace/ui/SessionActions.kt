@@ -57,6 +57,8 @@ import dev.lemonadecode.workspace.strings.action_cancel
 import dev.lemonadecode.workspace.strings.action_create_sub_session
 import dev.lemonadecode.workspace.strings.session_close
 import dev.lemonadecode.workspace.strings.session_copy_path
+import dev.lemonadecode.workspace.strings.session_move_down
+import dev.lemonadecode.workspace.strings.session_move_up
 import dev.lemonadecode.workspace.strings.session_name_field
 import dev.lemonadecode.workspace.strings.session_new_sub_same_folder
 import dev.lemonadecode.workspace.strings.session_new_sub_worktree
@@ -204,6 +206,23 @@ private fun SessionMenuItems(
       }
     },
   )
+  // Dragging the row does the same; this is for touch, and for one step at a time. The menu stays
+  // open on the row as it moves.
+  if (menu.canMoveUp || menu.canMoveDown) {
+    ContextMenuDivider()
+    ContextMenuItem(
+      label = stringResource(Res.string.session_move_up),
+      icon = LemonadeIcons.ArrowUp,
+      enabled = menu.canMoveUp,
+      onClick = { onEvent(WorkspaceEvent.MoveSessionUp(id)) },
+    )
+    ContextMenuItem(
+      label = stringResource(Res.string.session_move_down),
+      icon = LemonadeIcons.ArrowDown,
+      enabled = menu.canMoveDown,
+      onClick = { onEvent(WorkspaceEvent.MoveSessionDown(id)) },
+    )
+  }
   if (menu.canStartSubSession) {
     ContextMenuDivider()
     ContextMenuItem(

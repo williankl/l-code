@@ -36,6 +36,7 @@ import dev.lemonadecode.domain.review.Review
 import dev.lemonadecode.domain.session.LinkedWorktree
 import dev.lemonadecode.domain.session.Session
 import dev.lemonadecode.domain.session.SessionId
+import dev.lemonadecode.domain.session.SessionOrder
 import dev.lemonadecode.domain.session.SessionStatus
 import dev.lemonadecode.domain.session.SubSessionLocation
 import dev.lemonadecode.domain.settings.DevicesLayout
@@ -265,6 +266,19 @@ public class WorkspacePresenter internal constructor(
             namingWorktree = state.namingWorktree?.takeUnless { it in closing },
           )
         }
+
+        /** Where [id] is among its siblings, from 0. */
+        fun siblingIndex(id: SessionId): Int = SessionOrder.siblings(sessionService.sessions.value, id).indexOfFirst { it.id == id }
+
+        /** Moves [id], with its sub-sessions, to [index] among its siblings; nothing past either end or where it is. */
+        fun moveSession(id: SessionId, index: Int) {
+          val siblings = SessionOrder.siblings(sessionService.sessions.value, id)
+          if (index !in siblings.indices || siblings[index].id == id) return
+          // With none picked, the first session shows: it stays the one shown, wherever it goes.
+          if (view.selectedId == null && current != null) update { it.copy(selectedId = current.id) }
+          sessionService.move(id, index)
+        }
+
         fun close(id: SessionId) {
           val closing = SessionsMapper.subtree(sessionService.sessions.value, id)
           sessionService.close(id)
@@ -416,6 +430,24 @@ public class WorkspacePresenter internal constructor(
             update { it.copy(sessionMenu = null, renaming = null, toast = message) }
             toastTimer.restart(scope) { update { state -> if (state.toast === message) state.copy(toast = null) else state } }
           }
+
+          is WorkspaceEvent.StartSessionDrag -> sessionOf(event.sessionId)?.let { session ->
+            val index = SessionOrder.siblings(sessionService.sessions.value, session.id).indexOf(session)
+            update { it.closingPopovers().copy(renaming = null, sessionDrag = SessionDrag(session.id, index)) }
+          }
+          is WorkspaceEvent.DragSession -> update { state ->
+            val drag = state.sessionDrag?.takeIf { it.sessionId.value == event.sessionId }
+            if (drag == null) state else state.copy(sessionDrag = drag.copy(index = event.index))
+          }
+          is WorkspaceEvent.DropSession -> {
+            val drag = view.sessionDrag?.takeIf { it.sessionId.value == event.sessionId }
+            update { it.copy(sessionDrag = null) }
+            if (drag != null) moveSession(drag.sessionId, drag.index)
+          }
+          WorkspaceEvent.CancelSessionDrag -> update { it.copy(sessionDrag = null) }
+          // The menu stays open on the row as it moves, for another step.
+          is WorkspaceEvent.MoveSessionUp -> sessionOf(event.sessionId)?.let { moveSession(it.id, siblingIndex(it.id) - 1) }
+          is WorkspaceEvent.MoveSessionDown -> sessionOf(event.sessionId)?.let { moveSession(it.id, siblingIndex(it.id) + 1) }
 
           WorkspaceEvent.NewSession -> scope.launch {
             when (val opened = sessionService.openTerminal()) {

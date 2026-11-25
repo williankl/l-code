@@ -3,6 +3,7 @@ package dev.lemonadecode.sessions.fake
 import dev.lemonadecode.domain.session.LinkedWorktree
 import dev.lemonadecode.domain.session.Session
 import dev.lemonadecode.domain.session.SessionId
+import dev.lemonadecode.domain.session.SessionOrder
 import dev.lemonadecode.domain.session.SessionOrigin
 import dev.lemonadecode.domain.session.SessionPlacement
 import dev.lemonadecode.domain.session.SessionStatus
@@ -27,6 +28,9 @@ public class FakeSessionService(initial: List<Session> = emptyList()) : SessionS
 
   /** Every rename, with the name kept: trimmed, or null for back to the automatic one. */
   public val renamed: MutableList<Pair<SessionId, String?>> = mutableListOf()
+
+  /** Every move: the session and the place among its siblings it was asked to go to. */
+  public val moved: MutableList<Pair<SessionId, Int>> = mutableListOf()
   public var openResult: LemonadeCodeResult<SessionId, SessionError>? = null
 
   /** Sessions [restore] brings back; recorded as restored once it runs. */
@@ -174,6 +178,11 @@ public class FakeSessionService(initial: List<Session> = emptyList()) : SessionS
     val custom = name?.trim()?.takeIf { it.isNotEmpty() }
     renamed += id to custom
     state.update { list -> list.map { if (it.id == id) it.copy(customName = custom) else it } }
+  }
+
+  override fun move(id: SessionId, index: Int) {
+    moved += id to index
+    state.update { SessionOrder.move(it, id, index) }
   }
 
   override suspend fun restore(): Int {

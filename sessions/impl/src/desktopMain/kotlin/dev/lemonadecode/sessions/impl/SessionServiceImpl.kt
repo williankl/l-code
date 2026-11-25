@@ -6,6 +6,7 @@ import dev.lemonadecode.domain.session.BranchName
 import dev.lemonadecode.domain.session.LinkedWorktree
 import dev.lemonadecode.domain.session.Session
 import dev.lemonadecode.domain.session.SessionId
+import dev.lemonadecode.domain.session.SessionOrder
 import dev.lemonadecode.domain.session.SessionOrigin
 import dev.lemonadecode.domain.session.SessionPlacement
 import dev.lemonadecode.domain.session.SessionStatus
@@ -197,6 +198,11 @@ internal class SessionServiceImpl(
   override fun rename(id: SessionId, name: String?) {
     val custom = name?.trim()?.takeIf { it.isNotEmpty() }
     update(id) { it.copy(customName = custom) }
+  }
+
+  // Saved like any other change: the saved sessions are in display order, and come back in it.
+  override fun move(id: SessionId, index: Int) {
+    state.update { sessions -> SessionOrder.move(sessions, id, index) }
   }
 
   override suspend fun restore(): Int {

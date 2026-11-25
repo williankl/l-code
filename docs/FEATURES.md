@@ -59,10 +59,20 @@ drawer, and a dot on the toggle tells you when one of them needs input.
 </tr>
 </table>
 
-**Right-click a session** to rename it, copy its folder path, start a sub-session from it, or close
-it. Middle-click closes it too. **⌘W** closes the selected session and its sub-sessions. If that
-would leave a git worktree with no session in it, you're asked first whether to delete the worktree
-too (see [Closing a worktree's session](#closing-a-worktrees-session)).
+**Put them in order.** Drag a session up or down the sidebar to move it. It lifts out of the list
+and follows the pointer, its sub-sessions fade where they were because they move with it, and a line
+shows where it will go. Let go and it glides into place; **Esc** puts it back. A session moves among
+its siblings: the top-level sessions, or the sub-sessions of the same parent. A sub-session stays
+under the session it came from, since its folder, branch and diff all start there. Where dragging
+isn't handy, as on a touch screen, **Move up** and **Move down** in its right-click menu do the same
+a place at a time. The order is kept, like everything else, the next time the app opens.
+
+<img src="images/drag-session.png" width="100%" alt="checkout-flake lifted out of the sidebar, its sub-session faded, and a line under scratch where it will go">
+
+**Right-click a session** to rename it, copy its folder path, move it up or down, start a
+sub-session from it, or close it. Middle-click closes it too. **⌘W** closes the selected session and
+its sub-sessions. If that would leave a git worktree with no session in it, you're asked first
+whether to delete the worktree too (see [Closing a worktree's session](#closing-a-worktrees-session)).
 
 <img src="images/session-menu.png" width="100%" alt="The right-click menu of a session, naming it and its folder">
 
@@ -287,8 +297,8 @@ change it on its own page; the back arrow or Esc returns to the list.
 
 - **Appearance:** Dark, Light, or follow the System. The window's title bar follows it on macOS and
   Windows. **Animations** is on by default: menus and panels open with a short fade, the sidebar
-  glides to the rail, new sessions ease into the list and opened files push the diff along. Turn
-  it off and every change happens at once.
+  glides to the rail, new sessions ease into the list, a session you drag glides into its new place
+  and opened files push the diff along. Turn it off and every change happens at once.
 - **Language:** English, Deutsch, Español, Français, Português or Slovenčina, or match the computer's
   own. The whole app changes at once.
 - **Keep awake while sessions work:** while any session is working, your computer won't go to
@@ -318,9 +328,9 @@ Installed with Homebrew or the Snap Store? Those update the app for you.
 
 ## Sessions come back
 
-Quit whenever you like. Every session is saved: its name, where it sits in the tree, the folder its
-shell was in and the last 1,000 lines it showed. Next time you open the app, each one comes back in
-a fresh shell in that folder, with its old output above the new prompt.
+Quit whenever you like. Every session is saved: its name, where it sits in the tree and in the order
+you gave it, the folder its shell was in and the last 1,000 lines it showed. Next time you open the
+app, each one comes back in a fresh shell in that folder, with its old output above the new prompt.
 
 If Claude Code was running in a session, its conversation is resumed too. Programs other than Claude
 Code start fresh. Sessions are also saved while the app runs, so even after a crash you keep them
@@ -337,7 +347,7 @@ On Windows and Linux, use **Ctrl** wherever you see **⌘**.
 | **⌘T** | New terminal session |
 | **⌘W** | Close the selected session and its sub-sessions, asking first about a worktree that would be left unused |
 | **⌘↵** | Paste the unsent comments into the terminal |
-| **Esc** | Close the open menu, panel or drawer |
+| **Esc** | Close the open menu, panel or drawer, or put back a session you're dragging |
 
 In the terminal:
 
@@ -352,8 +362,9 @@ With the mouse:
 
 | Action | Does |
 |---|---|
-| Right-click a session | Rename, copy folder path, start a sub-session, close |
+| Right-click a session | Rename, copy folder path, move up or down, start a sub-session, close |
 | Middle-click a session | Close it |
+| Drag a session up or down | Move it among its siblings, with its sub-sessions |
 | Click **+** beside a line | Comment on that line |
 | Drag across lines | Comment on a range |
 | Drag a 3D model | Turn it around |

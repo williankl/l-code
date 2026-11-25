@@ -167,6 +167,8 @@
   <string name="session_name_field">Názov relácie</string>
   <string name="session_copy_path">Kopírovať cestu k priečinku</string>
   <string name="session_path_copied">Skopírované: %1$s</string>
+  <string name="session_move_up">Posunúť vyššie</string>
+  <string name="session_move_down">Posunúť nižšie</string>
   <string name="session_close">Zavrieť reláciu</string>
 
   <!-- Closing a session that leaves worktrees no other session uses -->

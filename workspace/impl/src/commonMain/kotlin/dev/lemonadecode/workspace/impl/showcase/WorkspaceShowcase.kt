@@ -44,6 +44,7 @@ import dev.lemonadecode.workspace.impl.LineRange
 import dev.lemonadecode.workspace.impl.MobileInput
 import dev.lemonadecode.workspace.impl.NavigationStyle
 import dev.lemonadecode.workspace.impl.PreviewLoad
+import dev.lemonadecode.workspace.impl.SessionDrag
 import dev.lemonadecode.workspace.impl.WorkspaceInput
 import dev.lemonadecode.workspace.impl.WorkspaceModelMapper
 import dev.lemonadecode.workspace.impl.WorkspaceViewState
@@ -132,6 +133,12 @@ public enum class WorkspaceShowcase(
   ),
   SettingsSounds("8q", "Settings › Sounds", "A ding when an agent finishes, two when it needs input, from any session. Play lets you hear each one."),
   DeviceWindow("8r", "Device · a window of its own", "A device's ↗ in the list mirrors it in its own window, screen and logs, beside others. Its frame closes it.", widthDp = 760, heightDp = 880, part = ShowcasePart.DeviceWindow),
+  DraggingSession(
+    "6e",
+    "Dragging a session into place",
+    "checkout-flake is lifted out of the tree; its sub-session, which moves with it, fades where it was. The line under scratch is where letting go puts it: a session moves among its siblings.",
+  ),
+  MovingInMenu("6f", "Move up and Move down", "The menu moves review-2 a place at a time among its siblings, for touch screens. It's the last one, so only Move up is on."),
   ;
 
   public fun model(eventSink: (WorkspaceEvent) -> Unit = {}): WorkspaceModel = WorkspaceModelMapper.map(scene.input, eventSink)
@@ -437,6 +444,17 @@ private fun sceneFor(showcase: WorkspaceShowcase): Scene = when (showcase) {
   )
   WorkspaceShowcase.DiffSounds -> soundsScene()
   WorkspaceShowcase.SettingsSounds -> settingsScene(SettingsPage.Sounds, update = UpdateState.None)
+  WorkspaceShowcase.DraggingSession -> draggingScene()
+  WorkspaceShowcase.MovingInMenu -> treeScene(sessionMenu = SessionId("r2"))
+}
+
+/** checkout-flake, with a sub-session of its own, picked up to go after scratch. */
+private fun draggingScene(): Scene {
+  val retry = session("cf1", "retry-on-timeout", SessionStatus.Working, parent = "cf", branch = "fix/checkout-flake")
+  val sessions = treeSessions.toMutableList().apply { add(indexOfFirst { it.id.value == "cf" } + 1, retry) }
+  val scene = treeScene(sessions = sessions, extraTranscripts = mapOf("cf1" to ShowcaseTranscripts.blank("checkout-flake")))
+  val view = scene.input.view.copy(sessionDrag = SessionDrag(SessionId("cf"), index = 2))
+  return scene.copy(input = scene.input.copy(view = view))
 }
 
 /** A notification sound that changed and an error sound that's new, both previewing. */

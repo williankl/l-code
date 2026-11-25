@@ -29,19 +29,39 @@ internal data class TerminalSelection(val anchor: TextPoint, val focus: TextPoin
 
   /**
    * The selected text as it would be copied: a newline after each line except soft-wrapped ones,
-   * which join the next, and no padding past the end of what a line shows.
+   * which join the next, and no padding past the end of what a line shows. With [trimIndent] the
+   * lines lose the indentation they share, by the rules of Kotlin's `trimIndent`, with the first
+   * line measured from the screen's left edge rather than from where the selection starts.
    */
-  fun text(lineAt: (Int) -> LineText?): String = buildString {
-    if (isEmpty) return@buildString
-    for (line in start.line..end.line) {
-      val content = lineAt(line) ?: LineText("", wrapped = false)
-      val raw = content.text
-      val from = (if (line == start.line) start.column else 0).coerceIn(0, raw.length)
-      val to = (if (line == end.line) end.column else raw.length).coerceIn(from, raw.length)
-      val piece = raw.substring(from, to).cells()
-      append(if (raw.substring(to).isBlank()) piece.trimEnd() else piece)
-      if (line < end.line && !content.wrapped) append('\n')
+  fun text(trimIndent: Boolean = false, lineAt: (Int) -> LineText?): String {
+    val text = buildString {
+      if (isEmpty) return@buildString
+      for (line in start.line..end.line) {
+        val content = lineAt(line) ?: LineText("", wrapped = false)
+        val raw = content.text
+        val from = (if (line == start.line) start.column else 0).coerceIn(0, raw.length)
+        val to = (if (line == end.line) end.column else raw.length).coerceIn(from, raw.length)
+        val piece = raw.substring(from, to).cells()
+        append(if (raw.substring(to).isBlank()) piece.trimEnd() else piece)
+        if (line < end.line && !content.wrapped) append('\n')
+      }
     }
+    return if (trimIndent) trimmed(text, lineAt) else text
+  }
+
+  private fun trimmed(text: String, lineAt: (Int) -> LineText?): String {
+    val lines = text.split('\n')
+    // Where the first line begins on screen: it counts as indented by that much.
+    val offset = start.column.coerceIn(0, lineAt(start.line)?.text?.length ?: 0)
+    fun indent(index: Int, line: String) = line.indexOfFirst { !it.isWhitespace() } + if (index == 0) offset else 0
+    val shared = lines.withIndex().filter { it.value.isNotBlank() }.minOfOrNull { indent(it.index, it.value) } ?: 0
+    return lines.mapIndexedNotNull { index, line ->
+      when {
+        (index == 0 || index == lines.lastIndex) && line.isBlank() -> null
+        index == 0 -> line.drop((shared - offset).coerceAtLeast(0))
+        else -> line.drop(shared)
+      }
+    }.joinToString("\n")
   }
 
   companion object {

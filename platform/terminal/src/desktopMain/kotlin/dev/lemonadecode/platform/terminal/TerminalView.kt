@@ -116,7 +116,9 @@ public interface TerminalClipboard {
  * click for a word, triple click for a line, shift-click to extend; ⌘C copies and ⌘A selects all
  * (Ctrl+Shift+C / Ctrl+Shift+A elsewhere); ⌘V / Ctrl+Shift+V pastes; the wheel scrolls back.
  * Links, written out or marked by the program, underline under the mouse; Ctrl- or ⌘-click hands
- * them to [onOpenLink].
+ * them to [onOpenLink]. With [copyOnSelect], a selection made with the mouse is copied as soon as
+ * it's finished, and what's copied, that way or with the copy key, loses the indentation its lines
+ * share.
  */
 @Composable
 public fun TerminalView(
@@ -127,6 +129,7 @@ public fun TerminalView(
   focusRequester: FocusRequester = remember { FocusRequester() },
   clipboard: TerminalClipboard = TerminalClipboard.System,
   onOpenLink: (String) -> Unit = ::openInBrowser,
+  copyOnSelect: Boolean = false,
 ) {
   val version by session.version.collectAsState()
   val measurer = rememberTextMeasurer()
@@ -150,7 +153,7 @@ public fun TerminalView(
         val keys = TerminalKeys(
           session = session,
           paste = { clipboard.read() },
-          copy = { selection?.takeUnless { it.isEmpty }?.let { clipboard.write(it.text(session::lineText)) } != null },
+          copy = { selection?.takeUnless { it.isEmpty }?.let { clipboard.write(it.text(trimIndent = copyOnSelect, lineAt = session::lineText)) } != null },
           selectAll = { selection = session.everything() },
         )
         when (handleKey(event, keys)) {
@@ -176,7 +179,7 @@ public fun TerminalView(
       .focusRequester(focusRequester)
       .focusable()
       .pointerHoverIcon(if (hovered != null) PointerIcon.Hand else PointerIcon.Text)
-      .pointerInput(session, cell, onOpenLink) {
+      .pointerInput(session, cell, onOpenLink, copyOnSelect, clipboard) {
         val clicks = ClickCounter(viewConfiguration.doubleTapTimeoutMillis, viewConfiguration.touchSlop)
         var dragging = false
         // Wheel movement not yet reported to the program: trackpads turn it in fractions.
@@ -201,6 +204,13 @@ public fun TerminalView(
           val columns = max(2, (size.width / width).toInt())
           val rows = max(2, (size.height / height).toInt())
           return floor(position.x / width).toInt().coerceIn(0, columns - 1) to floor(position.y / height).toInt().coerceIn(0, rows - 1)
+        }
+
+        /** Copies the finished selection when [copyOnSelect] asks for it, unless it's blank. */
+        fun copySelection() {
+          if (!copyOnSelect) return
+          val text = selection?.text(trimIndent = copyOnSelect, lineAt = session::lineText) ?: return
+          if (text.isNotBlank()) clipboard.write(text)
         }
 
         awaitPointerEventScope {
@@ -232,10 +242,12 @@ public fun TerminalView(
                     val at = pointAt(change.position, nearest = false)
                     selection = TerminalSelection.word(at.line, at.column, session.lineText(at.line)?.text.orEmpty())
                     dragging = false
+                    copySelection()
                   }
                   else -> {
                     selection = TerminalSelection.line(pointAt(change.position, nearest = false).line, columns)
                     dragging = false
+                    copySelection()
                   }
                 }
                 change.consume()
@@ -255,7 +267,7 @@ public fun TerminalView(
               PointerEventType.Exit -> hovered = null
               PointerEventType.Release -> if (dragging) {
                 dragging = false
-                if (selection?.isEmpty == true) selection = null
+                if (selection?.isEmpty == true) selection = null else copySelection()
               }
               PointerEventType.Scroll -> {
                 val delta = change.scrollDelta.y

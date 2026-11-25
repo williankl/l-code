@@ -1,5 +1,8 @@
 package dev.lemonadecode.platform.terminal
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.InternalComposeUiApi
@@ -46,6 +49,7 @@ class TerminalViewSelectionTest {
       copied = text
     }
   }
+  private var copyOnSelect by mutableStateOf(false)
 
   private class Rig(val scene: ImageComposeScene, val cellWidth: Float, val cellHeight: Float) {
     var time = 0L
@@ -78,8 +82,9 @@ class TerminalViewSelectionTest {
     }
   }
 
-  private fun withTerminal(block: suspend Rig.() -> Unit) = runBlocking<Unit> {
-    val script = "printf 'alpha beta\\ngamma delta\\nepsilon'; sleep 30"
+  private fun withTerminal(output: String = Plain, block: suspend Rig.() -> Unit) = runBlocking<Unit> {
+    val script = "printf '$output'; sleep 30"
+    val lastLine = output.substringAfterLast("\\n").trim()
     TerminalSession(TerminalLaunch(command = listOf("/bin/sh", "-c", script), workingDirectory = System.getProperty("java.io.tmpdir"))).use { session ->
       var width = 0f
       var height = 0f
@@ -87,14 +92,19 @@ class TerminalViewSelectionTest {
         val layout = rememberTextMeasurer().measure(AnnotatedString("M".repeat(100)), style, softWrap = false)
         width = layout.size.width / 100f
         height = layout.size.height.toFloat()
-        TerminalView(session, colors, style, clipboard = clipboard)
+        TerminalView(session, colors, style, clipboard = clipboard, copyOnSelect = copyOnSelect)
       }.use { scene ->
         val rig = Rig(scene, 0f, 0f)
         val _ = rig.frame()
         withTimeout(5_000) {
-          while (!session.screenText().contains("epsilon")) delay(20)
+          while (!session.screenText().contains(lastLine)) delay(20)
         }
-        Rig(scene, width, height).apply { time = rig.time }.block()
+        Rig(scene, width, height).apply {
+          time = rig.time
+          // The view starts handling the mouse at its first event: hover now, so a setting a test
+          // changes later has to reach a terminal that is already listening.
+          mouse(PointerEventType.Move, at(0, 0), pressed = false)
+        }.block()
       }
     }
   }
@@ -103,6 +113,20 @@ class TerminalViewSelectionTest {
     val mac = System.getProperty("os.name").orEmpty().startsWith("Mac")
     val modifiers = if (mac) InputEvent.META_DOWN_MASK else InputEvent.CTRL_DOWN_MASK or InputEvent.SHIFT_DOWN_MASK
     scene.sendKeyEvent(key(AwtKeyEvent(source, AwtKeyEvent.KEY_PRESSED, 0, modifiers, AwtKeyEvent.VK_C, 'c')))
+  }
+
+  private fun Rig.selectAll() {
+    val mac = System.getProperty("os.name").orEmpty().startsWith("Mac")
+    val modifiers = if (mac) InputEvent.META_DOWN_MASK else InputEvent.CTRL_DOWN_MASK or InputEvent.SHIFT_DOWN_MASK
+    scene.sendKeyEvent(key(AwtKeyEvent(source, AwtKeyEvent.KEY_PRESSED, 0, modifiers, AwtKeyEvent.VK_A, 'a')))
+  }
+
+  /** Drags from the first letter of [Indented]'s first line to the end of its last. */
+  private fun Rig.dragBlock() {
+    mouse(PointerEventType.Press, at(2, 0), pressed = true)
+    mouse(PointerEventType.Move, at(3, 1), pressed = true)
+    mouse(PointerEventType.Move, at(6, 2), pressed = true)
+    mouse(PointerEventType.Release, at(6, 2), pressed = false)
   }
 
   @Test
@@ -145,6 +169,66 @@ class TerminalViewSelectionTest {
     assertNull(clipboard.copied)
   }
 
+  @Test
+  fun `with copy on select a finished drag is copied, and not before`() = withTerminal {
+    copyOnSelect = true
+    val _ = frame()
+    mouse(PointerEventType.Press, at(6, 0), pressed = true)
+    mouse(PointerEventType.Move, at(3, 1), pressed = true)
+    mouse(PointerEventType.Move, at(5, 1), pressed = true)
+    assertNull(clipboard.copied)
+    mouse(PointerEventType.Release, at(5, 1), pressed = false)
+    assertEquals("beta\ngamma", clipboard.copied)
+  }
+
+  @Test
+  fun `with copy on select a double click copies the word and a triple click the line`() = withTerminal {
+    copyOnSelect = true
+    val _ = frame()
+    click(at(8, 1))
+    click(at(8, 1))
+    assertEquals("delta", clipboard.copied)
+    time += 1_000
+    repeat(3) { click(at(2, 2)) }
+    assertEquals("epsilon", clipboard.copied)
+  }
+
+  @Test
+  fun `copy on select drops the indentation the lines share, and so does the copy key`() = withTerminal(Indented) {
+    copyOnSelect = true
+    val _ = frame()
+    dragBlock()
+    assertEquals("if x:\n    run()\ndone", clipboard.copied)
+    clipboard.copied = null
+    copy()
+    assertEquals("if x:\n    run()\ndone", clipboard.copied)
+  }
+
+  @Test
+  fun `without copy on select nothing is copied until the copy key, indentation and all`() = withTerminal(Indented) {
+    dragBlock()
+    assertNull(clipboard.copied)
+    copy()
+    assertEquals("if x:\n      run()\n  done", clipboard.copied)
+  }
+
+  @Test
+  fun `with copy on select a click, a drag over spaces and select all leave the clipboard alone`() = withTerminal(Indented) {
+    copyOnSelect = true
+    val _ = frame()
+    click(at(4, 0))
+    assertNull(clipboard.copied)
+    // Long enough that the next press starts a new click, not a double click.
+    time += 1_000
+    mouse(PointerEventType.Press, at(0, 1), pressed = true)
+    mouse(PointerEventType.Move, at(2, 1), pressed = true)
+    mouse(PointerEventType.Move, at(4, 1), pressed = true)
+    mouse(PointerEventType.Release, at(4, 1), pressed = false)
+    assertNull(clipboard.copied)
+    selectAll()
+    assertNull(clipboard.copied)
+  }
+
   /** Wraps an AWT event the way the window does, so the view sees what it would see for real. */
   @OptIn(InternalComposeUiApi::class)
   private fun key(event: AwtKeyEvent): KeyEvent = KeyEvent(
@@ -179,3 +263,7 @@ class TerminalViewSelectionTest {
     }
   }
 }
+
+/** What the terminal prints, as printf's format: plain lines, or lines sharing an indentation. */
+private const val Plain = "alpha beta\\ngamma delta\\nepsilon"
+private const val Indented = "  if x:\\n      run()\\n  done"

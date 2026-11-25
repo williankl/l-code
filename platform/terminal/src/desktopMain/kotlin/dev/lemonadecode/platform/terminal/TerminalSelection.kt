@@ -31,7 +31,8 @@ internal data class TerminalSelection(val anchor: TextPoint, val focus: TextPoin
    * The selected text as it would be copied: a newline after each line except soft-wrapped ones,
    * which join the next, and no padding past the end of what a line shows. With [trimIndent] the
    * lines lose the indentation they share, by the rules of Kotlin's `trimIndent`, with the first
-   * line measured from the screen's left edge rather than from where the selection starts.
+   * line measured from where its whole line starts, rows it soft-wraps from included, rather than
+   * from where the selection starts.
    */
   fun text(trimIndent: Boolean = false, lineAt: (Int) -> LineText?): String {
     val text = buildString {
@@ -51,8 +52,10 @@ internal data class TerminalSelection(val anchor: TextPoint, val focus: TextPoin
 
   private fun trimmed(text: String, lineAt: (Int) -> LineText?): String {
     val lines = text.split('\n')
-    // Where the first line begins on screen: it counts as indented by that much.
-    val offset = start.column.coerceIn(0, lineAt(start.line)?.text?.length ?: 0)
+    // Where the first line begins in its whole line, rows that soft-wrap into it included: it
+    // counts as indented by that much.
+    val wrappedBefore = generateSequence(start.line - 1) { it - 1 }.map(lineAt).takeWhile { it?.wrapped == true }.filterNotNull()
+    val offset = start.column + wrappedBefore.sumOf { it.text.length }
     fun indent(index: Int, line: String) = line.indexOfFirst { !it.isWhitespace() } + if (index == 0) offset else 0
     val shared = lines.withIndex().filter { it.value.isNotBlank() }.minOfOrNull { indent(it.index, it.value) } ?: 0
     return lines.mapIndexedNotNull { index, line ->

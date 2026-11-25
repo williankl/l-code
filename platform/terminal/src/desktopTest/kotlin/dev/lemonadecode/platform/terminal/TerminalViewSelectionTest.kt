@@ -14,6 +14,7 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.pointer.PointerButton
 import androidx.compose.ui.input.pointer.PointerButtons
 import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.PointerKeyboardModifiers
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -65,12 +66,13 @@ class TerminalViewSelectionTest {
     /** The middle of a cell, nudged left so a drag snaps to its left edge. */
     fun at(column: Int, row: Int) = Offset((column + 0.2f) * cellWidth, (row + 0.5f) * cellHeight)
 
-    fun mouse(type: PointerEventType, position: Offset, pressed: Boolean) {
+    fun mouse(type: PointerEventType, position: Offset, pressed: Boolean, keyboardModifiers: PointerKeyboardModifiers? = null) {
       scene.sendPointerEvent(
         eventType = type,
         position = position,
         timeMillis = time,
         buttons = PointerButtons(isPrimaryPressed = pressed),
+        keyboardModifiers = keyboardModifiers,
         button = PointerButton.Primary,
       )
       time += 20
@@ -127,6 +129,20 @@ class TerminalViewSelectionTest {
     mouse(PointerEventType.Move, at(3, 1), pressed = true)
     mouse(PointerEventType.Move, at(6, 2), pressed = true)
     mouse(PointerEventType.Release, at(6, 2), pressed = false)
+  }
+
+  /** Drags over the first four spaces of [Indented]'s second line, and nothing else. */
+  private fun Rig.dragSpaces() {
+    mouse(PointerEventType.Press, at(0, 1), pressed = true)
+    mouse(PointerEventType.Move, at(4, 1), pressed = true)
+    mouse(PointerEventType.Release, at(4, 1), pressed = false)
+  }
+
+  /** Presses at [position], moves the pointer by [wobble] and lets go there. */
+  private fun Rig.wobblyClick(position: Offset, wobble: Offset) {
+    mouse(PointerEventType.Press, position, pressed = true)
+    mouse(PointerEventType.Move, position + wobble, pressed = true)
+    mouse(PointerEventType.Release, position + wobble, pressed = false)
   }
 
   @Test
@@ -227,6 +243,84 @@ class TerminalViewSelectionTest {
     assertNull(clipboard.copied)
     selectAll()
     assertNull(clipboard.copied)
+  }
+
+  @Test
+  fun `with copy on select a click whose pointer wobbles across a cell selects and copies nothing`() = withTerminal {
+    copyOnSelect = true
+    val _ = frame()
+    wobblyClick(Offset(3.45f * cellWidth, 0.5f * cellHeight), wobble = Offset(0.8f, 0f))
+    assertNull(clipboard.copied)
+    assertEquals(0, redPixels(frame()))
+    // Long enough that the next press starts a new click, not a double click.
+    time += 1_000
+    wobblyClick(Offset(3.45f * cellWidth, 0.95f * cellHeight), wobble = Offset(0f, 1.5f))
+    assertNull(clipboard.copied)
+  }
+
+  @Test
+  fun `without copy on select a click whose pointer wobbles across a cell selects nothing`() = withTerminal {
+    wobblyClick(Offset(3.45f * cellWidth, 0.5f * cellHeight), wobble = Offset(0.8f, 0f))
+    assertEquals(0, redPixels(frame()))
+    copy()
+    assertNull(clipboard.copied)
+  }
+
+  @Test
+  fun `with copy on select a drag of one cell copies one character`() = withTerminal {
+    copyOnSelect = true
+    val _ = frame()
+    mouse(PointerEventType.Press, at(6, 0), pressed = true)
+    mouse(PointerEventType.Move, at(7, 0), pressed = true)
+    mouse(PointerEventType.Release, at(7, 0), pressed = false)
+    assertEquals("b", clipboard.copied)
+  }
+
+  @Test
+  fun `with copy on select the copy key leaves blank text off the clipboard too`() = withTerminal(Indented) {
+    copyOnSelect = true
+    val _ = frame()
+    dragSpaces()
+    assertNull(clipboard.copied)
+    copy()
+    assertNull(clipboard.copied)
+  }
+
+  @Test
+  fun `without copy on select the copy key writes blank text as it is`() = withTerminal(Indented) {
+    dragSpaces()
+    copy()
+    assertEquals("    ", clipboard.copied)
+  }
+
+  @Test
+  fun `with copy on select a shift-click extends the selection and copies it on release, not on press`() = withTerminal {
+    copyOnSelect = true
+    val _ = frame()
+    click(at(1, 0))
+    click(at(1, 0))
+    clipboard.copied = null
+    time += 1_000
+    mouse(PointerEventType.Press, at(10, 0), pressed = true, keyboardModifiers = PointerKeyboardModifiers(isShiftPressed = true))
+    assertNull(clipboard.copied)
+    mouse(PointerEventType.Release, at(10, 0), pressed = false)
+    assertEquals("alpha beta", clipboard.copied)
+  }
+
+  @Test
+  fun `turning copy on select off reaches a terminal that is already open`() = withTerminal(Indented) {
+    copyOnSelect = true
+    val _ = frame()
+    dragBlock()
+    assertEquals("if x:\n    run()\ndone", clipboard.copied)
+    copyOnSelect = false
+    val _ = frame()
+    clipboard.copied = null
+    time += 1_000
+    dragBlock()
+    assertNull(clipboard.copied)
+    copy()
+    assertEquals("if x:\n      run()\n  done", clipboard.copied)
   }
 
   /** Wraps an AWT event the way the window does, so the view sees what it would see for real. */

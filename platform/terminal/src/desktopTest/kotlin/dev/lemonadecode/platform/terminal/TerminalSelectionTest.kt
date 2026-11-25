@@ -104,6 +104,18 @@ class TerminalSelectionTest {
   }
 
   @Test
+  fun `a selection that starts on a wrapped line's later row is indented by where it falls in the whole line`() {
+    val wrapped = listOf(
+      LineText("    a long indented li", wrapped = true),
+      LineText("ne that wraps", wrapped = false),
+      LineText("    next", wrapped = false),
+      LineText("    last", wrapped = false),
+    )
+    assertEquals("ne that wraps\nnext\nlast", trimmed(TerminalSelection(TextPoint(1, 0), TextPoint(3, 8)), wrapped))
+    assertEquals("that wraps\nnext\nlast", trimmed(TerminalSelection(TextPoint(1, 3), TextPoint(3, 8)), wrapped))
+  }
+
+  @Test
   fun `a selection of only spaces trims to nothing`() {
     assertEquals("", trimmed(TerminalSelection(TextPoint(3, 0), TextPoint(3, 4))))
   }

@@ -1,11 +1,13 @@
 package dev.lemonadecode.workspace.impl.ui
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.DesktopComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.MouseButton
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasSetTextAction
@@ -194,11 +196,15 @@ class WorkspaceFlowUiTest {
       waitFor(hasSetTextAction() and hasText("worktree/testing-things"))
       onNode(hasSetTextAction()).performTextReplacement("feat/login")
       waitFor(hasText("~/code/storefront.worktrees/login"))
+      // The panel names the sub-session as the list will.
+      onNodeWithText("login").assertExists()
       onNode(hasSetTextAction()).performKeyInput { pressKey(Key.Enter) }
       waitFor(hasText("sub-session · worktree"))
       val call = sessions.started.single()
       assertEquals(SubSessionLocation.NewWorktree to "feat/login", call.location to call.branch)
       assertEquals(SubSessionLocation.NewWorktree, settings.settings.value.subSessionLocation)
+      // The list names it after its worktree too.
+      waitFor(hasText("login") and hasAnyAncestor(hasContentDescription("Sessions")))
     }
   }
 
@@ -211,10 +217,13 @@ class WorkspaceFlowUiTest {
       waitFor(hasText("New sub-session in new worktree"))
       onNodeWithText("New sub-session in new worktree").performClick()
       waitFor(hasSetTextAction() and hasText("worktree/generating-bugs"))
+      onNodeWithText("~/code/storefront.worktrees/generating-bugs").assertExists()
       onNode(hasSetTextAction()).performKeyInput { pressKey(Key.Enter) }
       waitFor(hasText("sub-session · worktree"))
       val call = sessions.started.single()
       assertEquals(SessionId("cf") to "worktree/generating-bugs", call.parentId to call.branch)
+      // Under checkout-flake, by its worktree's name.
+      waitFor(hasText("generating-bugs") and hasAnyAncestor(hasContentDescription("Sessions")))
     }
   }
 
@@ -251,6 +260,46 @@ class WorkspaceFlowUiTest {
       waitFor(hasText("api-ratelimit"))
       waitUntil(timeoutMillis = 5_000) { onAllNodes(hasText("flaky checkout")).fetchSemanticsNodes().isEmpty() }
       assertEquals(listOf(SessionId("cf")), sessions.closed)
+    }
+  }
+
+  @Test
+  fun `dragging a session up the tree puts it there with its sub-session, and the menu moves it back`() {
+    sessions.setSessions(
+      listOf(
+        ShowcaseFixtures.session("ar", "api-ratelimit"),
+        ShowcaseFixtures.session("cf", "checkout-flake"),
+        ShowcaseFixtures.session("cf1", "retry-on-timeout", parent = "cf"),
+      ),
+    )
+    fun order() = sessions.sessions.value.map { it.id.value }
+
+    // The rows in the sidebar, not the header's name of the one shown.
+    fun DesktopComposeUiTest.row(name: String) = onNode(hasText(name) and hasAnyAncestor(hasContentDescription("Sessions")))
+    flow {
+      val row = row("checkout-flake")
+      val from = row.fetchSemanticsNode().boundsInRoot.center
+      val to = row("api-ratelimit").fetchSemanticsNode().boundsInRoot.center
+      row.performMouseInput {
+        moveTo(center)
+        press()
+        moveTo(center + Offset(0f, to.y - from.y), delayMillis = 50)
+        release()
+      }
+      waitUntil(timeoutMillis = 5_000) { sessions.moved.isNotEmpty() }
+      assertEquals(listOf(SessionId("cf") to 0), sessions.moved)
+      assertEquals(listOf("cf", "cf1", "ar"), order())
+      // The tree draws the new order once the lifted row has glided into place.
+      waitUntil(timeoutMillis = 5_000) {
+        row("checkout-flake").fetchSemanticsNode().boundsInRoot.top < row("api-ratelimit").fetchSemanticsNode().boundsInRoot.top
+      }
+      onAllNodes(hasText("checkout-flake")).assertCountEquals(1)
+
+      row("checkout-flake").performMouseInput { rightClick(center) }
+      waitFor(hasText("Move down"))
+      onNodeWithText("Move down").performClick()
+      waitUntil(timeoutMillis = 5_000) { order() == listOf("ar", "cf", "cf1") }
+      assertEquals(listOf(SessionId("cf") to 0, SessionId("cf") to 1), sessions.moved)
     }
   }
 
@@ -313,17 +362,17 @@ class WorkspaceFlowUiTest {
       onNode(hasSetTextAction()).performKeyInput { pressKey(Key.Enter) }
       waitFor(hasText("sub-session · worktree"))
 
-      // The row in the sidebar, not the header naming the selected session.
-      onNode(hasText("sub-1") and hasAnyAncestor(hasContentDescription("Sessions"))).performMouseInput {
+      // The row in the sidebar, named after its worktree, not the header naming the selected session.
+      onNode(hasText("testing-things") and hasAnyAncestor(hasContentDescription("Sessions"))).performMouseInput {
         moveTo(center)
         press(MouseButton.Tertiary)
         release(MouseButton.Tertiary)
       }
-      waitFor(hasText("Close sub-1?"))
+      waitFor(hasText("Close testing-things?"))
       onNodeWithText("Has uncommitted changes that will be lost").assertDoesNotExist()
       onNodeWithText("Only the folder is deleted. The branch worktree/testing-things stays.").assertExists()
       onNodeWithText("Close, keep worktree").performClick()
-      waitUntil(timeoutMillis = 5_000) { onAllNodes(hasText("sub-1")).fetchSemanticsNodes().isEmpty() }
+      waitUntil(timeoutMillis = 5_000) { onAllNodes(hasText("testing-things")).fetchSemanticsNodes().isEmpty() }
       assertEquals(1, sessions.closed.size)
       assertTrue(sessions.removedWorktrees.isEmpty())
       assertEquals(1, sessions.worktrees.size, "the worktree stays")
@@ -342,6 +391,29 @@ class WorkspaceFlowUiTest {
       onNodeWithText("Close session").assertDoesNotExist()
       waitFor(hasText("api-ratelimit"))
       assertEquals(listOf(SessionId("cf")), sessions.closed)
+    }
+  }
+
+  @Test
+  fun `a session archived from its menu waits under Archived and comes back where it was`() {
+    sessions.setSessions(listOf(ShowcaseFixtures.session("ar", "api-ratelimit"), ShowcaseFixtures.session("cf", "checkout-flake")))
+    flow {
+      onNodeWithText("checkout-flake").performMouseInput { rightClick(center) }
+      waitFor(hasText("Archive"))
+      onNodeWithText("Archive").performClick()
+      waitFor(hasContentDescription("Show archived sessions"))
+      // Folded at first: the session isn't listed anywhere, but the toast says where it went.
+      onNode(hasText("checkout-flake") and hasAnyAncestor(hasContentDescription("Sessions"))).assertDoesNotExist()
+      onNodeWithText("Archived checkout-flake").assertExists()
+      assertEquals(listOf(SessionId("cf")), sessions.archivedIds)
+      assertTrue(sessions.closed.isEmpty())
+
+      onNodeWithContentDescription("Show archived sessions").performClick()
+      waitFor(hasContentDescription("Restore checkout-flake"))
+      onNodeWithContentDescription("Restore checkout-flake").performClick()
+      waitFor(hasTestTag("terminal:cf"))
+      waitUntil(timeoutMillis = 5_000) { onAllNodes(hasContentDescription("Hide archived sessions")).fetchSemanticsNodes().isEmpty() }
+      assertEquals(listOf(SessionId("cf")), sessions.unarchivedIds)
     }
   }
 

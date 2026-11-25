@@ -36,6 +36,7 @@ import dev.lemonadecode.domain.review.Review
 import dev.lemonadecode.domain.session.LinkedWorktree
 import dev.lemonadecode.domain.session.Session
 import dev.lemonadecode.domain.session.SessionId
+import dev.lemonadecode.domain.session.SessionOrder
 import dev.lemonadecode.domain.session.SessionStatus
 import dev.lemonadecode.domain.session.SourceScan
 import dev.lemonadecode.domain.session.SubSessionLocation
@@ -64,6 +65,10 @@ import dev.lemonadecode.workspace.impl.SettingsMapper.toDomain
 import dev.lemonadecode.workspace.impl.WorkspaceModelMapper.toDomain
 import dev.lemonadecode.workspace.impl.WorkspaceModelMapper.toPreference
 import dev.lemonadecode.workspace.strings.Res
+import dev.lemonadecode.workspace.strings.archived_parent_archived
+import dev.lemonadecode.workspace.strings.archived_restored_at_home
+import dev.lemonadecode.workspace.strings.archived_restored_at_home_many
+import dev.lemonadecode.workspace.strings.archived_some_stayed
 import dev.lemonadecode.workspace.strings.devices_disconnected
 import dev.lemonadecode.workspace.strings.file_path_copied
 import dev.lemonadecode.workspace.strings.import_done
@@ -72,6 +77,7 @@ import dev.lemonadecode.workspace.strings.import_some_failed
 import dev.lemonadecode.workspace.strings.logs_errors_sent
 import dev.lemonadecode.workspace.strings.screenshot_attached
 import dev.lemonadecode.workspace.strings.screenshot_failed
+import dev.lemonadecode.workspace.strings.session_archived
 import dev.lemonadecode.workspace.strings.session_path_copied
 import dev.lemonadecode.workspace.strings.worktree_deleted
 import dev.lemonadecode.workspace.strings.worktrees_deleted
@@ -117,6 +123,7 @@ public class WorkspacePresenter internal constructor(
   @Composable
   override fun present(): WorkspaceModel {
     val sessions by sessionService.sessions.collectAsState()
+    val archived by sessionService.archived.collectAsState()
     val settings by settingsService.settings.collectAsState()
     val updateState by updateService.state.collectAsState()
     val updateChecks by updateService.checks.collectAsState()
@@ -266,28 +273,50 @@ public class WorkspacePresenter internal constructor(
         fun fileOf(path: String?): FileDiff? = (review?.diff as? DiffState.Ready)?.snapshot?.files?.firstOrNull { it.path == path }
         fun commented(path: String): Boolean = review?.comments.orEmpty().any { it.filePath == path }
         fun sessionOf(id: String): Session? = sessionService.sessions.value.firstOrNull { it.id.value == id }
+
+        /** Lets go of what was open on sessions leaving the tree, closed or archived: menus, and a drag. */
         fun closeMenusOf(closing: Set<SessionId>) = update { state ->
           state.copy(
             sessionMenu = state.sessionMenu?.takeUnless { it in closing },
             renaming = state.renaming?.takeUnless { it in closing },
             namingWorktree = state.namingWorktree?.takeUnless { it in closing },
+            // An archived one can come back: it mustn't come back still lifted.
+            sessionDrag = state.sessionDrag?.takeUnless { it.sessionId in closing },
           )
         }
+
+        /** Where [id] is among its siblings, from 0. */
+        fun siblingIndex(id: SessionId): Int = SessionOrder.siblings(sessionService.sessions.value, id).indexOfFirst { it.id == id }
+
+        /** Moves [id], with its sub-sessions, to [index] among its siblings; nothing past either end or where it is. */
+        fun moveSession(id: SessionId, index: Int) {
+          val siblings = SessionOrder.siblings(sessionService.sessions.value, id)
+          if (index !in siblings.indices || siblings[index].id == id) return
+          // With none picked, the first session shows: it stays the one shown, wherever it goes.
+          if (view.selectedId == null && current != null) update { it.copy(selectedId = current.id) }
+          sessionService.move(id, index)
+        }
+
         fun close(id: SessionId) {
           val closing = SessionsMapper.subtree(sessionService.sessions.value, id)
           sessionService.close(id)
           closeMenusOf(closing)
         }
 
+        /** Every session kept, open or archived: a worktree any of them is in isn't left unused. */
+        fun everySession(): List<Session> = sessionService.sessions.value + sessionService.archived.value.flatMap { it.sessions }
+
         /**
          * Closes [id] and its sub-sessions, but first asks whether to delete the worktrees that
          * leaves with no session in them, if there are any. Outside git there are none to ask about.
+         * An archived session goes for good with those archived with it, the same way.
          */
         fun requestClose(id: SessionId) {
           val all = sessionService.sessions.value
-          val session = all.firstOrNull { it.id == id } ?: return
-          val closing = SessionsMapper.subtree(all, id)
-          val doomed = all.filter { it.id in closing }
+          val shelved = sessionService.archived.value.firstOrNull { it.id == id }
+          val session = all.firstOrNull { it.id == id } ?: shelved?.session ?: return
+          val doomed = shelved?.sessions ?: SessionsMapper.subtree(all, id).let { closing -> all.filter { it.id in closing } }
+          val closing = doomed.map { it.id }.toSet()
           if (doomed.none { it.repositoryRoot != null }) return close(id)
           if (!lookingUp.add(id)) return
           closeMenusOf(closing)
@@ -297,8 +326,10 @@ public class WorkspacePresenter internal constructor(
             } finally {
               lookingUp.remove(id)
             }
-            val now = sessionService.sessions.value
-            if (now.none { it.id == id }) return@launch
+            // Gone meanwhile, or no longer where it was asked about: archived, or back from the archive.
+            val now = everySession()
+            val stillThere = if (shelved != null) sessionService.archived.value.any { it.id == id } else sessionService.sessions.value.any { it.id == id }
+            if (!stillThere) return@launch
             val unused = ClosingSessions.leftUnused(found, staying = now.filterNot { it.id in closing })
             if (unused.isEmpty()) {
               close(id)
@@ -309,12 +340,73 @@ public class WorkspacePresenter internal constructor(
         }
 
         /**
+         * Puts [session] and its sub-sessions away under Archived. If the selected session goes with
+         * them, a neighbour takes its place: its parent, else the next or previous session at its level.
+         */
+        fun archive(session: Session) {
+          val all = sessionService.sessions.value
+          val going = SessionsMapper.subtree(all, session.id)
+          val selected = WorkspaceModelMapper.selectedSession(all, view)
+          val next = SessionsMapper.neighbour(all, session.id)
+          sessionService.archive(session.id)
+          closeMenusOf(going)
+          // With none left, nothing is selected and the main panel says so.
+          if (selected != null && selected.id in going) update { it.selecting(next ?: selected.id).copy(selectedId = next) }
+          showToast(Res.string.session_archived.asLemonadeCodeString(session.displayName))
+        }
+
+        /**
+         * Brings [id] back from the archive and selects it, saying so when some of it stayed archived
+         * or a folder had gone.
+         */
+        fun restore(id: SessionId) {
+          val archive = sessionService.archived.value.firstOrNull { it.id == id } ?: return
+          if (id in view.restoring) return
+          // Its rows hide until it's done, so what's left of it part way can't be restored, or deleted, twice.
+          val ids = archive.sessions.map { it.id }.toSet()
+          update { it.copy(restoring = it.restoring + ids) }
+          scope.launch {
+            val back = try {
+              sessionService.unarchive(id)
+            } finally {
+              update { it.copy(restoring = it.restoring - ids) }
+            }
+            when (back) {
+              is LemonadeCodeResult.Success -> {
+                if (sessionService.sessions.value.any { it.id == back.value.id }) {
+                  update { it.selecting(back.value.id).copy(view = WorkspaceView.Terminal) }
+                }
+                val stayed = back.value.stillArchived.size
+                val missing = back.value.missingFolders
+                val single = missing.entries.singleOrNull()
+                when {
+                  // The one that matters more: those sessions are still archived.
+                  stayed > 0 -> fail(Res.plurals.archived_some_stayed.asLemonadeCodeString(stayed, stayed))
+                  single != null -> {
+                    val name = sessionService.sessions.value.firstOrNull { it.id == single.key }?.displayName ?: single.key.value
+                    fail(Res.string.archived_restored_at_home.asLemonadeCodeString(name, abbreviateHome(single.value, homeDirectory.path)))
+                  }
+                  missing.size > 1 -> fail(Res.plurals.archived_restored_at_home_many.asLemonadeCodeString(missing.size, missing.size))
+                }
+              }
+              is LemonadeCodeResult.Failure -> fail(
+                if (back.error == SessionError.ParentArchived) {
+                  Res.string.archived_parent_archived.asLemonadeCodeString(archive.session.displayName)
+                } else {
+                  ErrorMessages.of(back.error, homeDirectory.path)
+                },
+              )
+            }
+          }
+        }
+
+        /**
          * Deletes [worktrees], once the sessions in them have closed. Only those the dialog said had
          * changes are forced; any that changed since stay, and say why.
          */
         fun deleteWorktrees(worktrees: List<LinkedWorktree>) {
           // Again: a session may have moved into one while the dialog was open.
-          val unused = ClosingSessions.leftUnused(worktrees, staying = sessionService.sessions.value)
+          val unused = ClosingSessions.leftUnused(worktrees, staying = everySession())
           if (unused.isEmpty()) return
           scope.launch {
             val deleted = unused.filter { worktree ->
@@ -462,6 +554,31 @@ public class WorkspacePresenter internal constructor(
             update { it.copy(sessionMenu = null, renaming = null, toast = message) }
             toastTimer.restart(scope) { update { state -> if (state.toast === message) state.copy(toast = null) else state } }
           }
+          is WorkspaceEvent.ArchiveSession -> sessionOf(event.sessionId)?.let(::archive)
+          WorkspaceEvent.ToggleArchivedSessions -> update { it.copy(archivedOpen = !it.archivedOpen) }
+          is WorkspaceEvent.RestoreArchivedSession -> restore(SessionId(event.sessionId))
+          is WorkspaceEvent.DeleteArchivedSession -> {
+            val id = SessionId(event.sessionId)
+            if (id !in view.restoring && sessionService.archived.value.any { it.id == id }) requestClose(id)
+          }
+
+          // Found by id: its status or folder may have changed since it was read.
+          is WorkspaceEvent.StartSessionDrag -> sessionOf(event.sessionId)?.let { session ->
+            update { it.closingPopovers().copy(renaming = null, sessionDrag = SessionDrag(session.id, siblingIndex(session.id))) }
+          }
+          is WorkspaceEvent.DragSession -> update { state ->
+            val drag = state.sessionDrag?.takeIf { it.sessionId.value == event.sessionId }
+            if (drag == null) state else state.copy(sessionDrag = drag.copy(index = event.index))
+          }
+          is WorkspaceEvent.DropSession -> {
+            val drag = view.sessionDrag?.takeIf { it.sessionId.value == event.sessionId }
+            update { it.copy(sessionDrag = null) }
+            if (drag != null) moveSession(drag.sessionId, drag.index)
+          }
+          WorkspaceEvent.CancelSessionDrag -> update { it.copy(sessionDrag = null) }
+          // The menu stays open on the row as it moves, for another step.
+          is WorkspaceEvent.MoveSessionUp -> sessionOf(event.sessionId)?.let { moveSession(it.id, siblingIndex(it.id) - 1) }
+          is WorkspaceEvent.MoveSessionDown -> sessionOf(event.sessionId)?.let { moveSession(it.id, siblingIndex(it.id) + 1) }
 
           WorkspaceEvent.NewSession -> scope.launch {
             when (val opened = sessionService.openTerminal()) {
@@ -778,13 +895,15 @@ public class WorkspacePresenter internal constructor(
       }
     }
 
-    val subSessionLocation = view.subSessionMenu ?: settings.subSessionLocation
+    // Planning looks at the disk for a worktree's folder, so it runs only while the panel or a
+    // menu's branch field shows the plan, not on every draw. Closing, the panel shows its last one.
+    val subSessionPlan = view.subSessionMenu?.let { location -> selectedId?.let { sessionService.planSubSession(it, location, branch = view.worktreeBranch) } }
     val input = WorkspaceInput(
       sessions = sessions,
       review = review,
       settings = settings,
       view = view,
-      subSessionPlan = selectedId?.let { sessionService.planSubSession(it, subSessionLocation, branch = view.worktreeBranch) },
+      subSessionPlan = subSessionPlan,
       menuWorktreePlan = view.namingWorktree?.let { sessionService.planSubSession(it, SubSessionLocation.NewWorktree, branch = view.worktreeBranch) },
       pendingMessage = if (view.previewOpen) selectedId?.let(reviewService::pendingMessage) else null,
       homeDirectory = homeDirectory.path,
@@ -807,6 +926,7 @@ public class WorkspacePresenter internal constructor(
       ),
       nowMillis = clock.nowMillis(),
       systemLanguage = SettingsMapper.languageFor(systemLanguageTag()),
+      archived = archived,
       importSources = sessionImports.sources.map { it.name },
     )
     return WorkspaceModelMapper.map(input, eventSink)

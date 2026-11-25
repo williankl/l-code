@@ -9,6 +9,7 @@ short tour.
 - [Comments](#comments)
 - [Sending comments](#sending-comments)
 - [Sub-sessions and worktrees](#sub-sessions-and-worktrees)
+- [Archiving sessions](#archiving-sessions)
 - [File previews](#file-previews)
 - [Devices](#devices)
 - [Settings](#settings)
@@ -60,10 +61,22 @@ drawer, and a dot on the toggle tells you when one of them needs input.
 </tr>
 </table>
 
-**Right-click a session** to rename it, copy its folder path, start a sub-session from it, or close
-it. Middle-click closes it too. **⌘W** closes the selected session and its sub-sessions. If that
-would leave a git worktree with no session in it, you're asked first whether to delete the worktree
-too (see [Closing a worktree's session](#closing-a-worktrees-session)).
+**Put them in order.** Drag a session up or down the sidebar to move it. It lifts out of the list
+and follows the pointer, its sub-sessions fade where they were because they move with it, and a line
+shows where it will go. Let go and it glides into place; **Esc** puts it back. A session moves among
+its siblings: the top-level sessions, or the sub-sessions of the same parent. A sub-session stays
+under the session it came from, since its folder, branch and diff all start there. **Move up** and
+**Move down** in its right-click menu do the same one place at a time, for the collapsed rail, which
+can't be dragged, and for screen readers, which reach the menu through the session's options. The
+order is kept, like everything else, the next time the app opens.
+
+<img src="images/drag-session.png" width="100%" alt="checkout-flake lifted out of the sidebar, its sub-session faded, and a line under scratch where it will go">
+
+**Right-click a session** to rename it, copy its folder path, move it up or down, start a
+sub-session from it, [archive it](#archiving-sessions) or close it. Middle-click closes it too. **⌘W**
+closes the selected session and its sub-sessions. If that would leave a git worktree with no session
+in it, you're asked first whether to delete the worktree too (see
+[Closing a worktree's session](#closing-a-worktrees-session)).
 
 <img src="images/session-menu.png" width="100%" alt="The right-click menu of a session, naming it and its folder">
 
@@ -161,19 +174,23 @@ A sub-session can start in one of two places:
 |---|---|---|
 | **Folder** | The parent's folder | A new folder next to the repository, named after the branch, like `storefront.worktrees/generating-bugs` |
 | **Branch** | The parent's branch | A new branch you name, starting from the parent's |
+| **Name in the list** | `sub-1`, `sub-2`… | The worktree's, like `generating-bugs` |
 | **Good for** | Reviews and quick follow-ups | Parallel work that must never collide |
 
 A new worktree asks for its branch first, filled in with a playful suggestion like
 `worktree/generating-bugs`. Press **Enter** to keep it, or type over it: everything is yours to
-rename, `worktree/` included. The folder follows the name as you type. A name git won't take, or a
-branch that already exists, is caught before anything is created. The same field opens from a
-session's right-click menu.
+rename, `worktree/` included. The folder follows the name as you type, and so does the sub-session:
+it's called after the last part of the branch, the same as its folder, so `worktree/generating-bugs`
+shows up in the list and the header as `generating-bugs`. If a folder by that name is already there,
+or a sibling has the name, `-2` is added to both. A name git won't take, or a branch that already
+exists, is caught before anything is created. The same field opens from a session's right-click
+menu. Rename the sub-session whenever you like; your name stays.
 
-Before anything is created, the panel shows you the exact folder and branch you'll get.
+Before anything is created, the panel shows you the exact name, folder and branch you'll get.
 
-<img src="images/new-worktree.png" width="100%" alt="The New sub-session panel previewing a new worktree's folder and branch">
+<img src="images/new-worktree.png" width="100%" alt="The New sub-session panel previewing a new worktree's name, folder and branch">
 
-<img src="images/worktree-created.png" width="100%" alt="sub-1 in the same folder and sub-2 in its own worktree, both under bench-redis">
+<img src="images/worktree-created.png" width="100%" alt="sub-1 in the same folder and generating-bugs in its own worktree, both under bench-redis">
 
 ### Closing a worktree's session
 
@@ -194,7 +211,41 @@ uncommitted changes or new files says so: they're lost if you delete it.
 
 Closing a session that isn't in a worktree works as before, with no question.
 
-<img src="images/close-worktree.png" width="100%" alt="Closing sub-2 asks whether to delete its worktree too, warning that it has uncommitted changes and saying its branch stays">
+<img src="images/close-worktree.png" width="100%" alt="Closing generating-bugs asks whether to delete its worktree too, warning that it has uncommitted changes and saying its branch stays">
+
+---
+
+## Archiving sessions
+
+Done with a session for now, but not for good? Right-click it and pick **Archive**. Its terminal
+stops, and whatever ran in it, and the session moves with its sub-sessions into **Archived** at the
+bottom of the sidebar. Nothing about it is lost: its name, its folder, its worktree, its place in
+the tree and the Claude Code conversation it had open are all kept, across restarts too. Archiving
+never touches a worktree or a branch.
+
+<img src="images/archived.png" width="100%" alt="The Archived section open at the bottom of the sidebar, listing review-2, flaky-login with its two sub-sessions and dotfiles, each with Restore and Delete buttons">
+
+- **Archived** starts folded, with a count, and only shows while something is archived. Open it to
+  see what ran in each session and where, and how many sub-sessions went with it.
+- **Restore** brings a session back where it was in the tree, with its sub-sessions, and selects it.
+  Each starts again in a fresh shell in its folder, the way it would after a restart: Claude Code
+  resumes its conversation, and a plain shell shows what it showed before.
+- **Delete for good** works like closing: if that leaves a git worktree with no session in it,
+  you're asked first whether to delete the worktree too.
+- Archived sessions don't [drag](#sessions): restore one to put it in order. One brought back after
+  its siblings moved goes back before the one it sat before.
+
+| When | What happens |
+|---|---|
+| You archive the session you're in | Its parent is selected, else the next session at its level, else the one before it |
+| You archive the last open session | The main panel says nothing is open and offers a new terminal; the archived ones wait in the sidebar |
+| A sub-session's parent is closed or archived while it's archived | It comes back at the top of the tree. With its parent open, it comes back under it |
+| Its folder is gone when you restore it | It opens in your home folder, without resuming its agent, and a message names the folder |
+| A sub-session can't come back when you restore it | That sub-session, and those under it, stay under Archived, and a message says how many |
+| You archive a session while one of its sub-sessions is still starting | The new sub-session isn't created, and a message says so. Review comments handed to it stay unsent, to send again |
+| Closing another session would leave unused a worktree an archived session is in | The worktree isn't offered for deletion, since the archived session still needs it |
+
+Archived sessions have no status, make no sound and don't keep the computer awake.
 
 ---
 
@@ -288,8 +339,8 @@ change it on its own page; the back arrow or Esc returns to the list.
 
 - **Appearance:** Dark, Light, or follow the System. The window's title bar follows it on macOS and
   Windows. **Animations** is on by default: menus and panels open with a short fade, the sidebar
-  glides to the rail, new sessions ease into the list and opened files push the diff along. Turn
-  it off and every change happens at once.
+  glides to the rail, new sessions ease into the list, a session you drag glides into its new place
+  and opened files push the diff along. Turn it off and every change happens at once.
 - **Language:** English, Deutsch, Español, Français, Português or Slovenčina, or match the computer's
   own. The whole app changes at once.
 - **Keep awake while sessions work:** while any session is working, your computer won't go to
@@ -320,13 +371,14 @@ Installed with Homebrew or the Snap Store? Those update the app for you.
 
 ## Sessions come back
 
-Quit whenever you like. Every session is saved: its name, where it sits in the tree, the folder its
-shell was in and the last 1,000 lines it showed. Next time you open the app, each one comes back in
-a fresh shell in that folder, with its old output above the new prompt.
+Quit whenever you like. Every session is saved: its name, where it sits in the tree and in the order
+you gave it, the folder its shell was in and the last 1,000 lines it showed. Next time you open the
+app, each one comes back in a fresh shell in that folder, with its old output above the new prompt.
 
 If Claude Code was running in a session, its conversation is resumed too. Programs other than Claude
 Code start fresh. Sessions are also saved while the app runs, so even after a crash you keep them
-(just not their latest output).
+(just not their latest output). [Archived sessions](#archiving-sessions) stay archived: nothing starts
+for them until you restore them.
 
 ---
 
@@ -344,8 +396,9 @@ Each one becomes a Lemonade Code session the way a saved session comes back afte
   conversation and Claude still has it, the session resumes it with `claude --resume`.
 
 Importing copies: herdr's sessions stay as they are, and nothing in herdr is started, stopped or
-changed. A session you imported before can't be imported twice, and one whose folder no longer
-exists says so and stays unticked. If herdr is still running, the page asks you to quit it first, so
+changed. A session you imported before shows **Already imported** and can't be ticked again (with a
+few exceptions listed in the [roadmap](ROADMAP.md#importing-sessions)), and one whose folder no
+longer exists says so and stays unticked. If herdr is still running, the page asks you to quit it first, so
 a conversation isn't open in both. A saved herdr layout Lemonade Code can't read, like one from a
 newer herdr, is left out, and the page says so. herdr is the first tool Lemonade Code imports from; the page lists
 each tool on its own.
@@ -363,7 +416,7 @@ On Windows and Linux, use **Ctrl** wherever you see **⌘**.
 | **⌘T** | New terminal session |
 | **⌘W** | Close the selected session and its sub-sessions, asking first about a worktree that would be left unused |
 | **⌘↵** | Paste the unsent comments into the terminal |
-| **Esc** | Close the open menu, panel or drawer |
+| **Esc** | Close the open menu, panel or drawer, or put back a session you're dragging |
 
 In the terminal:
 
@@ -378,8 +431,9 @@ With the mouse:
 
 | Action | Does |
 |---|---|
-| Right-click a session | Rename, copy folder path, start a sub-session, close |
+| Right-click a session | Rename, copy folder path, move up or down, start a sub-session, archive, close |
 | Middle-click a session | Close it |
+| Drag a session up or down | Move it among its siblings, with its sub-sessions |
 | Click **+** beside a line | Comment on that line |
 | Drag across lines | Comment on a range |
 | Drag a 3D model | Turn it around |

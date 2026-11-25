@@ -32,13 +32,67 @@ class SubSessionPlannerTest {
   }
 
   @Test
-  fun `a worktree on a branch of the user's own is named after its last part`() {
+  fun `a worktree on a branch of the user's own and its sub-session are named after its last part`() {
     val root = session("ar", "api-ratelimit")
     val plan = SubSessionPlanner.plan(root, listOf(root), SubSessionLocation.NewWorktree, "sub", branch = "worktree/generating-bugs")
     assertEquals("/code/storefront.worktrees/generating-bugs", plan?.workingDirectory)
     assertEquals("worktree/generating-bugs", plan?.branch)
     assertEquals("feat/rate-limit", plan?.baseBranch)
-    assertEquals("sub-1", plan?.name)
+    assertEquals("generating-bugs", plan?.name)
+  }
+
+  @Test
+  fun `a branch with no slash names the worktree whole`() {
+    val root = session("ar", "api-ratelimit")
+    val plan = SubSessionPlanner.plan(root, listOf(root), SubSessionLocation.NewWorktree, "sub", branch = "flaky-login")
+    assertEquals("flaky-login", plan?.name)
+    assertEquals("/code/storefront.worktrees/flaky-login", plan?.workingDirectory)
+  }
+
+  @Test
+  fun `a folder already there moves the new worktree and its name along`() {
+    val root = session("ar", "api-ratelimit")
+    val there = setOf("/code/storefront.worktrees/generating-bugs", "/code/storefront.worktrees/generating-bugs-2")
+    val plan = SubSessionPlanner.plan(root, listOf(root), SubSessionLocation.NewWorktree, "sub", branch = "feat/generating-bugs") { it in there }
+    assertEquals("generating-bugs-3", plan?.name)
+    assertEquals("/code/storefront.worktrees/generating-bugs-3", plan?.workingDirectory)
+    assertEquals("feat/generating-bugs", plan?.branch, "the branch stays as typed")
+  }
+
+  @Test
+  fun `a worktree's name is never one a sibling already shows`() {
+    val root = session("ar", "api-ratelimit")
+    val named = session("s1", "generating-bugs", parent = "ar", placement = SessionPlacement.Worktree)
+    val renamed = session("s2", "sub-1", parent = "ar").copy(customName = "generating-bugs-2")
+    val elsewhere = session("cf", "flaky-login")
+    val sessions = listOf(root, named, renamed, elsewhere)
+    assertEquals("generating-bugs-3", SubSessionPlanner.plan(root, sessions, SubSessionLocation.NewWorktree, "sub", branch = "worktree/generating-bugs")?.name)
+    assertEquals("flaky-login", SubSessionPlanner.plan(root, sessions, SubSessionLocation.NewWorktree, "sub", branch = "fix/flaky-login")?.name, "only siblings count")
+  }
+
+  @Test
+  fun `nothing typed yet names nothing`() {
+    val root = session("ar", "api-ratelimit")
+    val plan = SubSessionPlanner.plan(root, listOf(root), SubSessionLocation.NewWorktree, "sub", branch = "") { true }
+    assertEquals("", plan?.name)
+    assertEquals("/code/storefront.worktrees/", plan?.workingDirectory)
+  }
+
+  @Test
+  fun `a worktree with no branch typed skips folders already there`() {
+    val root = session("ar", "api-ratelimit")
+    val plan = SubSessionPlanner.plan(root, listOf(root), SubSessionLocation.NewWorktree, "sub") { it == "/code/storefront.worktrees/sub-1" }
+    assertEquals("sub-2", plan?.name)
+    assertEquals("/code/storefront.worktrees/sub-2", plan?.workingDirectory)
+    assertEquals("feat/rate-limit-sub-2", plan?.branch)
+  }
+
+  @Test
+  fun `the same folder keeps numbering its sub-sessions`() {
+    val root = session("ar", "api-ratelimit")
+    val sessions = listOf(root, session("s1", "sub-1", parent = "ar"), session("w", "generating-bugs", parent = "ar", placement = SessionPlacement.Worktree))
+    val plan = SubSessionPlanner.plan(root, sessions, SubSessionLocation.SameFolder, "sub", branch = "worktree/generating-bugs") { true }
+    assertEquals("sub-2", plan?.name)
   }
 
   @Test
@@ -68,5 +122,24 @@ class SubSessionPlannerTest {
     val inserted = SubSessionPlanner.insertUnder(sessions, SessionId("a"), session("e", "e", parent = "a"))
     assertEquals(listOf("a", "b", "c", "e", "d"), inserted.map { it.name })
     assertEquals(setOf("a", "b", "c", "e"), SubSessionPlanner.subtree(inserted, SessionId("a")).map { it.value }.toSet())
+  }
+
+  @Test
+  fun `a session goes back before the sibling it was before, else after the one it was after`() {
+    // a has sub-sessions b (with c under it) and d; e is a root after a.
+    val sessions = listOf(session("a", "a"), session("b", "b", parent = "a"), session("c", "c", parent = "b"), session("d", "d", parent = "a"), session("e", "e"))
+    fun back(session: Session, after: String?, before: String?) = SubSessionPlanner.insertBack(sessions, session, after?.let(::SessionId), before?.let(::SessionId)).map { it.name }
+
+    val x = session("x", "x", parent = "a")
+    assertEquals(listOf("a", "b", "c", "x", "d", "e"), back(x, after = "b", before = "d"))
+    assertEquals(listOf("a", "b", "c", "x", "d", "e"), back(x, after = "b", before = "gone"), "after b and what's under it")
+    assertEquals(listOf("a", "x", "b", "c", "d", "e"), back(x, after = "gone", before = "b"))
+    assertEquals(listOf("a", "b", "c", "d", "x", "e"), back(x, after = "gone", before = "gone"), "last under its parent")
+    assertEquals(listOf("a", "b", "c", "d", "x", "e"), back(x, after = null, before = "e"), "e isn't a sibling of a sub-session")
+
+    val root = session("y", "y")
+    assertEquals(listOf("y", "a", "b", "c", "d", "e"), back(root, after = null, before = "a"))
+    assertEquals(listOf("a", "b", "c", "d", "y", "e"), back(root, after = "a", before = null))
+    assertEquals(listOf("a", "b", "c", "d", "e", "y"), back(root, after = null, before = null), "last of all")
   }
 }

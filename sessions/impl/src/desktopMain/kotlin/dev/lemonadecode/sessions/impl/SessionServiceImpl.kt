@@ -2,11 +2,13 @@ package dev.lemonadecode.sessions.impl
 
 import dev.lemonadecode.data.git.GitDataSource
 import dev.lemonadecode.data.git.GitError
+import dev.lemonadecode.domain.session.ArchivedSession
 import dev.lemonadecode.domain.session.BranchName
 import dev.lemonadecode.domain.session.ClaudeConversation
 import dev.lemonadecode.domain.session.LinkedWorktree
 import dev.lemonadecode.domain.session.Session
 import dev.lemonadecode.domain.session.SessionId
+import dev.lemonadecode.domain.session.SessionOrder
 import dev.lemonadecode.domain.session.SessionOrigin
 import dev.lemonadecode.domain.session.SessionPlacement
 import dev.lemonadecode.domain.session.SessionStatus
@@ -24,6 +26,7 @@ import dev.lemonadecode.platform.terminal.TerminalSignal
 import dev.lemonadecode.sessions.api.ImportedSession
 import dev.lemonadecode.sessions.api.SessionError
 import dev.lemonadecode.sessions.api.SessionService
+import dev.lemonadecode.sessions.api.Unarchived
 import dev.zacsweers.metro.ContributesBinding
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
@@ -76,6 +79,11 @@ internal class SessionServiceImpl(
 
   /** For each session with an agent running, the command that resumes it. */
   private val resumes = MutableStateFlow<Map<SessionId, String>>(emptyMap())
+
+  /** The archived sessions as kept, the most recently archived first; [archivedSessions] shows them. */
+  private val archives = MutableStateFlow<List<SavedArchive>>(emptyList())
+  private val archivedSessions = MutableStateFlow<List<ArchivedSession>>(emptyList())
+  private val archiveLock = Any()
   private val saver = AtomicReference<Job?>(null)
   private val shuttingDown = AtomicBoolean(false)
 
@@ -89,6 +97,8 @@ internal class SessionServiceImpl(
   @Volatile internal var resumeGrace: Duration = 20.seconds
 
   override val sessions: StateFlow<List<Session>> = state.asStateFlow()
+
+  override val archived: StateFlow<List<ArchivedSession>> = archivedSessions.asStateFlow()
 
   override suspend fun openTerminal(directory: String?): LemonadeCodeResult<SessionId, SessionError> {
     val folder = File(directory ?: home.path)
@@ -113,7 +123,10 @@ internal class SessionServiceImpl(
   override fun planSubSession(parentId: SessionId, location: SubSessionLocation, namePrefix: String, branch: String?): SubSessionPlan? {
     val sessions = state.value
     val parent = sessions.firstOrNull { it.id == parentId } ?: return null
-    return SubSessionPlanner.plan(parent, sessions, location, namePrefix, branch)
+    // Archived ones count too, so one brought back never shares a name with a newer one.
+    val named = sessions + archivedSessions.value.flatMap { it.sessions }
+    // A folder already there, like a worktree kept from an earlier sub-session, would make git refuse.
+    return SubSessionPlanner.plan(parent, named, location, namePrefix, branch) { File(it).exists() }
   }
 
   override fun suggestWorktreeBranch(): String = WorktreeNames.suggest(Random.Default)
@@ -191,22 +204,164 @@ internal class SessionServiceImpl(
   }
 
   override fun close(id: SessionId) {
+    // An archived one has nothing running: it's only let go of.
+    if (updateArchives { archived -> archived.filterNot { it.id == id.value } }) return
     val doomed = SubSessionPlanner.subtree(state.value, id)
-    forgetEnded()
-    val until = TimeSource.Monotonic.markNow() + EndingWait
-    doomed.forEach { sessionId ->
-      watchers.remove(sessionId)?.cancel()
-      registry.remove(sessionId)?.let { terminal ->
-        processTree(terminal.pid).forEach { ending[it] = until }
-        terminal.close()
-      }
-    }
+    end(doomed)
     resumes.update { it - doomed.toSet() }
     state.update { sessions -> sessions.filterNot { it.id in doomed } }
   }
 
+  /** Ends the terminals of [ids] and whatever runs in them. */
+  private fun end(ids: Set<SessionId>) {
+    val _ = forgetEnded()
+    ids.forEach { sessionId ->
+      watchers.remove(sessionId)?.cancel()
+      registry.remove(sessionId)?.let(::endShell)
+    }
+  }
+
+  /** Closes [terminal] and notes its processes, so [removeWorktree] waits a moment for them to end. */
+  private fun endShell(terminal: TerminalSession) {
+    val until = TimeSource.Monotonic.markNow() + EndingWait
+    processTree(terminal.pid).forEach { ending[it] = until }
+    terminal.close()
+  }
+
+  override fun archive(id: SessionId) {
+    // Out of the open sessions and into the archived ones in one step, for whoever saves or adds to them.
+    val going = synchronized(archiveLock) {
+      val sessions = state.value
+      val session = sessions.firstOrNull { it.id == id } ?: return
+      val going = SubSessionPlanner.subtree(sessions, id)
+      val siblings = sessions.filter { it.parentId == session.parentId }
+      val at = siblings.indexOf(session)
+      val agents = resumes.value
+      // Read while the terminals still run: what they showed, and the agents to resume.
+      val archive = SavedArchive(
+        sessions = sessions.filter { it.id in going }.map { saved(it, agents[it.id], withOutput = true, archived = true) },
+        after = siblings.getOrNull(at - 1)?.id?.value,
+        before = siblings.getOrNull(at + 1)?.id?.value,
+      )
+      state.update { list -> list.filterNot { it.id in going } }
+      val _ = updateArchives { listOf(archive) + it }
+      going
+    }
+    end(going)
+    resumes.update { it - going }
+  }
+
+  /**
+   * Brings the archive back a session at a time. Each leaves the archive only as it joins the open
+   * sessions, so one whose shell can't start, those not reached when this is cancelled, and what is
+   * saved meanwhile all keep every session.
+   */
+  override suspend fun unarchive(id: SessionId): LemonadeCodeResult<Unarchived, SessionError> {
+    val archive = archives.value.firstOrNull { it.id == id.value } ?: return LemonadeCodeResult.failure(SessionError.UnknownSession)
+    val group = archive.sessions.mapTo(HashSet()) { it.id }
+    val missing = mutableMapOf<SessionId, String>()
+    // Those that couldn't come back, and those under them: they stay archived, and are said to.
+    val kept = mutableListOf<String>()
+    for ((index, entry) in archive.sessions.withIndex()) {
+      val parentId = entry.parentId
+      // Under one that stayed, or that was archived again meanwhile: it stays too.
+      if (index > 0 && parentId in group && (parentId in kept || state.value.none { it.id.value == parentId })) {
+        kept += entry.id
+        continue
+      }
+      val gone = !File(entry.workingDirectory).isDirectory
+      // An agent's conversation belongs to its folder; at home it would find none.
+      val relaunched = relaunch(
+        entry = if (gone) entry.copy(resume = null) else entry,
+        after = archive.after.takeIf { index == 0 },
+        before = archive.before.takeIf { index == 0 },
+        claim = { takeFromArchive(entry.id) },
+      )
+      if (relaunched is LemonadeCodeResult.Success) {
+        if (gone) missing[relaunched.value] = entry.workingDirectory
+        continue
+      }
+      val error = (relaunched as LemonadeCodeResult.Failure).error
+      // Out of the archive without this call: back already, through another restore of it, which sees
+      // to the rest; or deleted for good, with the rest.
+      val backAlready = error == SessionError.UnknownSession && state.value.any { it.id.value == entry.id }
+      when {
+        index == 0 && backAlready -> return LemonadeCodeResult.success(Unarchived(id))
+        // Without its first session nothing came back: it all stays archived, where it was.
+        index == 0 -> return LemonadeCodeResult.failure(error)
+        error == SessionError.UnknownSession -> break
+        else -> kept += entry.id
+      }
+    }
+    return LemonadeCodeResult.success(Unarchived(id, missing, kept.map(::SessionId)))
+  }
+
+  /**
+   * Takes the session [id] out of the archive it's in, as it joins the open sessions; false when it
+   * isn't there any more. What's left of an archive whose first session went keeps its place in the
+   * list, split so each session left at the top heads its own, as the list shows them.
+   */
+  private fun takeFromArchive(id: String): Boolean = updateArchives { archived ->
+    archived.flatMap { archive ->
+      when {
+        archive.sessions.none { it.id == id } -> listOf(archive)
+        archive.id == id -> separate(archive.sessions.drop(1))
+        else -> listOf(archive.copy(sessions = archive.sessions.filterNot { it.id == id }))
+      }
+    }
+  }
+
+  /** [sessions] as archives: each whose parent isn't among them heads one, with those under it. */
+  private fun separate(sessions: List<SavedSession>): List<SavedArchive> {
+    val groups = mutableListOf<MutableList<SavedSession>>()
+    val groupOf = HashMap<String, MutableList<SavedSession>>()
+    sessions.forEach { session ->
+      val group = session.parentId?.let(groupOf::get) ?: mutableListOf<SavedSession>().also(groups::add)
+      group += session
+      groupOf[session.id] = group
+    }
+    return groups.map { SavedArchive(it) }
+  }
+
+  /** The session it goes under has been archived, so it can't join the open sessions. Call with the archive locked. */
+  private fun parentArchived(session: Session): Boolean {
+    val parentId = session.parentId ?: return false
+    return state.value.none { it.id == parentId } && archives.value.any { archive -> archive.sessions.any { it.id == parentId.value } }
+  }
+
+  /** Changes the archived sessions as kept, and as shown; false when nothing changed. */
+  private fun updateArchives(transform: (List<SavedArchive>) -> List<SavedArchive>): Boolean = synchronized(archiveLock) {
+    val current = archives.value
+    val next = transform(current)
+    if (next == current) return false
+    archives.value = next
+    archivedSessions.value = next.map { archive ->
+      val shown = archive.sessions.map { it.archivedSession() }
+      ArchivedSession(session = shown.first(), subSessions = shown.drop(1))
+    }
+    true
+  }
+
+  /** How an archived session shows: as it was when archived, with nothing running in it. */
+  private fun SavedSession.archivedSession(): Session = Session(
+    id = SessionId(id),
+    name = name,
+    shell = launcher.shellName,
+    workingDirectory = workingDirectory,
+    repositoryRoot = repositoryRoot,
+    branch = branch,
+    parentId = parentId?.let(::SessionId),
+    placement = placement(),
+    origin = origin(),
+    status = SessionStatus.Shell,
+    customName = customName,
+    agent = agent,
+  )
+
   override suspend fun worktreeOf(id: SessionId): LinkedWorktree? {
-    val session = state.value.firstOrNull { it.id == id } ?: return null
+    val session = state.value.firstOrNull { it.id == id }
+      ?: archivedSessions.value.flatMap { it.sessions }.firstOrNull { it.id == id }
+      ?: return null
     val worktree = git.linkedWorktree(session.workingDirectory).getOrNull() ?: return null
     return LinkedWorktree(path = worktree.root, branch = worktree.branch, mainCheckout = worktree.mainRoot, hasChanges = worktree.hasChanges)
   }
@@ -231,41 +386,69 @@ internal class SessionServiceImpl(
     update(id) { it.copy(customName = custom) }
   }
 
+  // Saved like any other change: the saved sessions are in display order, and come back in it.
+  override fun move(id: SessionId, index: Int) {
+    state.update { sessions -> SessionOrder.move(sessions, id, index) }
+  }
+
   override suspend fun restore(): Int {
-    val saved = safeSuspendRunCatching { store.load() }.getOrNull()?.sessions.orEmpty()
-    var count = 0
-    for (entry in saved) {
-      if (state.value.any { it.id.value == entry.id }) continue
-      // A worktree removed since, or a folder deleted: start at home rather than not at all.
-      val folder = File(entry.workingDirectory).takeIf { it.isDirectory }?.absolutePath ?: home.path
-      val parent = entry.parentId?.let(::SessionId)?.takeIf { parentId -> state.value.any { it.id == parentId } }
-      val checkout = git.checkout(folder).getOrNull()
-      val restored = launch(folder, initialInput = null, restored = entry) { id ->
-        Session(
-          id = id,
-          name = if (parent == null) rootName(folder) else entry.name,
-          shell = launcher.shellName,
-          workingDirectory = folder,
-          repositoryRoot = checkout?.root,
-          branch = checkout?.branch,
-          parentId = parent,
-          placement = if (parent == null) SessionPlacement.Root else entry.placement(),
-          origin = entry.origin(),
-          status = SessionStatus.Shell,
-          customName = entry.customName,
-        )
+    val loaded = safeSuspendRunCatching { store.load() }.getOrNull()
+    // Archived sessions stay archived: nothing starts for them. Each is kept once, and not at all
+    // when it's open too, so a file saved twice over, or caught between the two lists, brings back no copies.
+    val _ = updateArchives { current ->
+      val seen = (current.flatMap { archive -> archive.sessions.map { it.id } } + loaded?.sessions.orEmpty().map { it.id } + state.value.map { it.id.value }).toMutableSet()
+      current + loaded?.archived.orEmpty().flatMap { archive ->
+        val kept = archive.sessions.filter { seen.add(it.id) }
+        if (kept.isNotEmpty() && kept.first().id == archive.id) listOf(archive.copy(sessions = kept)) else separate(kept)
       }
+    }
+    var count = 0
+    for (entry in loaded?.sessions.orEmpty()) {
+      if (state.value.any { it.id.value == entry.id }) continue
+      val restored = relaunch(entry)
       if (restored is LemonadeCodeResult.Success) count++
     }
     startSaving()
     return count
   }
 
+  /**
+   * Starts a saved session again in a fresh shell, under its parent if that's open, else at the top.
+   * The first of a group goes back between its siblings [after] and [before], if they're still there.
+   * [claim] is asked as it joins the open sessions; see [launch].
+   */
+  private suspend fun relaunch(
+    entry: SavedSession,
+    after: String? = null,
+    before: String? = null,
+    claim: () -> Boolean = { true },
+  ): LemonadeCodeResult<SessionId, SessionError> {
+    // A worktree removed since, or a folder deleted: start at home rather than not at all.
+    val folder = File(entry.workingDirectory).takeIf { it.isDirectory }?.absolutePath ?: home.path
+    val parent = entry.parentId?.let(::SessionId)?.takeIf { parentId -> state.value.any { it.id == parentId } }
+    val checkout = git.checkout(folder).getOrNull()
+    return launch(folder, initialInput = null, restored = entry, after = after?.let(::SessionId), before = before?.let(::SessionId), claim = claim) { id ->
+      Session(
+        id = id,
+        name = if (parent == null) rootName(folder) else entry.name,
+        shell = launcher.shellName,
+        workingDirectory = folder,
+        repositoryRoot = checkout?.root,
+        branch = checkout?.branch,
+        parentId = parent,
+        placement = if (parent == null) SessionPlacement.Root else entry.placement(),
+        origin = entry.origin(),
+        status = SessionStatus.Shell,
+        customName = entry.customName,
+      )
+    }
+  }
+
   override suspend fun shutdown() {
     if (!shuttingDown.compareAndSet(false, true)) return
     saver.getAndSet(null)?.cancel()
-    val sessions = state.value
-    val _ = safeSuspendRunCatching { store.save(snapshot(sessions, resumes.value, withOutput = true)) }
+    val (sessions, toSave) = synchronized(archiveLock) { state.value.let { it to snapshot(it, resumes.value, archives.value, withOutput = true) } }
+    val _ = safeSuspendRunCatching { store.save(toSave) }
     sessions.forEach { session ->
       watchers.remove(session.id)?.cancel()
       registry.remove(session.id)?.close()
@@ -276,7 +459,8 @@ internal class SessionServiceImpl(
   @OptIn(FlowPreview::class)
   private fun startSaving() {
     val job = scope.launch(start = CoroutineStart.LAZY) {
-      combine(state, resumes) { sessions, agents -> snapshot(sessions, agents, withOutput = false) }
+      // Read together under the archive's lock, so a session moving between the lists is in exactly one.
+      combine(state, resumes, archives) { _, _, _ -> synchronized(archiveLock) { snapshot(state.value, resumes.value, archives.value, withOutput = false) } }
         .distinctUntilChanged()
         .debounce(SaveDelay)
         .collect { saved ->
@@ -288,29 +472,41 @@ internal class SessionServiceImpl(
     if (saver.compareAndSet(null, job)) job.start() else job.cancel()
   }
 
-  private fun snapshot(sessions: List<Session>, agents: Map<SessionId, String>, withOutput: Boolean) = SavedSessions(
-    sessions.map { session ->
-      val resume = agents[session.id]
-      SavedSession(
-        id = session.id.value,
-        name = session.name,
-        customName = session.customName,
-        workingDirectory = session.workingDirectory,
-        parentId = session.parentId?.value,
-        placement = session.placement.name,
-        origin = SavedSession.originName(session.origin),
-        reviewCommentCount = (session.origin as? SessionOrigin.Review)?.commentCount,
-        resume = resume,
-        // A resumed agent shows its own history; a plain shell gets back what it showed.
-        output = if (withOutput && resume == null) registry.terminal(session.id)?.recentOutput(MaxRestoredLines)?.takeIf { it.isNotEmpty() } else null,
-      )
-    },
+  private fun snapshot(sessions: List<Session>, agents: Map<SessionId, String>, archived: List<SavedArchive>, withOutput: Boolean) = SavedSessions(
+    sessions = sessions.map { session -> saved(session, agents[session.id], withOutput) },
+    archived = archived,
+  )
+
+  /**
+   * [session] as saved, with [resume], the command that resumes its agent. An [archived] one keeps
+   * what it shows while archived: its checkout, branch and agent.
+   */
+  private fun saved(session: Session, resume: String?, withOutput: Boolean, archived: Boolean = false) = SavedSession(
+    id = session.id.value,
+    name = session.name,
+    customName = session.customName,
+    workingDirectory = session.workingDirectory,
+    parentId = session.parentId?.value,
+    placement = session.placement.name,
+    origin = SavedSession.originName(session.origin),
+    reviewCommentCount = (session.origin as? SessionOrigin.Review)?.commentCount,
+    resume = resume,
+    // A resumed agent shows its own history; a plain shell gets back what it showed.
+    output = if (withOutput && resume == null) registry.terminal(session.id)?.recentOutput(MaxRestoredLines)?.takeIf { it.isNotEmpty() } else null,
+    repositoryRoot = session.repositoryRoot.takeIf { archived },
+    branch = session.branch.takeIf { archived },
+    // The program the resume command starts, when the agent isn't reporting.
+    agent = (session.agent ?: resume?.substringBefore(' ')).takeIf { archived },
   )
 
   private suspend fun launch(
     directory: String,
     initialInput: String?,
     restored: SavedSession? = null,
+    after: SessionId? = null,
+    before: SessionId? = null,
+    /** Asked as it joins the open sessions; false keeps it out, as one deleted for good meanwhile. */
+    claim: () -> Boolean = { true },
     build: (SessionId) -> Session,
   ): LemonadeCodeResult<SessionId, SessionError> = mutations.withLock {
     val id = SessionId(restored?.id ?: UUID.randomUUID().toString())
@@ -320,10 +516,22 @@ internal class SessionServiceImpl(
       is LemonadeCodeResult.Failure -> return@withLock LemonadeCodeResult.failure(SessionError.LaunchFailed(started.error.message ?: "Couldn't start the shell"))
     }
     val session = build(id)
-    registry.register(id, terminal)
-    state.update { sessions ->
-      val parentId = session.parentId
-      if (parentId == null) sessions + session else SubSessionPlanner.insertUnder(sessions, parentId, session)
+    // In one step with archiving. A session whose parent was archived while its shell started
+    // doesn't run on its own outside it: a new one isn't created, a restored one stays archived.
+    val placement = synchronized(archiveLock) {
+      when {
+        parentArchived(session) -> Placement.ParentArchived
+        !claim() -> Placement.Dropped
+        else -> {
+          registry.register(id, terminal)
+          state.update { sessions -> SubSessionPlanner.insertBack(sessions, session, after, before) }
+          Placement.Listed
+        }
+      }
+    }
+    if (placement != Placement.Listed) {
+      endShell(terminal)
+      return@withLock LemonadeCodeResult.failure(if (placement == Placement.ParentArchived) SessionError.ParentArchived else SessionError.UnknownSession)
     }
     val resume = restored?.resume
     if (resume != null) resumes.update { it + (id to resume) }
@@ -449,6 +657,9 @@ internal class SessionServiceImpl(
 
   // Windows paths ignore case: `cd c:\users\me` is home too.
   private fun rootName(folder: String): String = if (folder.equals(home.path, ignoreCase = IsWindows)) "~" else folderName(folder, IsWindows).ifEmpty { folder }
+
+  /** Where a launched session went: into the open sessions, or nowhere, as its parent was archived or it was already out of the archive. */
+  private enum class Placement { Listed, ParentArchived, Dropped }
 
   private companion object {
     val StaleReportCheck = 1.seconds

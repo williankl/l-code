@@ -1,5 +1,7 @@
 package dev.lemonadecode.workspace.ui
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -7,6 +9,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -16,8 +19,14 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.style.TextOverflow
+import com.teya.lemonade.Icon
+import com.teya.lemonade.LemonadeTheme
 import com.teya.lemonade.LemonadeUi
+import com.teya.lemonade.Text
 import com.teya.lemonade.TextField
+import com.teya.lemonade.core.LemonadeAssetSize
+import com.teya.lemonade.core.LemonadeIcons
 import dev.lemonadecode.platform.localization.resolve
 import dev.lemonadecode.workspace.strings.Res
 import dev.lemonadecode.workspace.strings.worktree_branch_field
@@ -75,4 +84,31 @@ internal fun WorktreeBranchField(
       },
   )
   LaunchedEffect(Unit) { focusRequester.requestFocus() }
+}
+
+/**
+ * The name the new worktree's sub-session will have in the list, its folder's, beside the split
+ * icon it opens from. Nothing while there's no name to show yet.
+ */
+@Composable
+internal fun WorktreeSessionName(name: String, modifier: Modifier = Modifier) {
+  if (name.isEmpty()) return
+  Row(
+    verticalAlignment = Alignment.CenterVertically,
+    horizontalArrangement = Arrangement.spacedBy(LemonadeTheme.spaces.spacing100),
+    modifier = modifier,
+  ) {
+    LemonadeUi.Icon(
+      icon = LemonadeIcons.ArrowSplit,
+      contentDescription = null,
+      size = LemonadeAssetSize.Small,
+      tint = LemonadeTheme.colors.content.contentSecondary,
+    )
+    LemonadeUi.Text(
+      text = name,
+      textStyle = LemonadeTheme.typography.bodySmallSemiBold,
+      maxLines = 1,
+      overflow = TextOverflow.Ellipsis,
+    )
+  }
 }

@@ -18,6 +18,14 @@ What Lemonade Code doesn't do yet. Want something that isn't here?
   one in its focused pane; the others aren't resumed. Agents other than Claude Code start fresh.
 - **herdr's saved layout.** While herdr runs, its layout is read as it last saved it, a few seconds
   behind at most.
+- **Imported once, mostly.** An import is remembered by herdr's workspace id, and herdr can hand a
+  closed workspace's id to a new one: after a restart, when the highest-numbered workspace was
+  closed, or when a herdr session is deleted and made again under the same name. Then:
+  - the new workspace can show as *Already imported* when it never was;
+  - a worktree imported under such an id can nest under an unrelated session that's still open.
+- **Offered again, now and then.** A workspace from an old herdr layout, saved before workspaces
+  had ids, is offered once more after a current herdr saves it again. And if saving the record of an
+  import fails partway, the session that had just opened can be listed again.
 
 ## Status
 

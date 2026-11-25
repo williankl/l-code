@@ -8,7 +8,7 @@ public value class SessionId(public val value: String)
 /** A terminal: the user's login shell in a pseudo-terminal, following wherever they `cd`. */
 public data class Session(
   val id: SessionId,
-  /** The name Lemonade Code gives it: the shell's folder for a terminal, e.g. `sub-1` for a sub-session. */
+  /** The name Lemonade Code gives it; [customName], when set, is shown instead. */
   val name: String,
   /** Short name of the shell, e.g. `zsh`. */
   val shell: String,

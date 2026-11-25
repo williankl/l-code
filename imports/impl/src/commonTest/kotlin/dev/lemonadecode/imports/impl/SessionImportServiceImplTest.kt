@@ -6,6 +6,7 @@ import dev.lemonadecode.domain.session.ImportableSession
 import dev.lemonadecode.domain.session.SessionPlacement
 import dev.lemonadecode.domain.session.SourceScan
 import dev.lemonadecode.platform.architecture.testing.FakeLemonadeCodeCoroutineDispatchers
+import dev.lemonadecode.platform.core.getOrNull
 import dev.lemonadecode.platform.preferences.PreferenceStore
 import dev.lemonadecode.platform.preferences.testing.FakePreferenceStore
 import dev.lemonadecode.sessions.api.ImportedSession
@@ -116,6 +117,41 @@ class SessionImportServiceImplTest {
     val parentId = service.import(listOf(scanned[0])).opened.single()
     service.import(listOf(scanned[1]))
     assertEquals(parentId, sessions.imported.last().parentId)
+  }
+
+  @Test
+  fun `with its parent archived, a worktree goes to the top, and the parent still counts as imported`() = runTest {
+    val service = service()
+    val scanned = assertIs<SourceScan.Found>(service.scan().single()).sessions
+    sessions.archive(service.import(listOf(scanned[0])).opened.single())
+    assertEquals(1, service.import(listOf(scanned[1])).opened.size)
+    assertEquals(null, sessions.imported.last().parentId)
+    assertEquals(ImportBlock.AlreadyImported, assertIs<SourceScan.Found>(service.scan().single()).sessions[0].blocked)
+  }
+
+  @Test
+  fun `an imported parent archived and restored keeps its id, so a worktree imported then goes under it`() = runTest {
+    val service = service()
+    val scanned = assertIs<SourceScan.Found>(service.scan().single()).sessions
+    val parentId = service.import(listOf(scanned[0])).opened.single()
+    sessions.archive(parentId)
+    assertEquals(parentId, sessions.unarchive(parentId).getOrNull()?.id)
+    service.import(listOf(scanned[1]))
+    assertEquals(parentId, sessions.imported.last().parentId)
+    assertEquals(parentId, sessions.sessions.value.last().parentId)
+  }
+
+  @Test
+  fun `a parent archived just as its worktree starts leaves the worktree at the top`() = runTest {
+    val service = service()
+    val scanned = assertIs<SourceScan.Found>(service.scan().single()).sessions
+    val parentId = service.import(listOf(scanned[0])).opened.single()
+    sessions.archivedWhileImporting = setOf(parentId)
+    val result = service.import(listOf(scanned[1]))
+    assertEquals(1, result.opened.size)
+    assertEquals(emptyList(), result.failed)
+    assertEquals(listOf(parentId, null), sessions.imported.drop(1).map { it.parentId })
+    assertEquals(null, sessions.sessions.value.single { it.id == result.opened.single() }.parentId)
   }
 
   @Test

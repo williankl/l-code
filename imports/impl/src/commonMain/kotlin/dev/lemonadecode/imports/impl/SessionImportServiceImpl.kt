@@ -15,6 +15,7 @@ import dev.lemonadecode.platform.core.safeSuspendRunCatching
 import dev.lemonadecode.platform.di.AppScope
 import dev.lemonadecode.platform.preferences.PreferenceStore
 import dev.lemonadecode.sessions.api.ImportedSession
+import dev.lemonadecode.sessions.api.SessionError
 import dev.lemonadecode.sessions.api.SessionService
 import dev.zacsweers.metro.ContributesBinding
 import dev.zacsweers.metro.Inject
@@ -61,18 +62,21 @@ internal class SessionImportServiceImpl(
     for (session in parentsFirst(sessions.filter { it.blocked == null }.distinctBy { it.key })) {
       // Never twice, even when asked from a list shown before the last import.
       if (session.key in ledger) continue
+      // Under its parent while that's open; one archived or closed since leaves it at the top.
       val open = sessionService.sessions.value
       val parent = session.parentKey?.let { ledger[it] }?.let(::SessionId)?.takeIf { id -> open.any { it.id == id } }
-      val result = sessionService.openImported(
-        ImportedSession(
-          directory = session.folder,
-          name = session.name,
-          customName = session.customName,
-          parentId = parent,
-          placement = if (session.worktree) SessionPlacement.Worktree else SessionPlacement.SameFolder,
-          claudeConversation = session.conversation,
-        ),
+      val imported = ImportedSession(
+        directory = session.folder,
+        name = session.name,
+        customName = session.customName,
+        parentId = parent,
+        placement = if (session.worktree) SessionPlacement.Worktree else SessionPlacement.SameFolder,
+        claudeConversation = session.conversation,
       )
+      val first = sessionService.openImported(imported)
+      // Its parent was archived just as it started: it goes to the top instead.
+      val parentWent = first is LemonadeCodeResult.Failure && first.error == SessionError.ParentArchived
+      val result = if (parentWent) sessionService.openImported(imported.copy(parentId = null)) else first
       when (result) {
         is LemonadeCodeResult.Success -> {
           opened += result.value
@@ -80,6 +84,7 @@ internal class SessionImportServiceImpl(
           // Right away, so one that opened is never offered again, even if the import stops here.
           remember(session.key, result.value)
         }
+        // What's left is its folder gone since the scan, or its shell not starting.
         is LemonadeCodeResult.Failure -> failed += session
       }
     }

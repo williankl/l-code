@@ -88,7 +88,8 @@ public interface MobileService {
    * recording is the video [screen] streams, so [screen] has to be collected meanwhile: it starts
    * over, for the file to open on a whole picture, and carries on as the stream starts again. When
    * the screen turns, the recording goes on in a new file. It stops by itself, keeping what was
-   * recorded, when the device goes away; it fails when no video comes.
+   * recorded, when the device goes away or the plugin is turned off; it fails when no video comes,
+   * or when the file can't be written, keeping what reached the disk.
    */
   public suspend fun startRecording(id: DeviceId): LemonadeCodeResult<Unit, MobileError>
 

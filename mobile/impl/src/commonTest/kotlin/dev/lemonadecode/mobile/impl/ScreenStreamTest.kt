@@ -203,6 +203,24 @@ class ScreenStreamTest {
   }
 
   @Test
+  fun `a picture handed over as the stream went quiet, then found cut short, is said to be, for a recording to drop it`() = runTest {
+    val chunks = Channel<ByteArray>(Channel.UNLIMITED)
+    val units = mutableListOf<ByteArray>()
+    var cutShort = 0
+    val idr = picture(idr = true)
+    decodeVideo(chunks.receiveAsFlow(), FakeScreenDecoders(), onUnit = { units += it }, onCutShort = { cutShort++ }).test {
+      chunks.send(idr.copyOfRange(0, 6))
+      assertEquals(1, awaitItem().pixels[0].toInt())
+      assertEquals(1, units.size)
+      assertEquals(0, cutShort, "it looks whole until more of it comes")
+      chunks.send(idr.copyOfRange(6, idr.size) + picture())
+      awaitComplete()
+    }
+    assertEquals(1, units.size)
+    assertEquals(1, cutShort)
+  }
+
+  @Test
   fun `each access unit is handed over as it's decoded, to be recorded`() = runTest {
     val chunks = Channel<ByteArray>(Channel.UNLIMITED)
     val units = mutableListOf<ByteArray>()

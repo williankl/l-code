@@ -20,6 +20,7 @@ import dev.lemonadecode.domain.mobile.MobileTools
 import dev.lemonadecode.domain.mobile.NearbyDevice
 import dev.lemonadecode.domain.mobile.NearbyKind
 import dev.lemonadecode.domain.mobile.QrPairing
+import dev.lemonadecode.domain.mobile.RecordingStop
 import dev.lemonadecode.domain.mobile.ScreenPicture
 import dev.lemonadecode.domain.mobile.ScreenRecording
 import dev.lemonadecode.domain.mobile.ScreenUnavailable
@@ -361,12 +362,39 @@ class MobileServiceImplTest {
     }
     val saved = assertIs<ScreenRecording.Saved>(service.recordings.value[pixel])
     assertEquals(listOf("/home/me/Videos/Lemonade Code/Willian's Pixel-1.mp4"), saved.files)
-    assertTrue(saved.deviceGone)
+    assertEquals(RecordingStop.DeviceGone, saved.stop)
     val file = videos.opened.single()
     assertEquals(576 to 1280, file.width to file.height)
     assertEquals(listOf(7, 1), file.pictures.map { it.first })
     assertTrue(file.finishedAt != null)
     assertEquals(null, service.stopRecording(pixel))
+  }
+
+  @Test
+  fun `turning the plugin off while recording saves the recording, saying that's why`() = runTest {
+    answerPixel()
+    commands.answer("adb -s 38021FDH2000AB shell dumpsys window displays", "cur=1080x2400\n")
+    val video = commands.byteStream("adb -s 38021FDH2000AB exec-out screenrecord --output-format=h264 --size 576x1280 --bit-rate 8000000 -")
+    val streamStart = nal(7, 0x42) + nal(8, 0xCE) + picture(idr = true)
+    val service = service()
+    runCurrent()
+
+    service.screen(pixel).test {
+      assertEquals(DeviceScreen.Loading, awaitItem())
+      video.send(streamStart)
+      assertIs<DeviceScreen.Frame>(awaitItem())
+      assertEquals(LemonadeCodeResult.success(Unit), service.startRecording(pixel))
+      advanceTimeBy(500.milliseconds)
+      runCurrent()
+      video.send(streamStart)
+      assertIs<DeviceScreen.Frame>(awaitItem())
+
+      settings.update { it.copy(mobilePlugin = false) }
+      runCurrent()
+      cancelAndIgnoreRemainingEvents()
+    }
+    val saved = assertIs<ScreenRecording.Saved>(service.recordings.value[pixel])
+    assertEquals(RecordingStop.PluginOff, saved.stop)
   }
 
   @Test

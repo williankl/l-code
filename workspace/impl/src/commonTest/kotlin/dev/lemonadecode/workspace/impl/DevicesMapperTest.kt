@@ -8,6 +8,7 @@ import dev.lemonadecode.domain.mobile.LogLevel
 import dev.lemonadecode.domain.mobile.LogPackages
 import dev.lemonadecode.domain.mobile.MobileDevice
 import dev.lemonadecode.domain.mobile.RecordingFailure
+import dev.lemonadecode.domain.mobile.RecordingStop
 import dev.lemonadecode.domain.mobile.ScreenPicture
 import dev.lemonadecode.domain.mobile.ScreenRecording
 import dev.lemonadecode.domain.settings.DevicesLayout
@@ -38,9 +39,12 @@ import dev.lemonadecode.workspace.strings.mirror_loading
 import dev.lemonadecode.workspace.strings.mirror_record_screenshots
 import dev.lemonadecode.workspace.strings.mirror_size
 import dev.lemonadecode.workspace.strings.recording_failed_no_video
+import dev.lemonadecode.workspace.strings.recording_failed_partly
 import dev.lemonadecode.workspace.strings.recording_failed_unwritable
 import dev.lemonadecode.workspace.strings.recording_saved
 import dev.lemonadecode.workspace.strings.recording_saved_device_gone
+import dev.lemonadecode.workspace.strings.recording_saved_partly
+import dev.lemonadecode.workspace.strings.recording_saved_plugin_off
 import dev.lemonadecode.workspace.strings.recording_saved_toast
 import dev.lemonadecode.workspace.strings.recording_saved_videos
 import dev.lemonadecode.workspace.strings.time_days_ago
@@ -207,6 +211,23 @@ class DevicesMapperTest {
   }
 
   @Test
+  fun `a recording that failed while writing still shows where what it wrote went`() {
+    val partly = ScreenRecording.Failed(
+      RecordingFailure.Unwritable("No space left on device"),
+      listOf("/Users/me/Movies/Lemonade Code/Pixel-8-a.mp4", "/Users/me/Movies/Lemonade Code/Pixel-8-b.mp4"),
+    )
+    assertEquals(
+      SavedRecordingModel(
+        label = Res.string.recording_saved_partly.asLemonadeCodeString(),
+        paths = "/Users/me/Movies/Lemonade Code/Pixel-8-a.mp4\n/Users/me/Movies/Lemonade Code/Pixel-8-b.mp4",
+        revealUri = "file:///Users/me/Movies/Lemonade%20Code/Pixel-8-a.mp4",
+      ),
+      DevicesMapper.recording(partly, ShowcaseDevices.screen(), now).saved,
+    )
+    assertNull(DevicesMapper.recording(ScreenRecording.Failed(RecordingFailure.NoVideo), ShowcaseDevices.screen(), now).saved)
+  }
+
+  @Test
   fun `file URIs are percent-encoded, and Windows paths get their drive`() {
     assertEquals("file:///Users/Jos%C3%A9/Movies/a%23b.mp4", DevicesMapper.fileUri("/Users/José/Movies/a#b.mp4"))
     assertEquals("file:///C:/Users/me/Videos/Lemonade%20Code/a.mp4", DevicesMapper.fileUri("C:\\Users\\me\\Videos\\Lemonade Code\\a.mp4"))
@@ -236,15 +257,25 @@ class DevicesMapperTest {
     )
     assertEquals(
       Res.string.recording_saved_device_gone.asLemonadeCodeString("Pixel 8", "~/Movies/Lemonade Code") to false,
-      DevicesMapper.recordingEnded(ShowcaseDevices.savedRecording.copy(deviceGone = true), "Pixel 8", home),
+      DevicesMapper.recordingEnded(ShowcaseDevices.savedRecording.copy(stop = RecordingStop.DeviceGone), "Pixel 8", home),
+    )
+    assertEquals(
+      Res.string.recording_saved_plugin_off.asLemonadeCodeString("Pixel 8", "~/Movies/Lemonade Code") to false,
+      DevicesMapper.recordingEnded(ShowcaseDevices.savedRecording.copy(stop = RecordingStop.PluginOff), "Pixel 8", home),
     )
     assertEquals(
       Res.string.recording_failed_no_video.asLemonadeCodeString("Pixel 8") to true,
       DevicesMapper.recordingEnded(ScreenRecording.Failed(RecordingFailure.NoVideo), "Pixel 8", home),
     )
+    // FFmpeg's and the system's own words are in English only, so the error says it in the app's language.
     assertEquals(
-      Res.string.recording_failed_unwritable.asLemonadeCodeString("No space left on device") to true,
+      Res.string.recording_failed_unwritable.asLemonadeCodeString() to true,
       DevicesMapper.recordingEnded(ScreenRecording.Failed(RecordingFailure.Unwritable("No space left on device")), "Pixel 8", home),
+    )
+    val partly = ScreenRecording.Failed(RecordingFailure.Unwritable("No space left on device"), listOf("/Users/me/Movies/Lemonade Code/Pixel-8.mp4"))
+    assertEquals(
+      Res.string.recording_failed_partly.asLemonadeCodeString("~/Movies/Lemonade Code") to true,
+      DevicesMapper.recordingEnded(partly, "Pixel 8", home),
     )
     assertNull(DevicesMapper.recordingEnded(ScreenRecording.Recording(now), "Pixel 8", home))
   }

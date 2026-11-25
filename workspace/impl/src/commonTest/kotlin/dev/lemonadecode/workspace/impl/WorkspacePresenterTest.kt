@@ -4,6 +4,7 @@ import dev.lemonadecode.domain.mobile.DeviceApp
 import dev.lemonadecode.domain.mobile.LogPackages
 import dev.lemonadecode.domain.mobile.MobileError
 import dev.lemonadecode.domain.mobile.RecordingFailure
+import dev.lemonadecode.domain.mobile.RecordingStop
 import dev.lemonadecode.domain.mobile.ScreenRecording
 import dev.lemonadecode.domain.review.DiffState
 import dev.lemonadecode.domain.review.Review
@@ -39,6 +40,7 @@ import dev.lemonadecode.workspace.strings.Res
 import dev.lemonadecode.workspace.strings.error_worktree_delete
 import dev.lemonadecode.workspace.strings.file_path_copied
 import dev.lemonadecode.workspace.strings.recording_failed_no_video
+import dev.lemonadecode.workspace.strings.recording_failed_partly
 import dev.lemonadecode.workspace.strings.recording_saved
 import dev.lemonadecode.workspace.strings.recording_saved_device_gone
 import dev.lemonadecode.workspace.strings.recording_saved_toast
@@ -513,7 +515,7 @@ class WorkspacePresenterTest {
 
       // Unplugged: the service stops it and keeps what was recorded.
       mobile.setDevices(ShowcaseDevices.connected - ShowcaseDevices.pixel)
-      mobile.recordings.value = mapOf(pixel to ScreenRecording.Saved(listOf("${ShowcaseFixtures.Home}/Movies/Lemonade Code/Pixel-8.mp4"), 3_000, deviceGone = true))
+      mobile.recordings.value = mapOf(pixel to ScreenRecording.Saved(listOf("${ShowcaseFixtures.Home}/Movies/Lemonade Code/Pixel-8.mp4"), 3_000, stop = RecordingStop.DeviceGone))
       val gone = awaitItemWhere { it.toast != null }
       assertEquals(Res.string.recording_saved_device_gone.asLemonadeCodeString("Pixel 8", "~/Movies/Lemonade Code"), gone.toast)
 
@@ -523,6 +525,16 @@ class WorkspacePresenterTest {
       mobile.recordings.value = mapOf(pixel to ScreenRecording.Failed(RecordingFailure.NoVideo))
       val failed = awaitItemWhere { it.error != null }
       assertEquals(Res.string.recording_failed_no_video.asLemonadeCodeString("Pixel 8"), failed.error)
+
+      // The disk filled up: the error says where what was written is, and the page still finds it.
+      failed.eventSink(WorkspaceEvent.DismissError)
+      mobile.recordings.value = mapOf(pixel to ScreenRecording.Recording(Now))
+      awaitItemWhere { it.recording() && it.error == null }
+      val written = "${ShowcaseFixtures.Home}/Movies/Lemonade Code/Pixel-8.mp4"
+      mobile.recordings.value = mapOf(pixel to ScreenRecording.Failed(RecordingFailure.Unwritable("No space left on device"), listOf(written)))
+      val full = awaitItemWhere { it.error != null }
+      assertEquals(Res.string.recording_failed_partly.asLemonadeCodeString("~/Movies/Lemonade Code"), full.error)
+      assertEquals("file:///Users/you/Movies/Lemonade%20Code/Pixel-8.mp4", (full.devices?.content as? DevicesContentModel.Device)?.recording?.saved?.revealUri)
     }
   }
 

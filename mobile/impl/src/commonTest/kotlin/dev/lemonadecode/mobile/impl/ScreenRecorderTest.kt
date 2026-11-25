@@ -2,6 +2,7 @@ package dev.lemonadecode.mobile.impl
 
 import dev.lemonadecode.domain.mobile.DeviceId
 import dev.lemonadecode.domain.mobile.RecordingFailure
+import dev.lemonadecode.domain.mobile.RecordingStop
 import dev.lemonadecode.domain.mobile.ScreenRecording
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.async
@@ -10,6 +11,7 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withTimeout
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
@@ -149,13 +151,105 @@ class ScreenRecorderTest {
   }
 
   @Test
+  fun `a file that fails as it's finished still answers the stop, with the file as far as it was written`() = runTest {
+    videos.finishFailure = "Couldn't finish: the disk was ejected"
+    val recorder = recorder()
+    assertTrue(recorder.start(pixel, "Pixel 8"))
+    send(recorder, streamStart)
+    send(recorder, picture(), after = 100)
+
+    val ending = withTimeout(5.seconds) { recorder.stop(pixel) }
+    val failed = ScreenRecording.Failed(
+      RecordingFailure.Unwritable("Couldn't finish: the disk was ejected"),
+      files = listOf("/home/me/Videos/Lemonade Code/Pixel 8-1.mp4"),
+    )
+    assertEquals(failed, ending)
+    assertEquals(failed, recorder.recordings.value[pixel])
+    assertEquals(emptySet(), recorder.recording)
+  }
+
+  @Test
+  fun `a full disk fails the recording at once, keeping the file it was writing`() = runTest {
+    videos.writeFailureAt = 3
+    val recorder = recorder()
+    assertTrue(recorder.start(pixel, "Pixel 8"))
+    send(recorder, streamStart)
+    send(recorder, picture(), after = 100)
+    send(recorder, picture(), after = 100)
+
+    val failed = ScreenRecording.Failed(RecordingFailure.Unwritable("No space left on device"), listOf("/home/me/Videos/Lemonade Code/Pixel 8-1.mp4"))
+    assertEquals(failed, recorder.recordings.value[pixel])
+    assertEquals(emptySet(), recorder.recording, "nothing more is taken")
+    assertEquals(2, videos.opened.single().pictures.size)
+  }
+
+  @Test
+  fun `when the file after a turn can't be written, the whole one before it is still reported`() = runTest {
+    val recorder = recorder()
+    assertTrue(recorder.start(pixel, "Pixel 8"))
+    send(recorder, streamStart)
+    send(recorder, picture(), after = 100)
+    videos.failure = "No space left on device"
+    send(recorder, streamStart, after = 300, width = 1280, height = 576)
+
+    val failed = ScreenRecording.Failed(RecordingFailure.Unwritable("No space left on device"), listOf("/home/me/Videos/Lemonade Code/Pixel 8-1.mp4"))
+    assertEquals(failed, recorder.recordings.value[pixel])
+    assertEquals(400L, videos.opened.single().finishedAt)
+  }
+
+  @Test
+  fun `a picture handed over as the stream went quiet, then found cut short, is taken back`() = runTest {
+    val recorder = recorder()
+    assertTrue(recorder.start(pixel, "Pixel 8"))
+    send(recorder, streamStart)
+    send(recorder, picture(), after = 100)
+    // Handed over when the stream went quiet, but the stream carried on in the middle of it.
+    send(recorder, picture(), after = 100)
+    recorder.onCutShort(pixel)
+    runCurrent()
+    // The stream starts again, whole.
+    send(recorder, streamStart, after = 300)
+    advanceTimeBy(100.milliseconds)
+    val _ = recorder.stop(pixel)
+
+    val file = videos.opened.single()
+    assertEquals(listOf(Triple(7, 0L, true), Triple(1, 100L, false), Triple(7, 500L, true)), file.pictures)
+    assertEquals(600L, file.finishedAt)
+  }
+
+  @Test
+  fun `a stream's first picture cut short leaves nothing behind, and the file starts at the next one`() = runTest {
+    val recorder = recorder()
+    assertTrue(recorder.start(pixel, "Pixel 8"))
+    send(recorder, streamStart)
+    recorder.onCutShort(pixel)
+    runCurrent()
+    send(recorder, streamStart, after = 300)
+    // The screen turned: the next stream's first picture is cut short too, then it turned back.
+    send(recorder, streamStart, after = 300, width = 1280, height = 576)
+    recorder.onCutShort(pixel)
+    runCurrent()
+    send(recorder, streamStart, after = 300)
+    advanceTimeBy(100.milliseconds)
+    val ending = recorder.stop(pixel)
+
+    val (first, empty, last) = videos.opened
+    assertEquals(listOf(Triple(7, 0L, true)), first.pictures, "its time starts at the picture kept")
+    assertEquals(300L, first.finishedAt)
+    assertTrue(empty.deleted, "nothing was kept in the landscape file")
+    assertEquals(listOf(Triple(7, 0L, true)), last.pictures)
+    assertEquals(100L, last.finishedAt)
+    assertEquals(listOf(first.path, last.path), (ending as ScreenRecording.Saved).files)
+  }
+
+  @Test
   fun `a device that went away keeps what was recorded, and an ended recording can be dismissed`() = runTest {
     val recorder = recorder()
     assertTrue(recorder.start(pixel, "Pixel 8"))
     send(recorder, streamStart)
     advanceTimeBy(2.seconds)
-    val ending = recorder.stop(pixel, deviceGone = true)
-    assertEquals(ScreenRecording.Saved(listOf("/home/me/Videos/Lemonade Code/Pixel 8-1.mp4"), durationMillis = 2_000, deviceGone = true), ending)
+    val ending = recorder.stop(pixel, RecordingStop.DeviceGone)
+    assertEquals(ScreenRecording.Saved(listOf("/home/me/Videos/Lemonade Code/Pixel 8-1.mp4"), durationMillis = 2_000, stop = RecordingStop.DeviceGone), ending)
 
     recorder.dismiss(pixel)
     assertEquals(emptyMap(), recorder.recordings.value)

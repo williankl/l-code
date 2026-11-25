@@ -2,6 +2,7 @@ package dev.lemonadecode.mobile.impl
 
 import dev.lemonadecode.domain.mobile.DeviceId
 import dev.lemonadecode.domain.mobile.RecordingFailure
+import dev.lemonadecode.domain.mobile.RecordingStop
 import dev.lemonadecode.domain.mobile.ScreenRecording
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
@@ -33,15 +34,21 @@ internal interface VideoFile {
    */
   fun write(accessUnit: ByteArray, atMicros: Long, keyFrame: Boolean)
 
+  /** Takes back the picture written last, which turned out to be cut short: it isn't kept. */
+  fun discardLast()
+
   /** Ends the file, its last picture shown until [atMicros]. */
   fun finish(atMicros: Long)
+
+  /** Ends the file and deletes it, for one nothing was kept in. */
+  fun delete()
 }
 
 /** Makes [VideoFile]s. */
 internal fun interface VideoFiles {
   /**
    * A new MP4 at [path] for H.264 pictures [width] by [height], described by [parameterSets], the
-   * stream's SPS and PPS in Annex B form. Throws when it can't be written.
+   * stream's SPS and PPS in Annex B form. Throws when it can't be written, leaving no file behind.
    */
   fun mp4(path: String, width: Int, height: Int, parameterSets: ByteArray): VideoFile
 }
@@ -52,8 +59,11 @@ internal fun interface VideoFiles {
  * again. A file opens on the first picture a stream starts with, which carries what the rest need
  * to be decoded. A stream that starts again at the same size, as `screenrecord` does every few
  * minutes, carries on in the same file; one at another size, after the screen turned, goes on in
- * a new file, since players don't follow a video that changes size. Each picture shows from when
- * it came until the next one, so a screen that holds still holds still in the video too.
+ * a new file, since players don't follow a video that changes size.
+ *
+ * Each picture shows from the moment the mirror's decoding reached it until the next one, so a
+ * screen that holds still holds still in the video too. A picture the mirror handed over early,
+ * when the stream went quiet, may turn out to have been cut short ([onCutShort]); it's taken back.
  */
 internal class ScreenRecorder(
   private val scope: CoroutineScope,
@@ -76,7 +86,10 @@ internal class ScreenRecorder(
   private sealed interface Message {
     class Picture(val accessUnit: ByteArray, val width: Int, val height: Int, val at: ComparableTimeMark) : Message
 
-    class Stop(val at: ComparableTimeMark, val deviceGone: Boolean, val done: CompletableDeferred<ScreenRecording>) : Message
+    /** The last picture was cut short. */
+    data object CutShort : Message
+
+    class Stop(val at: ComparableTimeMark, val stop: RecordingStop, val done: CompletableDeferred<ScreenRecording>) : Message
   }
 
   /** The devices being recorded now. */
@@ -99,13 +112,19 @@ internal class ScreenRecorder(
     val _ = session.messages.trySend(Message.Picture(accessUnit, width, height, timeSource.markNow()))
   }
 
-  /** Stops recording [id] and saves it; [deviceGone] says the device went away. Null when it wasn't recorded. */
-  suspend fun stop(id: DeviceId, deviceGone: Boolean = false): ScreenRecording? {
+  /** The last picture of [id]'s video, handed over when its stream went quiet, was only part of one. */
+  fun onCutShort(id: DeviceId) {
+    val session = sessions.value[id] ?: return
+    val _ = session.messages.trySend(Message.CutShort)
+  }
+
+  /** Stops recording [id] and saves it; [stop] says why. Null when it wasn't recorded. */
+  suspend fun stop(id: DeviceId, stop: RecordingStop = RecordingStop.Asked): ScreenRecording? {
     val done = CompletableDeferred<ScreenRecording>()
     val sent = lock.withLock {
       val session = sessions.value[id] ?: return null
       sessions.update { it - id }
-      session.messages.trySend(Message.Stop(timeSource.markNow(), deviceGone, done)).isSuccess
+      session.messages.trySend(Message.Stop(timeSource.markNow(), stop, done)).isSuccess
     }
     // The recording ended by itself meanwhile, e.g. no video came; it said how.
     return if (sent) done.await() else recordings.value[id]
@@ -114,104 +133,136 @@ internal class ScreenRecorder(
   /** Forgets how [id]'s last recording ended. */
   fun dismiss(id: DeviceId) = mutableRecordings.update { all -> if (all[id] is ScreenRecording.Recording) all else all - id }
 
-  /** Writes [id]'s pictures as they come until it's stopped, or until no video has come for [FirstVideoWait]. */
+  /**
+   * Writes [id]'s pictures as they come until it's stopped, or until no video has come for
+   * [FirstVideoWait]. However it ends, the stop asked for is answered, with the files written so far.
+   */
   @OptIn(ExperimentalCoroutinesApi::class)
   private suspend fun record(id: DeviceId, deviceName: String, startedAt: ComparableTimeMark, messages: Channel<Message>) {
     var part: Part? = null
     val saved = mutableListOf<String>()
+    var stop: Message.Stop? = null
+
+    /** Finishes the file being written at [at] and keeps it; one nothing was kept in is deleted. */
+    fun close(at: ComparableTimeMark) {
+      val current = part ?: return
+      if (current.isEmpty) current.file.delete() else current.finish(at)
+      // Only once it's whole: a file that failed to finish is reported as written in part.
+      part = null
+      if (!current.isEmpty) saved += current.path
+    }
     try {
-      while (true) {
-        val message = if (part == null) {
-          select<Message?> {
-            messages.onReceive { it }
-            onTimeout((FirstVideoWait - startedAt.elapsedNow()).coerceAtLeast(Duration.ZERO)) { null }
+      val ending = try {
+        var result: ScreenRecording? = null
+        while (result == null) {
+          val message = if (part == null) {
+            select<Message?> {
+              messages.onReceive { it }
+              onTimeout((FirstVideoWait - startedAt.elapsedNow()).coerceAtLeast(Duration.ZERO)) { null }
+            }
+          } else {
+            messages.receive()
           }
-        } else {
-          messages.receive()
-        }
-        when (message) {
-          null -> return end(id, messages, ScreenRecording.Failed(RecordingFailure.NoVideo))
-          is Message.Picture -> {
-            val current = part
-            val starts = startsStream(message.accessUnit)
-            // Until a stream starts, its pictures can't be decoded on their own.
-            if (current == null && !starts) continue
-            if (current == null || (starts && (message.width != current.width || message.height != current.height))) {
-              current?.let {
-                part = null
-                it.finish(message.at)
-                saved += it.path
+          when (message) {
+            null -> result = ScreenRecording.Failed(RecordingFailure.NoVideo)
+            is Message.Picture -> {
+              val current = part
+              val starts = startsStream(message.accessUnit)
+              // Until a stream starts, its pictures can't be decoded on their own.
+              if ((current == null || current.isEmpty) && !starts) continue
+              if (current == null || (starts && (message.width != current.width || message.height != current.height))) {
+                close(message.at)
+                part = open(deviceName, message)
               }
-              part = open(deviceName, message)
+              part?.write(message)
             }
-            part?.write(message)
-          }
-          is Message.Stop -> {
-            part?.let {
-              part = null
-              it.finish(message.at)
-              saved += it.path
+            Message.CutShort -> part?.discardLast()
+            is Message.Stop -> {
+              stop = message
+              close(message.at)
+              result = if (saved.isEmpty()) {
+                ScreenRecording.Failed(RecordingFailure.NoVideo)
+              } else {
+                ScreenRecording.Saved(saved.toList(), (message.at - startedAt).inWholeMilliseconds, message.stop)
+              }
             }
-            val ending = if (saved.isEmpty()) {
-              ScreenRecording.Failed(RecordingFailure.NoVideo)
-            } else {
-              ScreenRecording.Saved(saved.toList(), (message.at - startedAt).inWholeMilliseconds, message.deviceGone)
-            }
-            settle(id, messages, ending)
-            message.done.complete(ending)
-            return
           }
         }
+        result
+      } catch (e: CancellationException) {
+        throw e
+      } catch (e: Throwable) {
+        // The file being written plays as far as it reached the disk, so it's kept with the whole ones.
+        val partial = part?.takeUnless { it.isEmpty }?.path
+        ScreenRecording.Failed(RecordingFailure.Unwritable(e.message ?: e.toString()), saved + listOfNotNull(partial))
       }
-    } catch (e: CancellationException) {
-      throw e
-    } catch (e: Throwable) {
-      end(id, messages, ScreenRecording.Failed(RecordingFailure.Unwritable(e.message ?: e.toString())))
+      end(id, messages, ending)
+      stop?.done?.complete(ending)
     } finally {
       // Cancelled, e.g. the app is closing, or failed: what was written is kept as far as it went.
       part?.let { withContext(NonCancellable) { val _ = runCatching { it.finish(timeSource.markNow()) } } }
+      stop?.done?.cancel()
     }
   }
 
-  /** Ends [id]'s recording by itself as [ending]: nothing more is taken, and a stop already asked for gets the same answer. */
+  /** Ends [id]'s recording as [ending]: nothing more is taken, and a stop still waiting gets the same answer. */
   private suspend fun end(id: DeviceId, messages: Channel<Message>, ending: ScreenRecording) {
-    settle(id, messages, ending)
+    lock.withLock {
+      val current = sessions.value[id]
+      // Another recording of the device started since goes on saying so.
+      if (current == null || current.messages === messages) {
+        if (current != null) sessions.update { it - id }
+        mutableRecordings.update { it + (id to ending) }
+      }
+    }
     messages.close()
     for (message in messages) (message as? Message.Stop)?.done?.complete(ending)
-  }
-
-  /** Says how the recording reading [messages] ended, unless another of [id] has started since, which goes on saying so. */
-  private suspend fun settle(id: DeviceId, messages: Channel<Message>, ending: ScreenRecording) = lock.withLock {
-    val current = sessions.value[id]
-    if (current != null && current.messages !== messages) return@withLock
-    if (current != null) sessions.update { it - id }
-    mutableRecordings.update { it + (id to ending) }
   }
 
   private suspend fun open(deviceName: String, first: Message.Picture): Part {
     val parameterSets = checkNotNull(parameterSetsOf(first.accessUnit)) { "The video has no parameter sets" }
     val path = files.recordingPath(deviceName)
-    return Part(videos.mp4(path, first.width, first.height, parameterSets), path, first.width, first.height, first.at)
+    return Part(videos.mp4(path, first.width, first.height, parameterSets), path, first.width, first.height)
   }
 
-  /** One file of a recording, from the picture that opened it. */
+  /** One file of a recording; its time starts at the first picture kept in it. */
   private class Part(
     val file: VideoFile,
     val path: String,
     val width: Int,
     val height: Int,
-    val startedAt: ComparableTimeMark,
   ) {
+    private var startedAt: ComparableTimeMark? = null
     private var last = -1L
+    private var kept = 0
+
+    /** Nothing is kept in it: its only pictures were cut short. */
+    val isEmpty: Boolean get() = kept == 0
 
     fun write(picture: Message.Picture) {
+      val start = startedAt ?: picture.at.also { startedAt = it }
       // Pictures that come in one go would share a time; each one gets a moment of its own.
-      val at = if (last < 0) 0L else maxOf((picture.at - startedAt).inWholeMicroseconds, last + MinPictureGapMicros)
+      val at = if (last < 0) 0L else maxOf((picture.at - start).inWholeMicroseconds, last + MinPictureGapMicros)
       file.write(picture.accessUnit, at, isKeyFrame(picture.accessUnit))
       last = at
+      kept++
     }
 
-    fun finish(at: ComparableTimeMark) = file.finish(maxOf((at - startedAt).inWholeMicroseconds, last + MinPictureGapMicros))
+    /** The picture written last was cut short; with none left, the time starts again at the next one. */
+    fun discardLast() {
+      if (kept == 0) return
+      file.discardLast()
+      kept--
+      if (kept == 0) {
+        startedAt = null
+        last = -1L
+      }
+    }
+
+    fun finish(at: ComparableTimeMark) {
+      val start = startedAt ?: at
+      file.finish(maxOf((at - start).inWholeMicroseconds, last + MinPictureGapMicros))
+    }
   }
 }
 

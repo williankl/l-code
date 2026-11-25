@@ -144,7 +144,8 @@ internal fun mirrorScreens(
  * yet is decoded once nothing more has come for [quiet], so the screen's last change shows. When
  * that turns out to have been a pause in the middle of the picture, the decoder has a damaged one
  * that the pictures after it build on, so the flow ends there, for a new recording to start whole.
- * [onUnit] gets each access unit as it's decoded, e.g. to record it.
+ * [onUnit] gets each access unit as it's decoded, e.g. to record it, and [onCutShort] hears when
+ * the last one it got, handed over as the stream went quiet, turns out to be only part of one.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 internal fun decodeVideo(
@@ -152,6 +153,7 @@ internal fun decodeVideo(
   decoders: ScreenDecoders,
   quiet: Duration = QuietFlush,
   onUnit: (ByteArray) -> Unit = {},
+  onCutShort: () -> Unit = {},
 ): Flow<ScreenPicture.Bgra> = channelFlow {
   val decoder = decoders.h264()
   try {
@@ -172,6 +174,7 @@ internal fun decodeVideo(
         else -> splitter.feed(chunk.getOrThrow())
       }
       if (splitter.cutShort) {
+        onCutShort()
         incoming.cancel()
         break
       }

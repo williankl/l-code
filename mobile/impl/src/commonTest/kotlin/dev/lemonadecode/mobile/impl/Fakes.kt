@@ -115,34 +115,63 @@ internal class FakeDeviceFiles : DeviceFiles {
   override suspend fun recordingPath(deviceName: String): String = "/home/me/Videos/Lemonade Code/$deviceName-${++recordings}.mp4"
 }
 
-/** Video files the recorder writes, kept in memory: what each was given, and whether it was finished. */
+/** Video files the recorder writes, kept in memory: what each was given, and how it ended. */
 internal class FakeVideoFiles : VideoFiles {
   val opened = mutableListOf<FakeVideoFile>()
 
   /** Set to make opening a file fail with this message. */
   var failure: String? = null
 
+  /** Set to make each file opened from now on fail as it's finished, with this message. */
+  var finishFailure: String? = null
+
+  /** Set to make each file opened from now on fail on its nth picture, as a full disk would. */
+  var writeFailureAt: Int? = null
+
   override fun mp4(path: String, width: Int, height: Int, parameterSets: ByteArray): VideoFile {
     failure?.let { error(it) }
-    return FakeVideoFile(path, width, height, parameterSets).also { opened += it }
+    return FakeVideoFile(path, width, height, parameterSets, finishFailure, writeFailureAt).also { opened += it }
   }
 }
 
-internal class FakeVideoFile(val path: String, val width: Int, val height: Int, val parameterSets: ByteArray) : VideoFile {
-  /** Each picture written: its first NAL unit's type, when it shows from in milliseconds, and whether it's a key frame. */
+internal class FakeVideoFile(
+  val path: String,
+  val width: Int,
+  val height: Int,
+  val parameterSets: ByteArray,
+  private val finishFailure: String? = null,
+  private val writeFailureAt: Int? = null,
+) : VideoFile {
+  /** Each picture kept: its first NAL unit's type, when it shows from in milliseconds, and whether it's a key frame. */
   val pictures = mutableListOf<Triple<Int, Long, Boolean>>()
 
   /** When the file ended, in milliseconds; null until it did. */
   var finishedAt: Long? = null
 
+  /** It was deleted, nothing being kept in it. */
+  var deleted = false
+
+  private var written = 0
+
   override fun write(accessUnit: ByteArray, atMicros: Long, keyFrame: Boolean) {
-    check(finishedAt == null) { "written after it was finished" }
+    check(finishedAt == null && !deleted) { "written after it ended" }
+    if (++written == writeFailureAt) error("No space left on device")
     pictures += Triple(nalTypes(accessUnit).first(), atMicros / 1_000, keyFrame)
   }
 
+  override fun discardLast() {
+    val _ = pictures.removeAt(pictures.lastIndex)
+  }
+
   override fun finish(atMicros: Long) {
-    check(finishedAt == null) { "finished twice" }
+    check(finishedAt == null && !deleted) { "ended twice" }
+    finishFailure?.let { error(it) }
     finishedAt = atMicros / 1_000
+  }
+
+  override fun delete() {
+    check(finishedAt == null) { "deleted after it was finished" }
+    deleted = true
   }
 }
 

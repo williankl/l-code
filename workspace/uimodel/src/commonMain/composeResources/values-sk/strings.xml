@@ -388,11 +388,14 @@
     <item quantity="many">Uložených %1$d videí</item>
     <item quantity="other">Uložených %1$d videí</item>
   </plurals>
+  <string name="recording_saved_partly">Nahrávka je uložená len sčasti</string>
   <string name="recording_show">Zobraziť v priečinku</string>
   <string name="recording_saved_toast">Nahrávka zariadenia %1$s je uložená v priečinku %2$s</string>
   <string name="recording_saved_device_gone">Zariadenie %1$s sa počas nahrávania odpojilo. To, čo sa nahralo, je uložené v priečinku %2$s.</string>
+  <string name="recording_saved_plugin_off">Nahrávanie zariadenia %1$s sa zastavilo, lebo bol vypnutý doplnok Mobilné zariadenia. Je uložené v priečinku %2$s.</string>
   <string name="recording_failed_no_video">Zariadenie %1$s sa nepodarilo nahrať: neposlalo video.</string>
-  <string name="recording_failed_unwritable">Nahrávku sa nepodarilo uložiť: %1$s</string>
+  <string name="recording_failed_unwritable">Nahrávku sa nepodarilo uložiť.</string>
+  <string name="recording_failed_partly">Celú nahrávku sa nepodarilo zapísať. To, čo sa zapísalo, je v priečinku %1$s.</string>
 
   <!-- Devices › logs -->
   <string name="logs_all">Všetko</string>

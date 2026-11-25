@@ -265,14 +265,14 @@ public data class ScreenRecordingModel(
   val elapsed: String? = null,
   /** Why a recording can't start now, e.g. the screen comes as screenshots; the button is off and its tooltip says this. */
   val unavailable: LemonadeCodeString? = null,
-  /** The last recording saved, shown until it's dismissed or another starts. */
+  /** The last recording saved, whole or in part, shown until it's dismissed or another starts. */
   val saved: SavedRecordingModel? = null,
 )
 
-/** A recording saved to disk, and where to find it. */
+/** A recording saved to disk, whole or as far as it was written, and where to find it. */
 @Immutable
 public data class SavedRecordingModel(
-  /** e.g. "Saved Pixel-8-20261125-101403.mp4", or "Saved 2 videos" when the screen turned while recording. */
+  /** e.g. "0:42 video saved", "2 videos saved" when the screen turned, or "Part of the recording saved" when writing failed. */
   val label: LemonadeCodeString,
   /** The files' absolute paths, one a line. */
   val paths: String,

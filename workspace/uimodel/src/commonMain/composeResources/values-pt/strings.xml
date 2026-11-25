@@ -368,11 +368,14 @@
     <item quantity="many">%1$d vídeos guardados</item>
     <item quantity="other">%1$d vídeos guardados</item>
   </plurals>
+  <string name="recording_saved_partly">Gravação guardada em parte</string>
   <string name="recording_show">Mostrar na pasta</string>
   <string name="recording_saved_toast">Gravação de %1$s guardada em %2$s</string>
   <string name="recording_saved_device_gone">%1$s desligou-se durante a gravação. O que foi gravado está guardado em %2$s.</string>
+  <string name="recording_saved_plugin_off">A gravação de %1$s parou porque o plugin Móvel foi desligado. Está guardada em %2$s.</string>
   <string name="recording_failed_no_video">Não foi possível gravar %1$s: não enviou vídeo.</string>
-  <string name="recording_failed_unwritable">Não foi possível guardar a gravação: %1$s</string>
+  <string name="recording_failed_unwritable">Não foi possível guardar a gravação.</string>
+  <string name="recording_failed_partly">Não foi possível escrever toda a gravação. O que foi escrito está em %1$s.</string>
 
   <!-- Devices › logs -->
   <string name="logs_all">Todos</string>

@@ -18,6 +18,7 @@ import dev.lemonadecode.domain.mobile.MobileTool
 import dev.lemonadecode.domain.mobile.MobileTools
 import dev.lemonadecode.domain.mobile.NearbyDevice
 import dev.lemonadecode.domain.mobile.QrPairing
+import dev.lemonadecode.domain.mobile.RecordingStop
 import dev.lemonadecode.domain.mobile.ScreenPicture
 import dev.lemonadecode.domain.mobile.ScreenRecording
 import dev.lemonadecode.domain.mobile.ScreenUnavailable
@@ -116,11 +117,13 @@ internal class MobileServiceImpl(
       settings.settings.map { it.mobilePlugin }.distinctUntilChanged().collectLatest { on -> if (on) follow() }
     }
     scope.launch { mutableDevices.collect { logBook.retain() } }
-    // A device that goes away while recorded keeps what was recorded until then.
+    // A device that goes away while recorded keeps what was recorded until then. Turning the
+    // plugin off empties the list too, and says so.
     scope.launch {
       mutableDevices.collect { devices ->
         val gone = recorder.recording.filter { id -> devices.none { it.id == id && it.availability == DeviceAvailability.Ready } }
-        gone.forEach { id -> launch { val _ = recorder.stop(id, deviceGone = true) } }
+        val stop = if (isOn) RecordingStop.DeviceGone else RecordingStop.PluginOff
+        gone.forEach { id -> launch { val _ = recorder.stop(id, stop) } }
       }
     }
   }
@@ -226,7 +229,15 @@ internal class MobileServiceImpl(
     val (recordedWidth, recordedHeight) = recordingSize(width, height)
     val quiet = if (device.connection == DeviceConnection.Wifi) WifiQuietFlush else QuietFlush
     val pictures = android.recordScreen(adb, device, recordedWidth, recordedHeight)
-    emitAll(decodeVideo(pictures, decoders, quiet, onUnit = { recorder.onPicture(id, recordedWidth, recordedHeight, it) }))
+    emitAll(
+      decodeVideo(
+        pictures,
+        decoders,
+        quiet,
+        onUnit = { recorder.onPicture(id, recordedWidth, recordedHeight, it) },
+        onCutShort = { recorder.onCutShort(id) },
+      ),
+    )
   }
     .flowOn(dispatchers.default)
     // Each picture is a few megabytes; when they come faster than they're shown, only the newest waits.

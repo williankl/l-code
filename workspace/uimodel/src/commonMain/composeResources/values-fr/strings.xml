@@ -368,11 +368,14 @@
     <item quantity="many">%1$d vidéos enregistrées</item>
     <item quantity="other">%1$d vidéos enregistrées</item>
   </plurals>
+  <string name="recording_saved_partly">Enregistrement sauvegardé en partie</string>
   <string name="recording_show">Afficher dans le dossier</string>
   <string name="recording_saved_toast">Vidéo de %1$s enregistrée dans %2$s</string>
   <string name="recording_saved_device_gone">%1$s s’est déconnecté pendant l’enregistrement. Ce qui a été enregistré est dans %2$s.</string>
+  <string name="recording_saved_plugin_off">L’enregistrement de %1$s s’est arrêté car l’extension Mobile a été désactivée. Il est dans %2$s.</string>
   <string name="recording_failed_no_video">Impossible d’enregistrer %1$s : aucune vidéo reçue.</string>
-  <string name="recording_failed_unwritable">Impossible de sauvegarder l’enregistrement : %1$s</string>
+  <string name="recording_failed_unwritable">Impossible de sauvegarder l’enregistrement.</string>
+  <string name="recording_failed_partly">Impossible d’écrire tout l’enregistrement. Ce qui a été écrit est dans %1$s.</string>
 
   <!-- Devices › logs -->
   <string name="logs_all">Tous</string>

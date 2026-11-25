@@ -21,6 +21,7 @@ import dev.lemonadecode.domain.mobile.NearbyKind
 import dev.lemonadecode.domain.mobile.QrMatrix
 import dev.lemonadecode.domain.mobile.QrPairing
 import dev.lemonadecode.domain.mobile.RecordingFailure
+import dev.lemonadecode.domain.mobile.RecordingStop
 import dev.lemonadecode.domain.mobile.ScreenPicture
 import dev.lemonadecode.domain.mobile.ScreenRecording
 import dev.lemonadecode.domain.mobile.ScreenUnavailable
@@ -76,9 +77,12 @@ import dev.lemonadecode.workspace.strings.pair_step
 import dev.lemonadecode.workspace.strings.pair_step_platform
 import dev.lemonadecode.workspace.strings.pair_title
 import dev.lemonadecode.workspace.strings.recording_failed_no_video
+import dev.lemonadecode.workspace.strings.recording_failed_partly
 import dev.lemonadecode.workspace.strings.recording_failed_unwritable
 import dev.lemonadecode.workspace.strings.recording_saved
 import dev.lemonadecode.workspace.strings.recording_saved_device_gone
+import dev.lemonadecode.workspace.strings.recording_saved_partly
+import dev.lemonadecode.workspace.strings.recording_saved_plugin_off
 import dev.lemonadecode.workspace.strings.recording_saved_toast
 import dev.lemonadecode.workspace.strings.recording_saved_videos
 import dev.lemonadecode.workspace.strings.screen_cable_only_detail
@@ -419,19 +423,27 @@ internal object DevicesMapper {
         frame.picture !is ScreenPicture.Bgra -> Res.string.mirror_record_screenshots
         else -> null
       }?.asLemonadeCodeString(),
-      saved = (recording as? ScreenRecording.Saved)?.let { saved ->
-        SavedRecordingModel(
-          label = if (saved.files.size == 1) {
-            Res.string.recording_saved.asLemonadeCodeString(elapsed(saved.durationMillis))
+      saved = when {
+        recording is ScreenRecording.Saved -> savedRecording(
+          files = recording.files,
+          label = if (recording.files.size == 1) {
+            Res.string.recording_saved.asLemonadeCodeString(elapsed(recording.durationMillis))
           } else {
-            Res.plurals.recording_saved_videos.asLemonadeCodeString(saved.files.size, saved.files.size)
+            Res.plurals.recording_saved_videos.asLemonadeCodeString(recording.files.size, recording.files.size)
           },
-          paths = saved.files.joinToString("\n"),
-          revealUri = fileUri(saved.files.first()),
         )
+        // Writing failed, but what reached the disk plays: it can still be found.
+        recording is ScreenRecording.Failed && recording.files.isNotEmpty() -> savedRecording(recording.files, Res.string.recording_saved_partly.asLemonadeCodeString())
+        else -> null
       },
     )
   }
+
+  private fun savedRecording(files: List<String>, label: LemonadeCodeString): SavedRecordingModel = SavedRecordingModel(
+    label = label,
+    paths = files.joinToString("\n"),
+    revealUri = fileUri(files.first()),
+  )
 
   /** How long something has run: `0:42`, `12:05`, or `1:02:05` past an hour. */
   fun elapsed(millis: Long): String {
@@ -444,20 +456,26 @@ internal object DevicesMapper {
 
   /**
    * What a recording's ending says: a toast saying which folder one saved is in, the home folder
-   * [home] written `~`, or an error for one that failed; null while it records. [name] is the device's.
+   * [home] written `~`, or an error for one that failed, which says where what it wrote is; null
+   * while it records. [name] is the device's. The error's own words, FFmpeg's or the system's,
+   * aren't shown: they're in no language but English.
    */
   fun recordingEnded(ending: ScreenRecording, name: String, home: String): Pair<LemonadeCodeString, Boolean>? = when (ending) {
     is ScreenRecording.Recording -> null
-    is ScreenRecording.Saved -> {
-      val path = ending.files.first()
-      val folder = abbreviateHome(path.substring(0, maxOf(path.lastIndexOf('/'), path.lastIndexOf('\\'), 0)), home)
-      (if (ending.deviceGone) Res.string.recording_saved_device_gone else Res.string.recording_saved_toast).asLemonadeCodeString(name, folder) to false
-    }
-    is ScreenRecording.Failed -> when (val reason = ending.reason) {
-      RecordingFailure.NoVideo -> Res.string.recording_failed_no_video.asLemonadeCodeString(name)
-      is RecordingFailure.Unwritable -> Res.string.recording_failed_unwritable.asLemonadeCodeString(reason.message)
+    is ScreenRecording.Saved -> when (ending.stop) {
+      RecordingStop.Asked -> Res.string.recording_saved_toast
+      RecordingStop.DeviceGone -> Res.string.recording_saved_device_gone
+      RecordingStop.PluginOff -> Res.string.recording_saved_plugin_off
+    }.asLemonadeCodeString(name, folderOf(ending.files.first(), home)) to false
+    is ScreenRecording.Failed -> when {
+      ending.reason == RecordingFailure.NoVideo -> Res.string.recording_failed_no_video.asLemonadeCodeString(name)
+      ending.files.isNotEmpty() -> Res.string.recording_failed_partly.asLemonadeCodeString(folderOf(ending.files.first(), home))
+      else -> Res.string.recording_failed_unwritable.asLemonadeCodeString()
     } to true
   }
+
+  /** The folder [path] is in, with the home folder [home] written `~`. */
+  private fun folderOf(path: String, home: String): String = abbreviateHome(path.substring(0, maxOf(path.lastIndexOf('/'), path.lastIndexOf('\\'), 0)), home)
 
   /**
    * `file:///Users/me/Movies/Lemonade%20Code/Pixel-8.mp4` for that path, or `file:///C:/Users/…`

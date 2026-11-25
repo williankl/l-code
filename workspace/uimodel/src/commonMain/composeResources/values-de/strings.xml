@@ -348,11 +348,14 @@
     <item quantity="one">%1$d Video gespeichert</item>
     <item quantity="other">%1$d Videos gespeichert</item>
   </plurals>
+  <string name="recording_saved_partly">Aufnahme teilweise gespeichert</string>
   <string name="recording_show">Im Ordner zeigen</string>
   <string name="recording_saved_toast">Aufnahme von %1$s in %2$s gespeichert</string>
   <string name="recording_saved_device_gone">%1$s wurde während der Aufnahme getrennt. Das Aufgenommene ist in %2$s gespeichert.</string>
+  <string name="recording_saved_plugin_off">Aufnahme von %1$s beendet, weil das Plugin Mobil ausgeschaltet wurde. Sie ist in %2$s gespeichert.</string>
   <string name="recording_failed_no_video">%1$s konnte nicht aufgenommen werden: Es kam kein Video.</string>
-  <string name="recording_failed_unwritable">Aufnahme konnte nicht gespeichert werden: %1$s</string>
+  <string name="recording_failed_unwritable">Die Aufnahme konnte nicht gespeichert werden.</string>
+  <string name="recording_failed_partly">Die Aufnahme konnte nicht ganz geschrieben werden. Was geschrieben wurde, liegt in %1$s.</string>
 
   <!-- Devices › logs -->
   <string name="logs_all">Alle</string>

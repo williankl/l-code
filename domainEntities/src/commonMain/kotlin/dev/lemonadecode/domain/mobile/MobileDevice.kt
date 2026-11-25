@@ -120,24 +120,41 @@ public sealed interface ScreenRecording {
 
   /**
    * Saved as [files], absolute paths in the order they were recorded: one, and one more each time
-   * the screen turned meanwhile. [durationMillis] is how long it ran; [deviceGone] says it stopped
-   * because the device went away, keeping what was recorded until then.
+   * the screen turned meanwhile. [durationMillis] is how long it ran; [stop] says what stopped it.
    */
   public data class Saved(
     val files: List<String>,
     val durationMillis: Long,
-    val deviceGone: Boolean = false,
+    val stop: RecordingStop = RecordingStop.Asked,
   ) : ScreenRecording
 
-  /** Nothing was saved. */
-  public data class Failed(val reason: RecordingFailure) : ScreenRecording
+  /**
+   * It failed for [reason]. [files] are what it wrote before that, in the order recorded: whole
+   * files, and the one it was writing, which plays as far as it reached the disk.
+   */
+  public data class Failed(
+    val reason: RecordingFailure,
+    val files: List<String> = emptyList(),
+  ) : ScreenRecording
+}
+
+/** What stopped a recording that was saved. */
+public enum class RecordingStop {
+  /** Stopped from here. */
+  Asked,
+
+  /** The device went away, e.g. unplugged; what was recorded until then is kept. */
+  DeviceGone,
+
+  /** The Mobile plugin was turned off. */
+  PluginOff,
 }
 
 public sealed interface RecordingFailure {
   /** The device sent no video to record, e.g. its screen comes as screenshots. */
   public data object NoVideo : RecordingFailure
 
-  /** The video file couldn't be written; [message] says why. */
+  /** The video file couldn't be written, e.g. the disk is full; [message] is the error's own text, for logs. */
   public data class Unwritable(val message: String) : RecordingFailure
 }
 

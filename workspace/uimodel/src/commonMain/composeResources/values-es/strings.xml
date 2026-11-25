@@ -158,6 +158,8 @@
   <string name="session_name_field">Nombre de la sesión</string>
   <string name="session_copy_path">Copiar ruta de la carpeta</string>
   <string name="session_path_copied">Copiado: %1$s</string>
+  <string name="session_move_up">Mover hacia arriba</string>
+  <string name="session_move_down">Mover hacia abajo</string>
   <string name="session_close">Cerrar sesión</string>
 
   <!-- Closing a session that leaves worktrees no other session uses -->

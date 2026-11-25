@@ -36,6 +36,7 @@ import dev.lemonadecode.domain.review.Review
 import dev.lemonadecode.domain.session.LinkedWorktree
 import dev.lemonadecode.domain.session.Session
 import dev.lemonadecode.domain.session.SessionId
+import dev.lemonadecode.domain.session.SessionOrder
 import dev.lemonadecode.domain.session.SessionStatus
 import dev.lemonadecode.domain.session.SubSessionLocation
 import dev.lemonadecode.domain.settings.DevicesLayout
@@ -264,13 +265,30 @@ public class WorkspacePresenter internal constructor(
         fun fileOf(path: String?): FileDiff? = (review?.diff as? DiffState.Ready)?.snapshot?.files?.firstOrNull { it.path == path }
         fun commented(path: String): Boolean = review?.comments.orEmpty().any { it.filePath == path }
         fun sessionOf(id: String): Session? = sessionService.sessions.value.firstOrNull { it.id.value == id }
+
+        /** Lets go of what was open on sessions leaving the tree, closed or archived: menus, and a drag. */
         fun closeMenusOf(closing: Set<SessionId>) = update { state ->
           state.copy(
             sessionMenu = state.sessionMenu?.takeUnless { it in closing },
             renaming = state.renaming?.takeUnless { it in closing },
             namingWorktree = state.namingWorktree?.takeUnless { it in closing },
+            // An archived one can come back: it mustn't come back still lifted.
+            sessionDrag = state.sessionDrag?.takeUnless { it.sessionId in closing },
           )
         }
+
+        /** Where [id] is among its siblings, from 0. */
+        fun siblingIndex(id: SessionId): Int = SessionOrder.siblings(sessionService.sessions.value, id).indexOfFirst { it.id == id }
+
+        /** Moves [id], with its sub-sessions, to [index] among its siblings; nothing past either end or where it is. */
+        fun moveSession(id: SessionId, index: Int) {
+          val siblings = SessionOrder.siblings(sessionService.sessions.value, id)
+          if (index !in siblings.indices || siblings[index].id == id) return
+          // With none picked, the first session shows: it stays the one shown, wherever it goes.
+          if (view.selectedId == null && current != null) update { it.copy(selectedId = current.id) }
+          sessionService.move(id, index)
+        }
+
         fun close(id: SessionId) {
           val closing = SessionsMapper.subtree(sessionService.sessions.value, id)
           sessionService.close(id)
@@ -497,6 +515,24 @@ public class WorkspacePresenter internal constructor(
             val id = SessionId(event.sessionId)
             if (id !in view.restoring && sessionService.archived.value.any { it.id == id }) requestClose(id)
           }
+
+          // Found by id: its status or folder may have changed since it was read.
+          is WorkspaceEvent.StartSessionDrag -> sessionOf(event.sessionId)?.let { session ->
+            update { it.closingPopovers().copy(renaming = null, sessionDrag = SessionDrag(session.id, siblingIndex(session.id))) }
+          }
+          is WorkspaceEvent.DragSession -> update { state ->
+            val drag = state.sessionDrag?.takeIf { it.sessionId.value == event.sessionId }
+            if (drag == null) state else state.copy(sessionDrag = drag.copy(index = event.index))
+          }
+          is WorkspaceEvent.DropSession -> {
+            val drag = view.sessionDrag?.takeIf { it.sessionId.value == event.sessionId }
+            update { it.copy(sessionDrag = null) }
+            if (drag != null) moveSession(drag.sessionId, drag.index)
+          }
+          WorkspaceEvent.CancelSessionDrag -> update { it.copy(sessionDrag = null) }
+          // The menu stays open on the row as it moves, for another step.
+          is WorkspaceEvent.MoveSessionUp -> sessionOf(event.sessionId)?.let { moveSession(it.id, siblingIndex(it.id) - 1) }
+          is WorkspaceEvent.MoveSessionDown -> sessionOf(event.sessionId)?.let { moveSession(it.id, siblingIndex(it.id) + 1) }
 
           WorkspaceEvent.NewSession -> scope.launch {
             when (val opened = sessionService.openTerminal()) {
@@ -788,13 +824,15 @@ public class WorkspacePresenter internal constructor(
       }
     }
 
-    val subSessionLocation = view.subSessionMenu ?: settings.subSessionLocation
+    // Planning looks at the disk for a worktree's folder, so it runs only while the panel or a
+    // menu's branch field shows the plan, not on every draw. Closing, the panel shows its last one.
+    val subSessionPlan = view.subSessionMenu?.let { location -> selectedId?.let { sessionService.planSubSession(it, location, branch = view.worktreeBranch) } }
     val input = WorkspaceInput(
       sessions = sessions,
       review = review,
       settings = settings,
       view = view,
-      subSessionPlan = selectedId?.let { sessionService.planSubSession(it, subSessionLocation, branch = view.worktreeBranch) },
+      subSessionPlan = subSessionPlan,
       menuWorktreePlan = view.namingWorktree?.let { sessionService.planSubSession(it, SubSessionLocation.NewWorktree, branch = view.worktreeBranch) },
       pendingMessage = if (view.previewOpen) selectedId?.let(reviewService::pendingMessage) else null,
       homeDirectory = homeDirectory.path,

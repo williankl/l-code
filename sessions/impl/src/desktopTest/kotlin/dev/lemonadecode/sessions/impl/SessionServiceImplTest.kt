@@ -66,14 +66,19 @@ class SessionServiceImplTest {
   /** Every shell started, in order, whether or not its session joined the list. */
   private val startedShells = CopyOnWriteArrayList<TerminalSession>()
 
+  /** The fake git, making a new worktree's folder as git does, for the shell started in it, and holding a checkout where a test asks. */
+  private val gitMakingWorktrees = object : GitDataSource by git {
+    override suspend fun addWorktree(repositoryRoot: String, path: String, branch: String, startPoint: String): LemonadeCodeResult<Unit, GitError> = git.addWorktree(repositoryRoot, path, branch, startPoint).also { if (it.isSuccess) File(path).mkdirs() }
+
+    override suspend fun checkout(directory: String): LemonadeCodeResult<GitCheckout, GitError> {
+      beforeCheckout(directory)
+      return git.checkout(directory)
+    }
+  }
+
   /** A service as one launch of Lemonade Code sees it; a second one over the same [store] is the next launch. */
   private fun newService(registry: SessionRegistry) = SessionServiceImpl(
-    git = object : GitDataSource by git {
-      override suspend fun checkout(directory: String): LemonadeCodeResult<GitCheckout, GitError> {
-        beforeCheckout(directory)
-        return git.checkout(directory)
-      }
-    },
+    git = gitMakingWorktrees,
     launcher = object : ShellLauncher {
       override val shellName: String get() = shell.shellName
 
@@ -229,6 +234,32 @@ class SessionServiceImplTest {
   }
 
   @Test
+  fun `a session moved among its siblings takes its sub-sessions along, and comes back in that order`() = runBlocking<Unit> {
+    git.checkoutResult = LemonadeCodeResult.success(GitCheckout(root = home.path, branch = "main"))
+    val first = service.openTerminal().getOrNull()!!
+    val sub = service.startSubSession(first, SubSessionLocation.SameFolder).getOrNull()!!
+    val second = service.openTerminal().getOrNull()!!
+    val third = service.openTerminal().getOrNull()!!
+    val thirdSub1 = service.startSubSession(third, SubSessionLocation.SameFolder).getOrNull()!!
+    val thirdSub2 = service.startSubSession(third, SubSessionLocation.SameFolder).getOrNull()!!
+    assertEquals(listOf(first, sub, second, third, thirdSub1, thirdSub2), service.sessions.value.map { it.id })
+
+    service.move(first, 2)
+    assertEquals(listOf(second, third, thirdSub1, thirdSub2, first, sub), service.sessions.value.map { it.id })
+    service.move(thirdSub2, 0)
+    assertEquals(listOf(second, third, thirdSub2, thirdSub1, first, sub), service.sessions.value.map { it.id })
+    // Only among its siblings: a sub-session never leaves its parent.
+    assertEquals(third, service.sessions.value.single { it.id == thirdSub2 }.parentId)
+
+    service.shutdown()
+    assertEquals(listOf(second, third, thirdSub2, thirdSub1, first, sub).map { it.value }, store.saved!!.sessions.map { it.id })
+    val next = newService(SessionRegistry())
+    assertEquals(6, next.restore())
+    assertEquals(listOf(second, third, thirdSub2, thirdSub1, first, sub), next.sessions.value.map { it.id })
+    assertEquals(first, next.sessions.value.single { it.id == sub }.parentId)
+  }
+
+  @Test
   fun `an agent running at quit is resumed on the next launch, one you quit isn't`() = runBlocking<Unit> {
     assertEquals(0, service.restore())
     val running = service.openTerminal().getOrNull()!!
@@ -301,7 +332,6 @@ class SessionServiceImplTest {
       origin = SessionOrigin.Review(2),
       namePrefix = "review",
     ).getOrNull()!!
-    File(home.parentFile, "${home.name}.worktrees/sub-1").mkdirs()
     val worktree = service.startSubSession(parent, SubSessionLocation.NewWorktree).getOrNull()!!
     val sessions = service.sessions.value
     assertEquals(listOf(parent, review, worktree), sessions.map { it.id })
@@ -316,16 +346,68 @@ class SessionServiceImplTest {
   }
 
   @Test
-  fun `a worktree goes on the branch the user typed, in a folder named after it`() = runBlocking<Unit> {
+  fun `a worktree goes on the branch the user typed, in a folder named after it, and so does its sub-session`() = runBlocking<Unit> {
     git.checkoutResult = LemonadeCodeResult.success(GitCheckout(root = home.path, branch = "main"))
     val parent = service.openTerminal().getOrNull()!!
-    // The fake git creates nothing, and the shell needs its folder.
-    val folder = File(home.parentFile, "${home.name}.worktrees/generating-bugs").apply { mkdirs() }
+    val folder = File(home.parentFile, "${home.name}.worktrees/generating-bugs")
     val id = service.startSubSession(parent, SubSessionLocation.NewWorktree, branch = "worktree/generating-bugs").getOrNull()!!
     assertEquals(FakeGitDataSource.WorktreeCall(home.path, folder.path, "worktree/generating-bugs", "main"), git.worktreeCalls.single())
     val session = service.sessions.value.single { it.id == id }
     assertEquals("worktree/generating-bugs", session.branch)
-    assertEquals("sub-1", session.name)
+    assertEquals("generating-bugs", session.name)
+    assertEquals("generating-bugs", session.displayName)
+
+    // A name of the user's own wins, and clearing it goes back to the worktree's.
+    service.rename(id, "flaky login")
+    assertEquals("flaky login", service.sessions.value.single { it.id == id }.displayName)
+    service.rename(id, null)
+    assertEquals("generating-bugs", service.sessions.value.single { it.id == id }.displayName)
+  }
+
+  @Test
+  fun `a session moved into a worktree an agent made shows its name, a sub-session keeps its own`() = runBlocking<Unit> {
+    val worktree = File(home, "storefront/.claude/worktrees/feature-x").apply { mkdirs() }
+    git.checkoutResult = LemonadeCodeResult.success(GitCheckout(root = home.path, branch = "main"))
+    val root = service.openTerminal().getOrNull()!!
+    val sub = service.startSubSession(root, SubSessionLocation.SameFolder).getOrNull()!!
+    git.checkoutResult = LemonadeCodeResult.success(GitCheckout(root = worktree.path, branch = "worktree-feature-x"))
+    listOf(root, sub).forEach { registry.terminal(it)!!.send("cd storefront/.claude/worktrees/feature-x\r") }
+    val moved = withTimeout(10_000) {
+      service.sessions.first { sessions -> sessions.all { it.workingDirectory.let(::File).canonicalPath == worktree.canonicalPath } }
+    }
+    assertEquals(listOf("feature-x", "sub-1"), moved.map { it.name })
+  }
+
+  @Test
+  fun `a worktree folder already there, kept from before, moves the new one along`() = runBlocking<Unit> {
+    git.checkoutResult = LemonadeCodeResult.success(GitCheckout(root = home.path, branch = "main"))
+    val parent = service.openTerminal().getOrNull()!!
+    File(home.parentFile, "${home.name}.worktrees/generating-bugs").mkdirs()
+    val plan = service.planSubSession(parent, SubSessionLocation.NewWorktree, branch = "feat/generating-bugs")
+    assertEquals("generating-bugs-2", plan?.name, "the panel shows where it will really go")
+
+    val first = service.startSubSession(parent, SubSessionLocation.NewWorktree, branch = "feat/generating-bugs").getOrNull()!!
+    val second = service.startSubSession(parent, SubSessionLocation.NewWorktree, branch = "fix/generating-bugs").getOrNull()!!
+    assertEquals(
+      listOf("generating-bugs-2", "generating-bugs-3").map { File(home.parentFile, "${home.name}.worktrees/$it").path },
+      git.worktreeCalls.map { it.path },
+    )
+    assertEquals(listOf("generating-bugs-2", "generating-bugs-3"), listOf(first, second).map { id -> service.sessions.value.single { it.id == id }.name })
+  }
+
+  @Test
+  fun `a worktree sub-session saved under its old name comes back with it`() = runBlocking<Unit> {
+    val folder = File(home.parentFile, "${home.name}.worktrees/generating-bugs").apply { mkdirs() }
+    store.saved = SavedSessions(
+      listOf(
+        SavedSession(id = "root", name = home.name, workingDirectory = home.path),
+        SavedSession(id = "old", name = "sub-1", workingDirectory = folder.path, parentId = "root", placement = "Worktree", origin = "Split"),
+      ),
+    )
+    assertEquals(2, service.restore())
+    val restored = service.sessions.value.single { it.id.value == "old" }
+    assertEquals("sub-1", restored.displayName)
+    assertEquals(folder.path, restored.workingDirectory)
   }
 
   @Test
@@ -711,6 +793,42 @@ class SessionServiceImplTest {
     assertEquals(1, service.restore())
     assertEquals(listOf(SessionId("open")), service.sessions.value.map { it.id })
     assertEquals(listOf(SessionId("shelved")), service.archived.value.map { it.id })
+  }
+
+  @Test
+  fun `a worktree's sub-session keeps its worktree's name through archive and restore, and no new one takes an archived name`() = runBlocking<Unit> {
+    git.checkoutResult = LemonadeCodeResult.success(GitCheckout(root = home.path, branch = "main"))
+    val parent = service.openTerminal().getOrNull()!!
+    val worktree = service.startSubSession(parent, SubSessionLocation.NewWorktree, branch = "worktree/generating-bugs").getOrNull()!!
+    val first = service.startSubSession(parent, SubSessionLocation.SameFolder).getOrNull()!!
+    fun nameOf(id: SessionId) = service.sessions.value.single { it.id == id }.name
+    assertEquals(listOf("generating-bugs", "sub-1"), listOf(nameOf(worktree), nameOf(first)))
+
+    service.archive(first)
+    val second = service.startSubSession(parent, SubSessionLocation.SameFolder).getOrNull()!!
+    assertEquals("sub-2", nameOf(second), "sub-1 is archived, not gone")
+
+    service.archive(parent)
+    assertEquals(listOf("generating-bugs", "sub-2"), service.archived.value.first().subSessions.map { it.name })
+    assertTrue(service.unarchive(parent).isSuccess)
+    assertTrue(service.unarchive(first).isSuccess)
+    assertEquals("generating-bugs", nameOf(worktree))
+    assertEquals(setOf("sub-1", "sub-2"), setOf(nameOf(first), nameOf(second)))
+  }
+
+  @Test
+  fun `a session restored after its siblings moved goes back before the one it sat before, and moves as any other`() = runBlocking<Unit> {
+    val first = service.openTerminal().getOrNull()!!
+    val middle = service.openTerminal().getOrNull()!!
+    val last = service.openTerminal().getOrNull()!!
+    service.archive(middle)
+    service.move(last, 0)
+    assertEquals(listOf(last, first), service.sessions.value.map { it.id })
+
+    assertTrue(service.unarchive(middle).isSuccess)
+    assertEquals(listOf(middle, last, first), service.sessions.value.map { it.id })
+    service.move(middle, 2)
+    assertEquals(listOf(last, first, middle), service.sessions.value.map { it.id })
   }
 
   @Test

@@ -4,6 +4,7 @@ import dev.lemonadecode.domain.session.ArchivedSession
 import dev.lemonadecode.domain.session.LinkedWorktree
 import dev.lemonadecode.domain.session.Session
 import dev.lemonadecode.domain.session.SessionId
+import dev.lemonadecode.domain.session.SessionOrder
 import dev.lemonadecode.domain.session.SessionOrigin
 import dev.lemonadecode.domain.session.SessionPlacement
 import dev.lemonadecode.domain.session.SessionStatus
@@ -30,6 +31,9 @@ public class FakeSessionService(initial: List<Session> = emptyList()) : SessionS
 
   /** Every rename, with the name kept: trimmed, or null for back to the automatic one. */
   public val renamed: MutableList<Pair<SessionId, String?>> = mutableListOf()
+
+  /** Every move: the session and the place among its siblings it was asked to go to. */
+  public val moved: MutableList<Pair<SessionId, Int>> = mutableListOf()
   public var openResult: LemonadeCodeResult<SessionId, SessionError>? = null
 
   /** What [startSubSession] answers, once recorded; null starts it. */
@@ -102,14 +106,30 @@ public class FakeSessionService(initial: List<Session> = emptyList()) : SessionS
     return LemonadeCodeResult.success(id)
   }
 
+  /** Every [planSubSession] call, by the session it plans under. */
+  public val planned: MutableList<SessionId> = mutableListOf()
+
+  /**
+   * The name a plan for a new worktree on a typed branch gives, folder and sub-session alike, like
+   * the real one's `generating-bugs-2` beside a folder already there. Null takes the branch's last
+   * part: this fake keeps nothing apart itself.
+   */
+  public var plannedWorktreeName: String? = null
+
   override fun planSubSession(parentId: SessionId, location: SubSessionLocation, namePrefix: String, branch: String?): SubSessionPlan? {
+    planned += parentId
     val parent = state.value.firstOrNull { it.id == parentId } ?: return null
-    val name = generateSequence(1) { it + 1 }.map { "$namePrefix-$it" }.first { n -> state.value.none { it.name == n } }
     val worktree = location == SubSessionLocation.NewWorktree
+    val name = if (worktree && branch != null) {
+      plannedWorktreeName ?: branch.substringAfterLast('/')
+    } else {
+      generateSequence(1) { it + 1 }.map { "$namePrefix-$it" }.first { n -> state.value.none { it.name == n } }
+    }
+    val folder = "${parent.repositoryRoot}.worktrees"
     return SubSessionPlan(
       name = name,
       location = location,
-      workingDirectory = if (worktree) "${parent.repositoryRoot}.worktrees/${branch?.substringAfterLast('/') ?: name}" else parent.workingDirectory,
+      workingDirectory = if (worktree) "$folder/$name" else parent.workingDirectory,
       branch = if (worktree) branch ?: "${parent.branch}-$name" else parent.branch,
       createsBranch = worktree,
       baseBranch = parent.branch,
@@ -236,6 +256,11 @@ public class FakeSessionService(initial: List<Session> = emptyList()) : SessionS
     val custom = name?.trim()?.takeIf { it.isNotEmpty() }
     renamed += id to custom
     state.update { list -> list.map { if (it.id == id) it.copy(customName = custom) else it } }
+  }
+
+  override fun move(id: SessionId, index: Int) {
+    moved += id to index
+    state.update { SessionOrder.move(it, id, index) }
   }
 
   override suspend fun restore(): Int {

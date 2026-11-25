@@ -60,6 +60,8 @@ import dev.lemonadecode.workspace.strings.session_archive_action
 import dev.lemonadecode.workspace.strings.session_archive_detail
 import dev.lemonadecode.workspace.strings.session_close
 import dev.lemonadecode.workspace.strings.session_copy_path
+import dev.lemonadecode.workspace.strings.session_move_down
+import dev.lemonadecode.workspace.strings.session_move_up
 import dev.lemonadecode.workspace.strings.session_name_field
 import dev.lemonadecode.workspace.strings.session_new_sub_same_folder
 import dev.lemonadecode.workspace.strings.session_new_sub_worktree
@@ -213,6 +215,24 @@ private fun SessionMenuItems(
       }
     },
   )
+  // Dragging a tree row does the same. This moves one place at a time, for the rail's tiles, which
+  // can't be dragged, and for assistive technology, which opens the menu through Session options.
+  // The menu stays open on the row as it moves.
+  if (menu.canMoveUp || menu.canMoveDown) {
+    ContextMenuDivider()
+    ContextMenuItem(
+      label = stringResource(Res.string.session_move_up),
+      icon = LemonadeIcons.ArrowUp,
+      enabled = menu.canMoveUp,
+      onClick = { onEvent(WorkspaceEvent.MoveSessionUp(id)) },
+    )
+    ContextMenuItem(
+      label = stringResource(Res.string.session_move_down),
+      icon = LemonadeIcons.ArrowDown,
+      enabled = menu.canMoveDown,
+      onClick = { onEvent(WorkspaceEvent.MoveSessionDown(id)) },
+    )
+  }
   if (menu.canStartSubSession) {
     ContextMenuDivider()
     ContextMenuItem(
@@ -321,8 +341,8 @@ private fun RenameForm(
 }
 
 /**
- * The branch field the menu turns into for a new worktree, with the folder it will get. Enter or
- * Create starts it, Esc or Cancel closes the menu.
+ * The branch field the menu turns into for a new worktree, with the name and folder it will get.
+ * Enter or Create starts it, Esc or Cancel closes the menu.
  */
 @Composable
 private fun NewWorktreeForm(
@@ -339,6 +359,7 @@ private fun NewWorktreeForm(
   ) {
     Column(verticalArrangement = Arrangement.spacedBy(spaces.spacing100)) {
       WorktreeBranchField(branch = branch, onCreate = create, onCancel = cancel, onEvent = onEvent, modifier = Modifier.fillMaxWidth())
+      WorktreeSessionName(branch.sessionName)
       Mono(text = branch.path, style = LemonadeCodeTheme.typography.codeSmall, color = LemonadeCodeTheme.code.path)
     }
     Row(

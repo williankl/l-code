@@ -31,6 +31,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
@@ -174,15 +175,23 @@ private fun OpenSessions(
           }
         }
       }
-      is SessionNavigationModel.Tree -> Column {
-        AnimatedItems(items = navigation.rows, key = { it.id }) { index, row ->
-          TreeSessionRow(
-            row = row,
-            topGap = if (row.depth == 0 && index > 0) spaces.spacing100 else 0.dp,
-            menu = menu?.takeIf { it.sessionId == row.id },
-            labels = labels,
-            onEvent = onEvent,
-          )
+      is SessionNavigationModel.Tree -> {
+        // Rows are picked up and dragged among their siblings; see SessionDrag.
+        val drag = rememberSessionDragState()
+        SessionTreeDragArea(tree = navigation, state = drag) { moving ->
+          Column {
+            AnimatedItems(items = navigation.rows, key = { it.id }) { index, row ->
+              TreeSessionRow(
+                row = row,
+                topGap = if (row.depth == 0 && index > 0) spaces.spacing100 else 0.dp,
+                menu = menu?.takeIf { it.sessionId == row.id },
+                labels = labels,
+                onEvent = onEvent,
+                drag = drag,
+                moving = row.id in moving,
+              )
+            }
+          }
         }
       }
     }
@@ -257,6 +266,8 @@ private fun TreeSessionRow(
   menu: SessionMenuModel?,
   labels: SessionActionLabels,
   onEvent: (WorkspaceEvent) -> Unit,
+  drag: SessionDragState,
+  moving: Boolean,
 ) {
   val spaces = LemonadeTheme.spaces
   val brand = LemonadeTheme.colors.content.contentBrand
@@ -266,7 +277,9 @@ private fun TreeSessionRow(
     modifier = Modifier
       .fillMaxWidth()
       .padding(top = topGap)
-      .height(IntrinsicSize.Min),
+      .height(IntrinsicSize.Min)
+      // Faded where it was while it moves, lifted out of the list.
+      .alpha(if (moving) MovingRowAlpha else 1f),
   ) {
     val connector = row.connector
     if (connector != null) {
@@ -318,7 +331,11 @@ private fun TreeSessionRow(
       selected = row.selected,
       onClick = { onEvent(WorkspaceEvent.SelectSession(row.id)) },
       shape = LemonadeTheme.shapes.radius300,
-      modifier = Modifier.weight(1f).menuRing(menu != null, LemonadeTheme.shapes.radius300).sessionActions(row.id, labels, menuAt, onEvent),
+      modifier = Modifier
+        .weight(1f)
+        .menuRing(menu != null, LemonadeTheme.shapes.radius300)
+        .sessionActions(row.id, labels, menuAt, onEvent)
+        .sessionDragSource(row.id, drag, onEvent),
     ) {
       Row(
         horizontalArrangement = Arrangement.spacedBy(spaces.spacing200),
@@ -350,8 +367,11 @@ private val RailColumn = 10.dp
 /** Where a child's elbow meets it: the vertical centre of the name line. */
 private val RailJoinY = 16.dp
 
+/** How much a dragged row, and those nested under it, fade where they were. */
+private const val MovingRowAlpha = 0.35f
+
 @Composable
-private fun ComputerIcon(selected: Boolean) {
+internal fun ComputerIcon(selected: Boolean) {
   LemonadeUi.Icon(
     icon = LemonadeIcons.Computer,
     contentDescription = null,
@@ -362,7 +382,7 @@ private fun ComputerIcon(selected: Boolean) {
 }
 
 @Composable
-private fun SessionRowText(
+internal fun SessionRowText(
   name: String,
   status: SessionStatus,
   meta: LemonadeCodeString,

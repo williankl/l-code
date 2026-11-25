@@ -53,6 +53,10 @@ public data class SessionMenuModel(
   val rename: SessionRenameModel? = null,
   /** Set while the menu asks for a new worktree's branch instead of showing its items. */
   val newWorktree: WorktreeBranchModel? = null,
+  /** A sibling is above it to swap places with: Move up. With neither, the two items are left out. */
+  val canMoveUp: Boolean = false,
+  /** A sibling is below it to swap places with: Move down. */
+  val canMoveDown: Boolean = false,
 )
 
 /**
@@ -89,10 +93,36 @@ public sealed interface SessionNavigationModel {
   @Immutable
   public data class Flat(val rows: List<SessionListRowModel>) : SessionNavigationModel
 
-  /** Any depth, drawn as an indented tree with lineage rails. */
+  /**
+   * Any depth, drawn as an indented tree with lineage rails. A row can be dragged up or down
+   * among its siblings; [drag] is set while one is.
+   */
   @Immutable
-  public data class Tree(val rows: List<SessionTreeRowModel>) : SessionNavigationModel
+  public data class Tree(
+    val rows: List<SessionTreeRowModel>,
+    val drag: SessionDragModel? = null,
+  ) : SessionNavigationModel
 }
+
+/**
+ * A session's row picked up in the tree. It lifts out of the list and follows the pointer, while
+ * its rows and those of its sub-sessions, which move with it, fade where they were.
+ */
+@Immutable
+public data class SessionDragModel(
+  val sessionId: String,
+  /** Where letting go would put it; null where it already is, so letting go changes nothing. */
+  val drop: SessionDropModel?,
+)
+
+/** The line between two rows that shows where a dragged session would go, indented to its siblings. */
+@Immutable
+public data class SessionDropModel(
+  /** The row the line is drawn against. */
+  val rowId: String,
+  /** Under that row rather than over it: after the last sibling, it's the last row nested under that one. */
+  val below: Boolean,
+)
 
 @Immutable
 public data class SessionListRowModel(

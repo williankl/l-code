@@ -23,7 +23,9 @@ public interface SessionService {
 
   /**
    * What [startSubSession] would create, for showing before anything happens. Null if it can't.
-   * A new worktree goes on [branch] when given, in a folder named after its last part.
+   * A new worktree goes on [branch] when given, in a folder named after its last part, and the
+   * sub-session is named after that folder; `-2`, `-3`… keep it apart from a folder already there
+   * and from its siblings' names.
    */
   public fun planSubSession(
     parentId: SessionId,
@@ -94,6 +96,13 @@ public interface SessionService {
    * Null or blank goes back to the name Lemonade Code gives it.
    */
   public fun rename(id: SessionId, name: String?)
+
+  /**
+   * Moves the session, with its sub-sessions, to [index] among its siblings: the sessions under the
+   * same parent, or the top-level ones, counted as they'll be once it has moved. It stays under its
+   * parent. The order is kept across launches.
+   */
+  public fun move(id: SessionId, index: Int)
 
   /**
    * Brings back the sessions open when Lemonade Code last quit, each in a fresh shell in the folder it was

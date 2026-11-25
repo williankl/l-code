@@ -33,6 +33,12 @@ internal data class Composer(
   val draft: String,
 )
 
+/** A session being dragged, and the place among its siblings it would go to, counted as they'll be once it has moved. */
+internal data class SessionDrag(
+  val sessionId: SessionId,
+  val index: Int,
+)
+
 /** The workspace's own UI state: everything that isn't owned by a service. */
 internal data class WorkspaceViewState(
   val selectedId: SessionId? = null,
@@ -86,6 +92,8 @@ internal data class WorkspaceViewState(
   val archivedOpen: Boolean = false,
   /** Archived sessions on their way back, with those archived with them: their rows hide meanwhile. */
   val restoring: Set<SessionId> = emptySet(),
+  /** A session's row picked up in the tree, while it's dragged. */
+  val sessionDrag: SessionDrag? = null,
   val error: LemonadeCodeString? = null,
   val toast: LemonadeCodeString? = null,
 )

@@ -7,6 +7,7 @@ import dev.lemonadecode.domain.session.BranchName
 import dev.lemonadecode.domain.session.LinkedWorktree
 import dev.lemonadecode.domain.session.Session
 import dev.lemonadecode.domain.session.SessionId
+import dev.lemonadecode.domain.session.SessionOrder
 import dev.lemonadecode.domain.session.SessionOrigin
 import dev.lemonadecode.domain.session.SessionPlacement
 import dev.lemonadecode.domain.session.SessionStatus
@@ -120,7 +121,10 @@ internal class SessionServiceImpl(
   override fun planSubSession(parentId: SessionId, location: SubSessionLocation, namePrefix: String, branch: String?): SubSessionPlan? {
     val sessions = state.value
     val parent = sessions.firstOrNull { it.id == parentId } ?: return null
-    return SubSessionPlanner.plan(parent, sessions, location, namePrefix, branch)
+    // Archived ones count too, so one brought back never shares a name with a newer one.
+    val named = sessions + archivedSessions.value.flatMap { it.sessions }
+    // A folder already there, like a worktree kept from an earlier sub-session, would make git refuse.
+    return SubSessionPlanner.plan(parent, named, location, namePrefix, branch) { File(it).exists() }
   }
 
   override fun suggestWorktreeBranch(): String = WorktreeNames.suggest(Random.Default)
@@ -348,6 +352,11 @@ internal class SessionServiceImpl(
   override fun rename(id: SessionId, name: String?) {
     val custom = name?.trim()?.takeIf { it.isNotEmpty() }
     update(id) { it.copy(customName = custom) }
+  }
+
+  // Saved like any other change: the saved sessions are in display order, and come back in it.
+  override fun move(id: SessionId, index: Int) {
+    state.update { sessions -> SessionOrder.move(sessions, id, index) }
   }
 
   override suspend fun restore(): Int {

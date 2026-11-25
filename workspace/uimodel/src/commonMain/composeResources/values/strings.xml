@@ -149,6 +149,8 @@
   <string name="session_name_field">Session name</string>
   <string name="session_copy_path">Copy folder path</string>
   <string name="session_path_copied">Copied %1$s</string>
+  <string name="session_move_up">Move up</string>
+  <string name="session_move_down">Move down</string>
   <string name="session_close">Close session</string>
 
   <!-- Closing a session that leaves worktrees no other session uses -->

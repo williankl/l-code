@@ -5,6 +5,7 @@ import dev.lemonadecode.domain.review.Review
 import dev.lemonadecode.domain.session.ArchivedSession
 import dev.lemonadecode.domain.session.BranchName
 import dev.lemonadecode.domain.session.Session
+import dev.lemonadecode.domain.session.SessionOrder
 import dev.lemonadecode.domain.session.SessionStatus
 import dev.lemonadecode.domain.session.SubSessionLocation
 import dev.lemonadecode.domain.session.SubSessionPlan
@@ -53,7 +54,7 @@ internal data class WorkspaceInput(
   val review: Review?,
   val settings: AppSettings,
   val view: WorkspaceViewState,
-  /** What the new sub-session panel would create, for its current location. */
+  /** What the new sub-session panel would create, for its current location; null while it's closed. */
   val subSessionPlan: SubSessionPlan?,
   val pendingMessage: String?,
   val homeDirectory: String,
@@ -102,7 +103,7 @@ internal object WorkspaceModelMapper {
         expanded = input.settings.sidebarExpanded,
         sidebarWidth = clampSidebarWidth(input.settings.sidebarWidth),
         drawerOpen = view.drawerOpen,
-        navigation = SessionsMapper.navigation(sessions, selected, view.navigationStyle, view.folded, input.homeDirectory),
+        navigation = SessionsMapper.navigation(sessions, selected, view.navigationStyle, view.folded, input.homeDirectory, drag = view.sessionDrag),
         tiles = SessionsMapper.tiles(sessions, selected),
         menu = view.sessionMenu?.let { id -> sessions.firstOrNull { it.id == id } }?.let { session ->
           SessionsMapper.menu(
@@ -113,6 +114,7 @@ internal object WorkspaceModelMapper {
             newWorktree = view.worktreeBranch?.takeIf { view.namingWorktree == session.id }?.let {
               worktreeBranch(it, input.menuWorktreePlan, view.takenBranch, input.homeDirectory)
             },
+            siblings = SessionOrder.siblings(sessions, session.id),
           )
         },
         archived = SessionsMapper.archived(input.archived.filterNot { it.id in view.restoring }, open = view.archivedOpen, home = input.homeDirectory),
@@ -197,6 +199,7 @@ internal object WorkspaceModelMapper {
   private fun worktreeBranch(name: String, plan: SubSessionPlan?, taken: String?, home: String): WorktreeBranchModel = WorktreeBranchModel(
     name = name,
     path = plan?.workingDirectory?.let { abbreviateHome(it, home) }.orEmpty(),
+    sessionName = plan?.name.orEmpty(),
     problem = when {
       name.isEmpty() -> null
       !BranchName.isValid(name) -> Res.string.worktree_branch_invalid.asLemonadeCodeString()

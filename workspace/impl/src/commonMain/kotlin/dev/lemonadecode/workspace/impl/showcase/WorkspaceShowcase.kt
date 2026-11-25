@@ -46,6 +46,7 @@ import dev.lemonadecode.workspace.impl.LineRange
 import dev.lemonadecode.workspace.impl.MobileInput
 import dev.lemonadecode.workspace.impl.NavigationStyle
 import dev.lemonadecode.workspace.impl.PreviewLoad
+import dev.lemonadecode.workspace.impl.SessionDrag
 import dev.lemonadecode.workspace.impl.WorkspaceInput
 import dev.lemonadecode.workspace.impl.WorkspaceModelMapper
 import dev.lemonadecode.workspace.impl.WorkspaceViewState
@@ -92,7 +93,7 @@ public enum class WorkspaceShowcase(
   NarrowWrap("n2", "Narrow, drawer closed, toolbars wrap", "The info dot on the sessions toggle flags a session that needs input.", widthDp = 860),
   SessionTree("2a", "Tree with lineage rails", "bench-redis, four levels down. The path to it is lit in brand lime."),
   ChoosingWorktree("3a·tree", "Choosing a worktree", "The new sub-session panel suggests a branch to keep or type over, and previews its folder before anything is created."),
-  AfterCreatingBoth("3b·tree", "After creating both kinds", "sub-1 shares the folder; sub-2 runs in its own worktree on its own branch."),
+  AfterCreatingBoth("3b·tree", "After creating both kinds", "sub-1 shares the folder; generating-bugs runs in its own worktree on its own branch, and takes the worktree’s name."),
   SettingsOpen("4a", "Settings open, an agent working", "Settings is a short list; every item opens its own page. The top bar tag shows keep awake is holding the machine up."),
   LightKeepAwake("4b", "Light theme, keep awake on", "The same diff review in the light palette."),
   MultiLineComment("5a", "A range comment posted, another range selected", "rateLimit.ts:24–26 has a range comment; 28–32 is selected with the composer open."),
@@ -102,7 +103,7 @@ public enum class WorkspaceShowcase(
   ClosingWorktree(
     "6d",
     "Closing a session in a worktree",
-    "No other session uses sub-2’s worktree, so closing it asks whether to delete that too. It has uncommitted changes; its branch stays either way.",
+    "No other session uses the worktree of generating-bugs, so closing it asks whether to delete that too. It has uncommitted changes; its branch stays either way.",
   ),
   SettingsList("8a", "Settings list", "Six rows show their current value; the gear's dot says an update is out. Open one to change it."),
   SettingsLanguage("8b", "Language, Deutsch chosen", "Each language in its own name, with its flag. The whole app follows at once."),
@@ -136,8 +137,18 @@ public enum class WorkspaceShowcase(
   ),
   SettingsSounds("8q", "Settings › Sounds", "A ding when an agent finishes, two when it needs input, from any session. Play lets you hear each one."),
   DeviceWindow("8r", "Device · a window of its own", "A device's ↗ in the list mirrors it in its own window, screen and logs, beside others. Its frame closes it.", widthDp = 760, heightDp = 880, part = ShowcasePart.DeviceWindow),
-  ArchivedSessions(
+  DraggingSession(
     "6e",
+    "Dragging a session into place",
+    "checkout-flake is lifted out of the tree; its sub-session, which moves with it, fades where it was. The line under scratch is where letting go puts it: a session moves among its siblings.",
+  ),
+  MovingInMenu(
+    "6f",
+    "Move up and Move down",
+    "The menu moves review-2 one place at a time among its siblings, for the rail, which can't be dragged, and for screen readers. It's the last one, so only Move up is on.",
+  ),
+  ArchivedSessions(
+    "6g",
     "Archived sessions",
     "Archive in a session's menu puts it away with its sub-sessions: its terminal stops, and it waits under Archived to be restored where it was, or deleted for good.",
   ),
@@ -315,16 +326,16 @@ private fun treeScene(
   ) + extraTranscripts,
 )
 
-/** sub-1 in bench-redis's folder and sub-2 in a worktree of its own, sub-2 selected. */
+/** sub-1 in bench-redis's folder and generating-bugs in a worktree of its own, named after it and selected. */
 private fun bothKindsScene(closing: ClosingSession? = null): Scene {
   val sameFolder = session("s1", "sub-1", parent = "d4")
   val worktree = session(
     "s2",
-    "sub-2",
+    WorktreeName,
     parent = "d4",
-    branch = "feat/rate-limit-sub-2",
+    branch = SuggestedBranch,
     placement = SessionPlacement.Worktree,
-    folder = "$Repo.worktrees/sub-2",
+    folder = "$Repo.worktrees/$WorktreeName",
   )
   val sessions = treeSessions.toMutableList().apply { addAll(indexOfFirst { it.id.value == "d4" } + 1, listOf(sameFolder, worktree)) }
   return treeScene(
@@ -333,15 +344,20 @@ private fun bothKindsScene(closing: ClosingSession? = null): Scene {
     closing = closing,
     extraTranscripts = mapOf(
       "s1" to ShowcaseTranscripts.blank("bench-redis", rule = "same folder"),
-      "s2" to ShowcaseTranscripts.worktree("bench-redis", "sub-2", "feat/rate-limit-sub-2"),
+      "s2" to ShowcaseTranscripts.worktree("bench-redis", WorktreeName, SuggestedBranch),
     ),
   )
 }
 
 private const val SuggestedBranch = "worktree/generating-bugs"
 
-/** A new worktree on [branch], in a folder named after its last part. */
-private fun worktreePlan(branch: String) = SubSessionPlan("sub-1", SubSessionLocation.NewWorktree, "$Repo.worktrees/${branch.substringAfterLast('/')}", branch, true, "feat/rate-limit")
+/** The worktree [SuggestedBranch] makes, and the name of its sub-session. */
+private const val WorktreeName = "generating-bugs"
+
+/** A new worktree on [branch], in a folder named after its last part, and so is its sub-session. */
+private fun worktreePlan(branch: String) = branch.substringAfterLast('/').let { name ->
+  SubSessionPlan(name, SubSessionLocation.NewWorktree, "$Repo.worktrees/$name", branch, true, "feat/rate-limit")
+}
 
 private fun sceneFor(showcase: WorkspaceShowcase): Scene = when (showcase) {
   WorkspaceShowcase.AgentFinishes -> scene()
@@ -384,9 +400,9 @@ private fun sceneFor(showcase: WorkspaceShowcase): Scene = when (showcase) {
   WorkspaceShowcase.ClosingWorktree -> bothKindsScene(
     closing = ClosingSession(
       sessionId = SessionId("s2"),
-      name = "sub-2",
+      name = WorktreeName,
       subSessionCount = 0,
-      worktrees = listOf(LinkedWorktree("$Repo.worktrees/sub-2", "feat/rate-limit-sub-2", Repo, hasChanges = true)),
+      worktrees = listOf(LinkedWorktree("$Repo.worktrees/$WorktreeName", SuggestedBranch, Repo, hasChanges = true)),
     ),
   )
   WorkspaceShowcase.SettingsList -> settingsScene(SettingsPage.List)
@@ -446,6 +462,8 @@ private fun sceneFor(showcase: WorkspaceShowcase): Scene = when (showcase) {
   )
   WorkspaceShowcase.DiffSounds -> soundsScene()
   WorkspaceShowcase.SettingsSounds -> settingsScene(SettingsPage.Sounds, update = UpdateState.None)
+  WorkspaceShowcase.DraggingSession -> draggingScene()
+  WorkspaceShowcase.MovingInMenu -> treeScene(sessionMenu = SessionId("r2"))
   WorkspaceShowcase.ArchivedSessions -> treeScene(sessions = treeSessions.filterNot { it.id.value == "r2" }).let { scene ->
     val view = scene.input.view.copy(archivedOpen = true, toast = Res.string.session_archived.asLemonadeCodeString("review-2"))
     scene.copy(input = scene.input.copy(view = view, archived = archivedSessions))
@@ -470,6 +488,15 @@ private val archivedSessions: List<ArchivedSession> get() {
     ),
     ArchivedSession(session("df", "dotfiles", SessionStatus.Shell, branch = null, folder = "${ShowcaseFixtures.Home}/dotfiles")),
   )
+}
+
+/** checkout-flake, with a sub-session of its own, picked up to go after scratch. */
+private fun draggingScene(): Scene {
+  val retry = session("cf1", "retry-on-timeout", SessionStatus.Working, parent = "cf", branch = "fix/checkout-flake")
+  val sessions = treeSessions.toMutableList().apply { add(indexOfFirst { it.id.value == "cf" } + 1, retry) }
+  val scene = treeScene(sessions = sessions, extraTranscripts = mapOf("cf1" to ShowcaseTranscripts.blank("checkout-flake")))
+  val view = scene.input.view.copy(sessionDrag = SessionDrag(SessionId("cf"), index = 2))
+  return scene.copy(input = scene.input.copy(view = view))
 }
 
 /** A notification sound that changed and an error sound that's new, both previewing. */

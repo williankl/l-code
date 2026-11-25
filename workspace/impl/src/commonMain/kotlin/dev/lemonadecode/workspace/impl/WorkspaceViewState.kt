@@ -88,6 +88,10 @@ internal data class WorkspaceViewState(
   val startingSubSession: Boolean = false,
   /** A session about to close that leaves worktrees unused, while the dialog asks what to do with them. */
   val closing: ClosingSession? = null,
+  /** The Archived section at the bottom of the sidebar is open; it starts folded. */
+  val archivedOpen: Boolean = false,
+  /** Archived sessions on their way back, with those archived with them: their rows hide meanwhile. */
+  val restoring: Set<SessionId> = emptySet(),
   /** A session's row picked up in the tree, while it's dragged. */
   val sessionDrag: SessionDrag? = null,
   val error: LemonadeCodeString? = null,

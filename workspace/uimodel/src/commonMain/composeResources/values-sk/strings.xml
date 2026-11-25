@@ -195,6 +195,42 @@
   </plurals>
   <string name="error_worktree_delete">Worktree %1$s sa nepodarilo odstrániť: %2$s</string>
 
+  <!-- Archived sessions: put away from the session menu, kept under Archived to restore or delete -->
+  <string name="session_archive">Archivovať</string>
+  <string name="session_archive_detail">Zastaví ju a ponechá v Archivovaných</string>
+  <string name="session_archive_action">Archivovať reláciu</string>
+  <string name="session_archived">Relácia %1$s bola archivovaná</string>
+  <string name="archived_title">Archivované</string>
+  <string name="archived_show">Zobraziť archivované relácie</string>
+  <string name="archived_hide">Skryť archivované relácie</string>
+  <plurals name="archived_sub_sessions">
+    <item quantity="one">S %1$d podreláciou</item>
+    <item quantity="few">S %1$d podreláciami</item>
+    <item quantity="many">S %1$d podreláciami</item>
+    <item quantity="other">S %1$d podreláciami</item>
+  </plurals>
+  <string name="archived_restore">Obnoviť</string>
+  <string name="archived_restore_session">Obnoviť %1$s</string>
+  <string name="archived_delete">Natrvalo odstrániť</string>
+  <string name="archived_delete_session">Natrvalo odstrániť %1$s</string>
+  <string name="archived_restored_at_home">%2$s už neexistuje, preto sa %1$s vrátila do vášho domovského priečinka</string>
+  <plurals name="archived_restored_at_home_many">
+    <item quantity="one">%1$d priečinok už neexistuje, preto sa jeho relácia vrátila do vášho domovského priečinka</item>
+    <item quantity="few">%1$d priečinky už neexistujú, preto sa ich relácie vrátili do vášho domovského priečinka</item>
+    <item quantity="many">%1$d priečinkov už neexistuje, preto sa ich relácie vrátili do vášho domovského priečinka</item>
+    <item quantity="other">%1$d priečinkov už neexistuje, preto sa ich relácie vrátili do vášho domovského priečinka</item>
+  </plurals>
+  <plurals name="archived_some_stayed">
+    <item quantity="one">%1$d podrelácia sa nemohla vrátiť a zostala v Archivovaných</item>
+    <item quantity="few">%1$d podrelácie sa nemohli vrátiť a zostali v Archivovaných</item>
+    <item quantity="many">%1$d podrelácií sa nemohlo vrátiť a zostalo v Archivovaných</item>
+    <item quantity="other">%1$d podrelácií sa nemohlo vrátiť a zostalo v Archivovaných</item>
+  </plurals>
+  <string name="archived_parent_archived">%1$s zostala v Archivovaných, lebo relácia, pod ktorú patrí, bola medzitým archivovaná</string>
+  <string name="error_parent_archived">Relácia bola archivovaná počas spúšťania jej podrelácie, preto sa podrelácia nevytvorila.</string>
+  <string name="no_open_sessions_title">Žiadne otvorené relácie</string>
+  <string name="no_open_sessions_detail">Otvorte nový terminál alebo obnovte archivovanú reláciu z bočného panela.</string>
+
   <!-- New session -->
   <string name="action_new_terminal">Nový terminál</string>
   <string name="no_sessions_title">Zatiaľ žiadne relácie</string>

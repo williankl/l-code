@@ -35,8 +35,15 @@ import dev.lemonadecode.updates.fake.FakeUpdateService
 import dev.lemonadecode.workspace.impl.showcase.ShowcaseDevices
 import dev.lemonadecode.workspace.impl.showcase.ShowcaseFixtures
 import dev.lemonadecode.workspace.strings.Res
+import dev.lemonadecode.workspace.strings.archived_parent_archived
+import dev.lemonadecode.workspace.strings.archived_restored_at_home
+import dev.lemonadecode.workspace.strings.archived_restored_at_home_many
+import dev.lemonadecode.workspace.strings.archived_some_stayed
+import dev.lemonadecode.workspace.strings.error_launch
+import dev.lemonadecode.workspace.strings.error_parent_archived
 import dev.lemonadecode.workspace.strings.error_worktree_delete
 import dev.lemonadecode.workspace.strings.file_path_copied
+import dev.lemonadecode.workspace.strings.session_archived
 import dev.lemonadecode.workspace.strings.session_path_copied
 import dev.lemonadecode.workspace.strings.time_hours_ago
 import dev.lemonadecode.workspace.strings.update_failed_checksum
@@ -44,6 +51,8 @@ import dev.lemonadecode.workspace.strings.updates_up_to_date
 import dev.lemonadecode.workspace.strings.worktree_branch_invalid
 import dev.lemonadecode.workspace.strings.worktree_branch_taken
 import dev.lemonadecode.workspace.strings.worktree_deleted
+import dev.lemonadecode.workspace.uimodel.ArchivedSessionRowModel
+import dev.lemonadecode.workspace.uimodel.ArchivedSessionsModel
 import dev.lemonadecode.workspace.uimodel.CloseSessionDialogModel
 import dev.lemonadecode.workspace.uimodel.ClosingWorktreeModel
 import dev.lemonadecode.workspace.uimodel.DeviceRowModel
@@ -75,6 +84,7 @@ import dev.lemonadecode.workspace.uimodel.WorkspaceEvent
 import dev.lemonadecode.workspace.uimodel.WorkspaceModel
 import dev.lemonadecode.workspace.uimodel.WorkspaceView
 import dev.lemonadecode.workspace.uimodel.WorktreeBranchModel
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalForInheritanceCoroutinesApi
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.test.runTest
@@ -1062,6 +1072,239 @@ class WorkspacePresenterTest {
       assertEquals(null, asking.sessions.menu, "the menu gives way to the dialog")
       assertEquals(worktreeDialog, asking.closeSession)
       assertEquals(emptyList(), sessions.closed)
+    }
+  }
+
+  @Test
+  fun `archiving from the menu puts a session and its sub-sessions under Archived, folded, and says so`() = runTest {
+    withFamily()
+    presenter.test {
+      val start = awaitItem()
+      assertEquals(null, start.sessions.archived, "no Archived section while nothing is archived")
+      start.eventSink(WorkspaceEvent.OpenSessionMenu("r1"))
+      awaitItemWhere { it.sessions.menu?.sessionId == "r1" }.eventSink(WorkspaceEvent.ArchiveSession("r1"))
+      val archived = awaitItemWhere { it.sessions.archived != null && it.toast != null }
+      assertEquals(listOf(SessionId("r1")), sessions.archivedIds)
+      assertEquals(emptyList(), sessions.closed)
+      assertEquals(listOf("ar", "cf"), archived.sessions.tiles.map { it.id })
+      assertEquals(
+        ArchivedSessionsModel(
+          open = false,
+          rows = listOf(ArchivedSessionRowModel("r1", "review-1", SessionsMapper.meta(sessions.archived.value.single().session, ShowcaseFixtures.Home), subSessionCount = 1)),
+        ),
+        archived.sessions.archived,
+      )
+      assertEquals(null, archived.sessions.menu)
+      assertEquals("api-ratelimit", archived.header?.name, "the selection stays where it was")
+      assertEquals(Res.string.session_archived.asLemonadeCodeString("review-1"), archived.toast)
+
+      archived.eventSink(WorkspaceEvent.ToggleArchivedSessions)
+      assertEquals(true, awaitItemWhere { it.sessions.archived?.open == true }.sessions.archived?.open)
+    }
+  }
+
+  @Test
+  fun `archiving the selected session selects the next one at its level, and the last one leaves nothing open`() = runTest {
+    withFamily()
+    presenter.test {
+      awaitItem().eventSink(WorkspaceEvent.ArchiveSession("ar"))
+      val next = awaitItemWhere { it.header?.name == "checkout-flake" }
+      assertEquals(listOf("cf"), next.sessions.tiles.map { it.id })
+
+      next.eventSink(WorkspaceEvent.ArchiveSession("cf"))
+      val none = awaitItemWhere { it.content is WorkspaceContentModel.NoSessions && it.sessions.archived?.rows?.size == 2 }
+      assertEquals(null, none.header)
+      assertEquals(listOf("cf", "ar"), none.sessions.archived?.rows?.map { it.id }, "the most recently archived first")
+    }
+  }
+
+  @Test
+  fun `archiving the selected session selects its parent, else the one before it`() = runTest {
+    withFamily()
+    presenter.test {
+      awaitItem().eventSink(WorkspaceEvent.SelectSession("cf"))
+      awaitItemWhere { it.header?.name == "checkout-flake" }.eventSink(WorkspaceEvent.ArchiveSession("cf"))
+      awaitItemWhere { it.header?.name == "api-ratelimit" }.eventSink(WorkspaceEvent.SelectSession("d2"))
+      awaitItemWhere { it.header?.name == "atomic-refill" }.eventSink(WorkspaceEvent.ArchiveSession("d2"))
+      awaitItemWhere { it.header?.name == "review-1" }
+    }
+  }
+
+  @Test
+  fun `restoring an archived session brings it back selected, on its terminal`() = runTest {
+    withFamily()
+    presenter.test {
+      awaitItem().eventSink(WorkspaceEvent.ArchiveSession("r1"))
+      val archived = awaitItemWhere { it.sessions.archived != null }
+      archived.eventSink(WorkspaceEvent.RestoreArchivedSession("r1"))
+      // A second click on its way out restores nothing twice.
+      archived.eventSink(WorkspaceEvent.RestoreArchivedSession("r1"))
+      val back = awaitItemWhere { it.header?.name == "review-1" }
+      assertEquals(listOf(SessionId("r1")), sessions.unarchivedIds)
+      assertEquals(null, back.sessions.archived)
+      assertEquals(WorkspaceContentModel.Terminal("r1"), back.content)
+      assertEquals(setOf("ar", "r1", "d2", "cf"), back.sessions.tiles.map { it.id }.toSet())
+      assertEquals(null, back.error)
+    }
+  }
+
+  @Test
+  fun `a session whose folder had gone comes back at home, and says so`() = runTest {
+    withFamily()
+    sessions.missingFolders = setOf(ShowcaseFixtures.Repo)
+    presenter.test {
+      awaitItem().eventSink(WorkspaceEvent.ArchiveSession("cf"))
+      awaitItemWhere { it.sessions.archived != null }.eventSink(WorkspaceEvent.RestoreArchivedSession("cf"))
+      val one = awaitItemWhere { it.error != null }
+      assertEquals(Res.string.archived_restored_at_home.asLemonadeCodeString("checkout-flake", "~/code/storefront"), one.error)
+      assertEquals("checkout-flake", one.header?.name)
+
+      one.eventSink(WorkspaceEvent.DismissError)
+      awaitItemWhere { it.error == null }.eventSink(WorkspaceEvent.ArchiveSession("r1"))
+      awaitItemWhere { it.sessions.archived != null }.eventSink(WorkspaceEvent.RestoreArchivedSession("r1"))
+      assertEquals(Res.plurals.archived_restored_at_home_many.asLemonadeCodeString(2, 2), awaitItemWhere { it.error != null }.error)
+    }
+  }
+
+  @Test
+  fun `a session that can't come back stays archived and says why`() = runTest {
+    withFamily()
+    sessions.unarchiveResult = LemonadeCodeResult.failure(SessionError.LaunchFailed("no terminal"))
+    presenter.test {
+      awaitItem().eventSink(WorkspaceEvent.ArchiveSession("cf"))
+      awaitItemWhere { it.sessions.archived != null }.eventSink(WorkspaceEvent.RestoreArchivedSession("cf"))
+      val failed = awaitItemWhere { it.error != null }
+      assertEquals(Res.string.error_launch.asLemonadeCodeString("no terminal"), failed.error)
+      assertEquals(listOf("cf"), failed.sessions.archived?.rows?.map { it.id })
+    }
+  }
+
+  @Test
+  fun `sub-sessions whose shell can't start stay archived, and the banner says how many`() = runTest {
+    withFamily()
+    sessions.failingToStart = setOf(SessionId("r1"))
+    presenter.test {
+      awaitItem().eventSink(WorkspaceEvent.ArchiveSession("ar"))
+      awaitItemWhere { it.sessions.archived != null }.eventSink(WorkspaceEvent.RestoreArchivedSession("ar"))
+      val partly = awaitItemWhere { it.error != null }
+      assertEquals(Res.plurals.archived_some_stayed.asLemonadeCodeString(2, 2), partly.error, "review-1, and atomic-refill under it")
+      assertEquals("api-ratelimit", partly.header?.name)
+      assertEquals(listOf("r1"), partly.sessions.archived?.rows?.map { it.id })
+      assertEquals(1, partly.sessions.archived?.rows?.single()?.subSessionCount)
+    }
+  }
+
+  @Test
+  fun `while a restore runs, its rows hide, and neither Restore nor Delete reaches it twice`() = runTest {
+    withFamily()
+    val gate = CompletableDeferred<Unit>()
+    sessions.unarchiveGate = gate
+    presenter.test {
+      awaitItem().eventSink(WorkspaceEvent.ArchiveSession("ar"))
+      awaitItemWhere { it.sessions.archived != null }.eventSink(WorkspaceEvent.ArchiveSession("cf"))
+      awaitItemWhere { it.sessions.archived?.rows?.size == 2 }.eventSink(WorkspaceEvent.RestoreArchivedSession("ar"))
+      val restoring = awaitItemWhere { it.sessions.archived?.rows?.size == 1 }
+      assertEquals(listOf("cf"), restoring.sessions.archived?.rows?.map { it.id }, "only the other archive shows")
+      yieldUntil { sessions.unarchivedIds.isNotEmpty() }
+      restoring.eventSink(WorkspaceEvent.RestoreArchivedSession("ar"))
+      restoring.eventSink(WorkspaceEvent.DeleteArchivedSession("ar"))
+      assertEquals(listOf(ar), sessions.unarchivedIds)
+      assertEquals(emptyList(), sessions.closed)
+
+      gate.complete(Unit)
+      val back = awaitItemWhere { it.header?.name == "api-ratelimit" && it.sessions.tiles.any { tile -> tile.id == "ar" } }
+      assertEquals(listOf("cf"), back.sessions.archived?.rows?.map { it.id })
+      assertEquals(null, back.error)
+    }
+  }
+
+  @Test
+  fun `a restore that stayed archived, its parent archived meanwhile, says so and selects nothing new`() = runTest {
+    withFamily()
+    presenter.test {
+      awaitItem().eventSink(WorkspaceEvent.SelectSession("cf"))
+      awaitItemWhere { it.header?.name == "checkout-flake" }.eventSink(WorkspaceEvent.ArchiveSession("r1"))
+      sessions.unarchiveResult = LemonadeCodeResult.failure(SessionError.ParentArchived)
+      awaitItemWhere { it.sessions.archived != null }.eventSink(WorkspaceEvent.RestoreArchivedSession("r1"))
+      val stayed = awaitItemWhere { it.error != null }
+      assertEquals(Res.string.archived_parent_archived.asLemonadeCodeString("review-1"), stayed.error)
+      assertEquals("checkout-flake", stayed.header?.name)
+      assertEquals(listOf("r1"), stayed.sessions.archived?.rows?.map { it.id })
+    }
+  }
+
+  @Test
+  fun `a sub-session not created because its session was archived as it started says so`() = runTest {
+    withFamily()
+    sessions.startResult = LemonadeCodeResult.failure(SessionError.ParentArchived)
+    presenter.test {
+      awaitItem().eventSink(WorkspaceEvent.CreateSubSessionFrom("ar", LocationModel.SameFolder))
+      val failed = awaitItemWhere { it.error != null }
+      assertEquals(Res.string.error_parent_archived.asLemonadeCodeString(), failed.error)
+      assertEquals("api-ratelimit", failed.header?.name)
+    }
+  }
+
+  @Test
+  fun `archiving a session while it's dragged ends the drag, and it doesn't come back lifted`() = runTest {
+    withFamily()
+    presenter.test {
+      awaitItem().eventSink(WorkspaceEvent.StartSessionDrag("cf"))
+      awaitItemWhere { (it.sessions.navigation as SessionNavigationModel.Tree).drag != null }.eventSink(WorkspaceEvent.ArchiveSession("cf"))
+      val archived = awaitItemWhere { it.sessions.archived != null }
+      assertEquals(null, (archived.sessions.navigation as SessionNavigationModel.Tree).drag)
+      // A release still on its way moves nothing.
+      archived.eventSink(WorkspaceEvent.DropSession("cf"))
+      assertEquals(emptyList(), sessions.moved)
+
+      archived.eventSink(WorkspaceEvent.RestoreArchivedSession("cf"))
+      val back = awaitItemWhere { it.sessions.tiles.any { tile -> tile.id == "cf" } }
+      assertEquals(null, (back.sessions.navigation as SessionNavigationModel.Tree).drag, "not lifted again")
+    }
+  }
+
+  @Test
+  fun `deleting an archived session in no worktree lets it go at once`() = runTest {
+    withFamily()
+    presenter.test {
+      awaitItem().eventSink(WorkspaceEvent.ArchiveSession("cf"))
+      awaitItemWhere { it.sessions.archived != null }.eventSink(WorkspaceEvent.DeleteArchivedSession("cf"))
+      val deleted = awaitItemWhere { it.sessions.archived == null }
+      assertEquals(listOf(SessionId("cf")), sessions.closed)
+      assertEquals(null, deleted.closeSession)
+      // Only archived sessions are deleted this way.
+      deleted.eventSink(WorkspaceEvent.DeleteArchivedSession("ar"))
+      assertEquals(listOf(SessionId("cf")), sessions.closed)
+    }
+  }
+
+  @Test
+  fun `deleting an archived session asks about its worktree, like closing does`() = runTest {
+    withWorktree()
+    presenter.test {
+      awaitItem().eventSink(WorkspaceEvent.ArchiveSession("s2"))
+      assertEquals(emptyList(), sessions.removedWorktrees, "archiving deletes no worktree")
+      awaitItemWhere { it.sessions.archived != null }.eventSink(WorkspaceEvent.DeleteArchivedSession("s2"))
+      val asking = awaitItemWhere { it.closeSession != null }
+      assertEquals(worktreeDialog, asking.closeSession)
+      asking.eventSink(WorkspaceEvent.ConfirmCloseSession(deleteWorktrees = true))
+      awaitItemWhere { it.toast == Res.string.worktree_deleted.asLemonadeCodeString("~/code/storefront.worktrees/sub-2") }
+      assertEquals(listOf(SessionId("s2")), sessions.closed)
+      assertEquals(listOf(FakeSessionService.RemoveWorktreeCall(worktree, force = true, stillOpen = emptyList())), sessions.removedWorktrees)
+      assertEquals(emptyList(), sessions.archived.value)
+    }
+  }
+
+  @Test
+  fun `a worktree an archived session is still in isn't offered when another closes`() = runTest {
+    withWorktree(inWorktree("s3", "sub-3"))
+    presenter.test {
+      awaitItem().eventSink(WorkspaceEvent.ArchiveSession("s3"))
+      awaitItemWhere { it.sessions.archived != null }.eventSink(WorkspaceEvent.CloseSession("s2"))
+      val closed = awaitItemWhere { it.sessions.tiles.none { tile -> tile.id == "s2" } }
+      assertEquals(listOf(SessionId("s2")), sessions.closed)
+      assertEquals(null, closed.closeSession)
+      assertEquals(emptyList(), sessions.removedWorktrees)
     }
   }
 

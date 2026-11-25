@@ -56,6 +56,21 @@ public sealed interface WorkspaceEvent {
   /** The session's folder path is on the clipboard: confirms it with a toast. */
   public data class CopiedSessionPath(val path: String) : WorkspaceEvent
 
+  /**
+   * Puts the session and its sub-sessions away under Archived: their terminals end, but nothing is
+   * lost. A selected one gives way to a neighbour.
+   */
+  public data class ArchiveSession(val sessionId: String) : WorkspaceEvent
+
+  /** Opens or folds the Archived section. */
+  public data object ToggleArchivedSessions : WorkspaceEvent
+
+  /** Brings an archived session back where it was, with its sub-sessions, and selects it. */
+  public data class RestoreArchivedSession(val sessionId: String) : WorkspaceEvent
+
+  /** Lets an archived session go for good, asking first about a worktree that would be left unused, like closing. */
+  public data class DeleteArchivedSession(val sessionId: String) : WorkspaceEvent
+
   /** Picked up a session's row in the tree, to move it among its siblings. */
   public data class StartSessionDrag(val sessionId: String) : WorkspaceEvent
 

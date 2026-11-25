@@ -1,5 +1,6 @@
 package dev.lemonadecode.sessions.api
 
+import dev.lemonadecode.domain.session.ArchivedSession
 import dev.lemonadecode.domain.session.LinkedWorktree
 import dev.lemonadecode.domain.session.Session
 import dev.lemonadecode.domain.session.SessionId
@@ -11,7 +12,8 @@ import kotlinx.coroutines.flow.StateFlow
 
 /**
  * Every open terminal, in display order: each sub-session sits right after its parent's
- * descendants. A session's folder, repository and branch follow the shell as it `cd`s.
+ * descendants. A session's folder, repository and branch follow the shell as it `cd`s. Archived
+ * sessions aren't among them.
  */
 public interface SessionService {
   public val sessions: StateFlow<List<Session>>
@@ -52,12 +54,33 @@ public interface SessionService {
   /** Pastes [text] into the session's terminal, as a paste: nothing runs until the user says so. */
   public fun paste(id: SessionId, text: String): LemonadeCodeResult<Unit, SessionError>
 
-  /** Stops the session and all of its sub-sessions. */
+  /** Stops the session and all of its sub-sessions. An archived one, with those archived with it, is let go of for good. */
   public fun close(id: SessionId)
+
+  /** Sessions put away with [archive], the most recently archived first. Nothing runs in them. */
+  public val archived: StateFlow<List<ArchivedSession>>
+
+  /**
+   * Puts the session and its sub-sessions away: their terminals end, and whatever runs in them, but
+   * they're kept, across launches too, for [unarchive] to bring back. No worktree or branch is touched.
+   * A sub-session still starting then isn't created: [startSubSession] fails with
+   * [SessionError.ParentArchived].
+   */
+  public fun archive(id: SessionId)
+
+  /**
+   * Brings an archived session and its sub-sessions back where they were, each in a fresh shell in its
+   * folder with the output it showed, and an agent that was running resumed, as at launch. A session
+   * whose folder has gone since starts at home instead, without its agent, and says so. Each leaves
+   * the archive only as it comes back: a sub-session that can't stays archived, with those under it,
+   * and is named in [Unarchived.stillArchived]. If the first can't, nothing changes; that's
+   * [SessionError.ParentArchived] when the session it goes under was archived as it started.
+   */
+  public suspend fun unarchive(id: SessionId): LemonadeCodeResult<Unarchived, SessionError>
 
   /**
    * The linked git worktree the session's folder is in, with whether it has changes now. Null in a
-   * repository's main checkout, outside git, and when git can't tell.
+   * repository's main checkout, outside git, and when git can't tell. Archived sessions have theirs too.
    */
   public suspend fun worktreeOf(id: SessionId): LinkedWorktree?
 
@@ -97,6 +120,18 @@ public interface SessionService {
   }
 }
 
+/**
+ * An archived session back in the tree as [id]. [missingFolders] are the folders that had gone, by
+ * the session that was in them; those sessions started at home instead. [stillArchived] are the
+ * sub-sessions that couldn't come back, their shell failing or their parent archived again, and
+ * those under them: they stay archived.
+ */
+public data class Unarchived(
+  val id: SessionId,
+  val missingFolders: Map<SessionId, String> = emptyMap(),
+  val stillArchived: List<SessionId> = emptyList(),
+)
+
 public sealed interface SessionError {
   public data class FolderNotFound(val path: String) : SessionError
 
@@ -116,4 +151,10 @@ public sealed interface SessionError {
   public data class InvalidBranch(val branch: String) : SessionError
 
   public data class LaunchFailed(val message: String) : SessionError
+
+  /**
+   * The session it goes under was archived while its shell started, so it didn't join the open
+   * sessions: a new sub-session wasn't created, and one coming back from the archive stayed there.
+   */
+  public data object ParentArchived : SessionError
 }

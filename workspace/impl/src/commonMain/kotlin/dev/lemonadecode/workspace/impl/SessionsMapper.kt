@@ -1,5 +1,6 @@
 package dev.lemonadecode.workspace.impl
 
+import dev.lemonadecode.domain.session.ArchivedSession
 import dev.lemonadecode.domain.session.Session
 import dev.lemonadecode.domain.session.SessionId
 import dev.lemonadecode.domain.session.SessionOrder
@@ -12,6 +13,8 @@ import dev.lemonadecode.workspace.strings.Res
 import dev.lemonadecode.workspace.strings.session_meta
 import dev.lemonadecode.workspace.strings.tag_sub_session_same_folder
 import dev.lemonadecode.workspace.strings.tag_sub_session_worktree
+import dev.lemonadecode.workspace.uimodel.ArchivedSessionRowModel
+import dev.lemonadecode.workspace.uimodel.ArchivedSessionsModel
 import dev.lemonadecode.workspace.uimodel.HeaderTagIcon
 import dev.lemonadecode.workspace.uimodel.HeaderTagModel
 import dev.lemonadecode.workspace.uimodel.SessionDragModel
@@ -150,6 +153,35 @@ internal object SessionsMapper {
       sessions.forEach { if (it.parentId in result && result.add(it.id)) grew = true }
     }
     return result
+  }
+
+  /**
+   * The session to select once [id] and its sub-sessions leave the list: its parent, else the next
+   * session at its level, else the one before it, else whichever is left. Null when none is.
+   */
+  fun neighbour(sessions: List<Session>, id: SessionId): SessionId? {
+    val session = sessions.firstOrNull { it.id == id } ?: return null
+    val going = subtree(sessions, id)
+    val staying = sessions.filterNot { it.id in going }
+    session.parentId?.let { parent -> staying.firstOrNull { it.id == parent } }?.let { return it.id }
+    val index = sessions.indexOf(session)
+    val level = staying.filter { it.parentId == session.parentId }
+    return (level.firstOrNull { sessions.indexOf(it) > index } ?: level.lastOrNull { sessions.indexOf(it) < index } ?: staying.firstOrNull())?.id
+  }
+
+  /** The Archived section: each archived session as a row, the most recently archived first. Null while there's none. */
+  fun archived(archived: List<ArchivedSession>, open: Boolean, home: String): ArchivedSessionsModel? = archived.takeIf { it.isNotEmpty() }?.let { list ->
+    ArchivedSessionsModel(
+      open = open,
+      rows = list.map { entry ->
+        ArchivedSessionRowModel(
+          id = entry.id.value,
+          name = entry.session.displayName,
+          meta = meta(entry.session, home),
+          subSessionCount = entry.subSessions.size,
+        )
+      },
+    )
   }
 
   /**

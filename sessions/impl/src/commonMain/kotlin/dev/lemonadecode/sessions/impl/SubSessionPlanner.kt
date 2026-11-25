@@ -79,6 +79,21 @@ internal object SubSessionPlanner {
     return sessions.toMutableList().apply { add(index, created) }
   }
 
+  /**
+   * Puts [session] back among its siblings where it was: right before [before] if that's still one of
+   * them, else right after [after] and everything nested under it, else last under its parent, or
+   * last of all for a session without one.
+   */
+  fun insertBack(sessions: List<Session>, session: Session, after: SessionId?, before: SessionId?): List<Session> {
+    val siblings = sessions.filter { it.parentId == session.parentId }
+    val next = siblings.firstOrNull { it.id == before }
+    if (next != null) return sessions.toMutableList().apply { add(sessions.indexOf(next), session) }
+    val previous = siblings.firstOrNull { it.id == after }
+    if (previous != null) return insertUnder(sessions, previous.id, session)
+    val parentId = session.parentId ?: return sessions + session
+    return insertUnder(sessions, parentId, session)
+  }
+
   /** [id] and every session nested under it. */
   fun subtree(sessions: List<Session>, id: SessionId): Set<SessionId> {
     val result = mutableSetOf(id)

@@ -15,6 +15,7 @@ import dev.lemonadecode.domain.review.FileContent
 import dev.lemonadecode.domain.review.FileDiff
 import dev.lemonadecode.domain.review.Review
 import dev.lemonadecode.domain.review.ReviewComment
+import dev.lemonadecode.domain.session.ArchivedSession
 import dev.lemonadecode.domain.session.LinkedWorktree
 import dev.lemonadecode.domain.session.Session
 import dev.lemonadecode.domain.session.SessionId
@@ -33,6 +34,7 @@ import dev.lemonadecode.domain.update.AppVersion
 import dev.lemonadecode.domain.update.UpdateChannel
 import dev.lemonadecode.domain.update.UpdateChecks
 import dev.lemonadecode.domain.update.UpdateState
+import dev.lemonadecode.platform.localization.asLemonadeCodeString
 import dev.lemonadecode.platform.syntax.SyntaxHighlighter
 import dev.lemonadecode.workspace.impl.ClosingSession
 import dev.lemonadecode.workspace.impl.Composer
@@ -54,6 +56,8 @@ import dev.lemonadecode.workspace.impl.showcase.ShowcaseFixtures.comment
 import dev.lemonadecode.workspace.impl.showcase.ShowcaseFixtures.path
 import dev.lemonadecode.workspace.impl.showcase.ShowcaseFixtures.rowOf
 import dev.lemonadecode.workspace.impl.showcase.ShowcaseFixtures.session
+import dev.lemonadecode.workspace.strings.Res
+import dev.lemonadecode.workspace.strings.session_archived
 import dev.lemonadecode.workspace.uimodel.DeviceTab
 import dev.lemonadecode.workspace.uimodel.DevicesWindow
 import dev.lemonadecode.workspace.uimodel.SettingsPage
@@ -142,6 +146,11 @@ public enum class WorkspaceShowcase(
     "6f",
     "Move up and Move down",
     "The menu moves review-2 one place at a time among its siblings, for the rail, which can't be dragged, and for screen readers. It's the last one, so only Move up is on.",
+  ),
+  ArchivedSessions(
+    "6g",
+    "Archived sessions",
+    "Archive in a session's menu puts it away with its sub-sessions: its terminal stops, and it waits under Archived to be restored where it was, or deleted for good.",
   ),
   ;
 
@@ -455,6 +464,30 @@ private fun sceneFor(showcase: WorkspaceShowcase): Scene = when (showcase) {
   WorkspaceShowcase.SettingsSounds -> settingsScene(SettingsPage.Sounds, update = UpdateState.None)
   WorkspaceShowcase.DraggingSession -> draggingScene()
   WorkspaceShowcase.MovingInMenu -> treeScene(sessionMenu = SessionId("r2"))
+  WorkspaceShowcase.ArchivedSessions -> treeScene(sessions = treeSessions.filterNot { it.id.value == "r2" }).let { scene ->
+    val view = scene.input.view.copy(archivedOpen = true, toast = Res.string.session_archived.asLemonadeCodeString("review-2"))
+    scene.copy(input = scene.input.copy(view = view, archived = archivedSessions))
+  }
+}
+
+/**
+ * What the Archived section holds, the most recently archived first: review-2 from the tree, a
+ * worktree's session with the two sub-sessions archived with it, and a plain shell.
+ */
+private val archivedSessions: List<ArchivedSession> get() {
+  val worktree = "$Repo.worktrees/flaky-login"
+  fun archived(session: Session) = session.copy(status = SessionStatus.Shell)
+  return listOf(
+    ArchivedSession(archived(session("r2", "review-2", parent = "ar", origin = SessionOrigin.Review(1)))),
+    ArchivedSession(
+      archived(session("fl", "flaky-login", branch = "fix/flaky-login", folder = worktree)),
+      subSessions = listOf(
+        archived(session("f1", "sub-1", parent = "fl", branch = "fix/flaky-login", folder = worktree)),
+        archived(session("f2", "review-1", parent = "fl", branch = "fix/flaky-login", folder = worktree, origin = SessionOrigin.Review(2))),
+      ),
+    ),
+    ArchivedSession(session("df", "dotfiles", SessionStatus.Shell, branch = null, folder = "${ShowcaseFixtures.Home}/dotfiles")),
+  )
 }
 
 /** checkout-flake, with a sub-session of its own, picked up to go after scratch. */

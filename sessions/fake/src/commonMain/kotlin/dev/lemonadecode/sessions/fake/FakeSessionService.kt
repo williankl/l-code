@@ -1,5 +1,6 @@
 package dev.lemonadecode.sessions.fake
 
+import dev.lemonadecode.domain.session.ArchivedSession
 import dev.lemonadecode.domain.session.LinkedWorktree
 import dev.lemonadecode.domain.session.Session
 import dev.lemonadecode.domain.session.SessionId
@@ -12,6 +13,8 @@ import dev.lemonadecode.domain.session.SubSessionPlan
 import dev.lemonadecode.platform.core.LemonadeCodeResult
 import dev.lemonadecode.sessions.api.SessionError
 import dev.lemonadecode.sessions.api.SessionService
+import dev.lemonadecode.sessions.api.Unarchived
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
@@ -32,6 +35,9 @@ public class FakeSessionService(initial: List<Session> = emptyList()) : SessionS
   /** Every move: the session and the place among its siblings it was asked to go to. */
   public val moved: MutableList<Pair<SessionId, Int>> = mutableListOf()
   public var openResult: LemonadeCodeResult<SessionId, SessionError>? = null
+
+  /** What [startSubSession] answers, once recorded; null starts it. */
+  public var startResult: LemonadeCodeResult<SessionId, SessionError>? = null
 
   /** Sessions [restore] brings back; recorded as restored once it runs. */
   public var saved: List<Session> = emptyList()
@@ -139,6 +145,7 @@ public class FakeSessionService(initial: List<Session> = emptyList()) : SessionS
     branch: String?,
   ): LemonadeCodeResult<SessionId, SessionError> {
     started += StartCall(parentId, location, initialInput, origin, namePrefix, branch)
+    startResult?.let { return it }
     val parent = state.value.firstOrNull { it.id == parentId } ?: return LemonadeCodeResult.failure(SessionError.UnknownSession)
     val plan = planSubSession(parentId, location, namePrefix, branch) ?: return LemonadeCodeResult.failure(SessionError.NotARepository)
     if (plan.createsBranch && plan.branch in existingBranches) return LemonadeCodeResult.failure(SessionError.BranchExists(plan.branch.orEmpty()))
@@ -170,16 +177,71 @@ public class FakeSessionService(initial: List<Session> = emptyList()) : SessionS
 
   override fun close(id: SessionId) {
     closed += id
-    state.update { list ->
-      // Sub-sessions always come after their parent, so one pass finds every level.
-      val doomed = mutableSetOf(id)
-      list.forEach { if (it.parentId in doomed) doomed += it.id }
-      list.filterNot { it.id in doomed }
+    if (archivedState.value.any { it.id == id }) {
+      archivedState.update { list -> list.filterNot { it.id == id } }
+      return
     }
+    state.update { list -> list.filterNot { it.id in subtree(list, id) } }
+  }
+
+  /** [id] and its sub-sessions: they always come after their parent, so one pass finds every level. */
+  private fun subtree(list: List<Session>, id: SessionId): Set<SessionId> {
+    val found = mutableSetOf(id)
+    list.forEach { if (it.parentId in found) found += it.id }
+    return found
+  }
+
+  private val archivedState = MutableStateFlow<List<ArchivedSession>>(emptyList())
+  override val archived: StateFlow<List<ArchivedSession>> = archivedState
+
+  public val archivedIds: MutableList<SessionId> = mutableListOf()
+  public val unarchivedIds: MutableList<SessionId> = mutableListOf()
+
+  /** Folders [unarchive] finds gone, which it reports instead of bringing their sessions back there. */
+  public var missingFolders: Set<String> = emptySet()
+
+  /** What [unarchive] answers; null brings the session back. */
+  public var unarchiveResult: LemonadeCodeResult<Unarchived, SessionError>? = null
+
+  /** While set, [unarchive] waits for it before doing anything, as a slow restore would. */
+  public var unarchiveGate: CompletableDeferred<Unit>? = null
+
+  /** Takes the session and its sub-sessions out of the list, the most recently archived first, with no status. */
+  override fun archive(id: SessionId) {
+    archivedIds += id
+    val list = state.value
+    val going = subtree(list, id)
+    val sessions = list.filter { it.id in going }.map { it.copy(status = SessionStatus.Shell) }
+    if (sessions.isEmpty()) return
+    state.value = list.filterNot { it.id in going }
+    archivedState.update { listOf(ArchivedSession(sessions.first(), sessions.drop(1))) + it }
+  }
+
+  /** Sessions whose shell [unarchive] can't start: they, and those under them, stay archived where they were. */
+  public var failingToStart: Set<SessionId> = emptySet()
+
+  /** Puts the sessions back last, under the parent if it's there; a folder in [missingFolders] comes back at home. */
+  override suspend fun unarchive(id: SessionId): LemonadeCodeResult<Unarchived, SessionError> {
+    unarchivedIds += id
+    unarchiveGate?.await()
+    unarchiveResult?.let { return it }
+    val archive = archivedState.value.firstOrNull { it.id == id } ?: return LemonadeCodeResult.failure(SessionError.UnknownSession)
+    val stayed = mutableSetOf<SessionId>()
+    archive.sessions.forEach { if (it.id in failingToStart || it.parentId in stayed) stayed += it.id }
+    if (id in stayed) return LemonadeCodeResult.failure(SessionError.LaunchFailed("no shell"))
+    val kept = archive.sessions.filter { it.id in stayed }
+    archivedState.update { list -> list.mapNotNull { if (it !== archive) it else kept.takeIf(List<Session>::isNotEmpty)?.let { left -> ArchivedSession(left.first(), left.drop(1)) } } }
+    val missing = archive.sessions.filter { it.id !in stayed && it.workingDirectory in missingFolders }.associate { it.id to it.workingDirectory }
+    val back = archive.sessions.filterNot { it.id in stayed }.map { session ->
+      val moved = if (session.id in missing) session.copy(workingDirectory = homeFolder) else session
+      if (session.id == id && state.value.none { it.id == session.parentId }) moved.copy(parentId = null, placement = SessionPlacement.Root) else moved
+    }
+    state.update { it + back }
+    return LemonadeCodeResult.success(Unarchived(id, missing, kept.map { it.id }))
   }
 
   override suspend fun worktreeOf(id: SessionId): LinkedWorktree? {
-    val session = state.value.firstOrNull { it.id == id } ?: return null
+    val session = (state.value + archivedState.value.flatMap { it.sessions }).firstOrNull { it.id == id } ?: return null
     return worktrees.firstOrNull { it.contains(session.workingDirectory) }
   }
 

@@ -9,6 +9,7 @@ import dev.lemonadecode.workspace.strings.Res
 import dev.lemonadecode.workspace.strings.error_folder_missing
 import dev.lemonadecode.workspace.strings.error_launch
 import dev.lemonadecode.workspace.strings.error_not_repo
+import dev.lemonadecode.workspace.strings.error_parent_archived
 import dev.lemonadecode.workspace.strings.error_preview
 import dev.lemonadecode.workspace.strings.error_send
 import dev.lemonadecode.workspace.strings.error_worktree
@@ -29,6 +30,7 @@ internal object ErrorMessages {
     is SessionError.BranchExists -> Res.string.worktree_branch_taken.asLemonadeCodeString(error.branch)
     is SessionError.InvalidBranch -> Res.string.worktree_branch_invalid.asLemonadeCodeString()
     is SessionError.LaunchFailed -> Res.string.error_launch.asLemonadeCodeString(error.message)
+    SessionError.ParentArchived -> Res.string.error_parent_archived.asLemonadeCodeString()
   }
 
   /** Null when there's nothing worth telling, like sending with no comments. */

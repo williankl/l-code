@@ -26,6 +26,7 @@ import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasScrollToIndexAction
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
@@ -832,8 +833,83 @@ class WorkspaceContentUiTest {
       expect(WorkspaceEvent.StartRenamingSession("d3")) { onNodeWithText("Rename").performClick() }
       expect(WorkspaceEvent.CopiedSessionPath(ShowcaseFixtures.Repo)) { onNodeWithText("Copy folder path").performClick() }
       assertEquals(ShowcaseFixtures.Repo, clipboard.text)
+      onNodeWithText("Stops it, keeps it under Archived").assertExists()
+      expect(WorkspaceEvent.ArchiveSession("d3")) { onNodeWithText("Archive").performClick() }
       expect(WorkspaceEvent.CloseSession("d3")) { onNodeWithText("Close session").performClick() }
     }
+  }
+
+  @Test
+  fun `the archived section folds, and restores or deletes each session without selecting it`() = show(WorkspaceShowcase.ArchivedSessions) {
+    onNodeWithText("ARCHIVED").assertExists()
+    onNodeWithText("With 2 sub-sessions").assertExists()
+    onNodeWithText("zsh · ~/dotfiles").assertExists()
+    expect(WorkspaceEvent.RestoreArchivedSession("fl")) { onNodeWithContentDescription("Restore flaky-login").performClick() }
+    expect(WorkspaceEvent.DeleteArchivedSession("df")) { onNodeWithContentDescription("Delete dotfiles for good").performClick() }
+    events.clear()
+    onNodeWithText("dotfiles").performClick()
+    waitForIdle()
+    assertEquals(emptyList(), events, "nothing runs in an archived session to select")
+    expect(WorkspaceEvent.ToggleArchivedSessions) { onNodeWithContentDescription("Hide archived sessions").performClick() }
+  }
+
+  @Test
+  fun `a folded archived section shows only its header, and nothing archived shows no section`() {
+    show(WorkspaceShowcase.ArchivedSessions, edit = { it.copy(sessions = it.sessions.copy(archived = it.sessions.archived?.copy(open = false))) }) {
+      onNodeWithContentDescription("Show archived sessions").assert(hasText("ARCHIVED") and hasText("3"))
+      onNodeWithText("dotfiles").assertDoesNotExist()
+      expect(WorkspaceEvent.ToggleArchivedSessions) { onNodeWithContentDescription("Show archived sessions").performClick() }
+    }
+    show(WorkspaceShowcase.SessionTree) {
+      onNodeWithText("ARCHIVED").assertDoesNotExist()
+    }
+  }
+
+  @Test
+  fun `with every session archived, the main panel says where they went`() = show(
+    WorkspaceShowcase.ArchivedSessions,
+    edit = { it.copy(content = WorkspaceContentModel.NoSessions, header = null, viewSwitcher = null, toast = null) },
+  ) {
+    onNodeWithText("No open sessions").assertExists()
+    onNodeWithText("Open a new terminal, or restore an archived session from the sidebar.").assertExists()
+    expect(WorkspaceEvent.NewSession) { onNodeWithText("New terminal").performClick() }
+  }
+
+  @Test
+  fun `with the Archived section open, open sessions still drag among themselves, and archived ones don't drag`() = show(WorkspaceShowcase.ArchivedSessions) {
+    val scratch = onNode(hasText("scratch") and hasAnyAncestor(hasContentDescription("Sessions")))
+    val from = scratch.fetchSemanticsNode().boundsInRoot.center
+    val to = onNodeWithText("checkout-flake").fetchSemanticsNode().boundsInRoot.center
+    events.clear()
+    scratch.performMouseInput {
+      moveTo(center)
+      press()
+      moveTo(center + Offset(0f, to.y - from.y), delayMillis = 50)
+      release()
+    }
+    waitForIdle()
+    assertEquals(listOf(WorkspaceEvent.StartSessionDrag("sc"), WorkspaceEvent.DragSession("sc", 1), WorkspaceEvent.DropSession("sc")), events)
+
+    // Pulled down over the archived ones, it goes no further than the last of its siblings: where it is.
+    events.clear()
+    scratch.performMouseInput {
+      moveTo(center)
+      press()
+      moveBy(Offset(0f, 2_000f), delayMillis = 50)
+      release()
+    }
+    waitForIdle()
+    assertEquals(listOf(WorkspaceEvent.StartSessionDrag("sc"), WorkspaceEvent.DropSession("sc")), events)
+
+    events.clear()
+    onNodeWithText("dotfiles").performMouseInput {
+      moveTo(center)
+      press()
+      moveBy(Offset(0f, -300f), delayMillis = 50)
+      release()
+    }
+    waitForIdle()
+    assertEquals(emptyList(), events, "an archived row isn't picked up")
   }
 
   @Test

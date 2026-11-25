@@ -185,6 +185,39 @@
   </plurals>
   <string name="error_worktree_delete">Não foi possível eliminar a worktree %1$s: %2$s</string>
 
+  <!-- Archived sessions: put away from the session menu, kept under Archived to restore or delete -->
+  <string name="session_archive">Arquivar</string>
+  <string name="session_archive_detail">Para-a e guarda-a em Arquivadas</string>
+  <string name="session_archive_action">Arquivar sessão</string>
+  <string name="session_archived">%1$s arquivada</string>
+  <string name="archived_title">Arquivadas</string>
+  <string name="archived_show">Mostrar sessões arquivadas</string>
+  <string name="archived_hide">Ocultar sessões arquivadas</string>
+  <plurals name="archived_sub_sessions">
+    <item quantity="one">Com %1$d subsessão</item>
+    <item quantity="many">Com %1$d subsessões</item>
+    <item quantity="other">Com %1$d subsessões</item>
+  </plurals>
+  <string name="archived_restore">Restaurar</string>
+  <string name="archived_restore_session">Restaurar %1$s</string>
+  <string name="archived_delete">Eliminar de vez</string>
+  <string name="archived_delete_session">Eliminar %1$s de vez</string>
+  <string name="archived_restored_at_home">%2$s já não existe, por isso %1$s reabriu na tua pasta pessoal</string>
+  <plurals name="archived_restored_at_home_many">
+    <item quantity="one">%1$d pasta já não existe, por isso a sua sessão reabriu na tua pasta pessoal</item>
+    <item quantity="many">%1$d pastas já não existem, por isso as suas sessões reabriram na tua pasta pessoal</item>
+    <item quantity="other">%1$d pastas já não existem, por isso as suas sessões reabriram na tua pasta pessoal</item>
+  </plurals>
+  <plurals name="archived_some_stayed">
+    <item quantity="one">%1$d subsessão não conseguiu voltar e continua em Arquivadas</item>
+    <item quantity="many">%1$d subsessões não conseguiram voltar e continuam em Arquivadas</item>
+    <item quantity="other">%1$d subsessões não conseguiram voltar e continuam em Arquivadas</item>
+  </plurals>
+  <string name="archived_parent_archived">%1$s continua em Arquivadas porque a sessão de que depende foi arquivada entretanto</string>
+  <string name="error_parent_archived">A sessão foi arquivada enquanto a sua subsessão arrancava, por isso a subsessão não foi criada.</string>
+  <string name="no_open_sessions_title">Não há sessões abertas</string>
+  <string name="no_open_sessions_detail">Abre um novo terminal ou restaura uma sessão arquivada na barra lateral.</string>
+
   <!-- New session -->
   <string name="action_new_terminal">Novo terminal</string>
   <string name="no_sessions_title">Ainda não há sessões</string>

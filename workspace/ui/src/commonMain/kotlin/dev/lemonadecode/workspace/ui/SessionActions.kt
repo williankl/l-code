@@ -55,6 +55,9 @@ import dev.lemonadecode.platform.designsystem.rememberLastNonNull
 import dev.lemonadecode.workspace.strings.Res
 import dev.lemonadecode.workspace.strings.action_cancel
 import dev.lemonadecode.workspace.strings.action_create_sub_session
+import dev.lemonadecode.workspace.strings.session_archive
+import dev.lemonadecode.workspace.strings.session_archive_action
+import dev.lemonadecode.workspace.strings.session_archive_detail
 import dev.lemonadecode.workspace.strings.session_close
 import dev.lemonadecode.workspace.strings.session_copy_path
 import dev.lemonadecode.workspace.strings.session_move_down
@@ -81,6 +84,7 @@ import org.jetbrains.compose.resources.stringResource
 internal class SessionActionLabels(
   val options: String,
   val rename: String,
+  val archive: String,
   val close: String,
 )
 
@@ -88,6 +92,7 @@ internal class SessionActionLabels(
 internal fun sessionActionLabels(): SessionActionLabels = SessionActionLabels(
   options = stringResource(Res.string.session_options),
   rename = stringResource(Res.string.session_rename_action),
+  archive = stringResource(Res.string.session_archive_action),
   close = stringResource(Res.string.session_close),
 )
 
@@ -111,6 +116,10 @@ internal fun Modifier.sessionActions(
     CustomAccessibilityAction(labels.rename) {
       menuAt.value = null
       onEvent(WorkspaceEvent.StartRenamingSession(sessionId))
+      true
+    },
+    CustomAccessibilityAction(labels.archive) {
+      onEvent(WorkspaceEvent.ArchiveSession(sessionId))
       true
     },
     CustomAccessibilityAction(labels.close) {
@@ -246,8 +255,15 @@ private fun SessionMenuItems(
       onClick = { onEvent(WorkspaceEvent.StartNamingWorktree(id)) },
     )
   }
-  // Last, and apart: like a middle click, it ends the session and its sub-sessions.
+  // Last, and apart: both end the session and its sub-sessions; Archive keeps them to bring back,
+  // Close, like a middle click, doesn't.
   ContextMenuDivider()
+  ContextMenuItem(
+    label = stringResource(Res.string.session_archive),
+    icon = LemonadeIcons.Package,
+    detail = stringResource(Res.string.session_archive_detail),
+    onClick = { onEvent(WorkspaceEvent.ArchiveSession(id)) },
+  )
   ContextMenuItem(
     label = stringResource(Res.string.session_close),
     icon = LemonadeIcons.Trash,

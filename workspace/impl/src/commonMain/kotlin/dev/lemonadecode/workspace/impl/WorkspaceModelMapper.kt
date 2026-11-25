@@ -2,6 +2,7 @@ package dev.lemonadecode.workspace.impl
 
 import dev.lemonadecode.domain.review.CommentStatus
 import dev.lemonadecode.domain.review.Review
+import dev.lemonadecode.domain.session.ArchivedSession
 import dev.lemonadecode.domain.session.BranchName
 import dev.lemonadecode.domain.session.Session
 import dev.lemonadecode.domain.session.SessionOrder
@@ -73,6 +74,8 @@ internal data class WorkspaceInput(
   val nowMillis: Long = 0,
   /** The computer's own language, which Match system follows. */
   val systemLanguage: LanguageOption = LanguageOption.English,
+  /** Sessions put away under Archived, the most recently archived first. */
+  val archived: List<ArchivedSession> = emptyList(),
 )
 
 /** Turns domain state and the workspace's UI state into the immutable Model the UI draws. */
@@ -114,6 +117,7 @@ internal object WorkspaceModelMapper {
             siblings = SessionOrder.siblings(sessions, session.id),
           )
         },
+        archived = SessionsMapper.archived(input.archived.filterNot { it.id in view.restoring }, open = view.archivedOpen, home = input.homeDirectory),
       ),
       header = selected?.let { SessionsMapper.header(it, parent, view.navigationStyle) },
       viewSwitcher = selected?.let {

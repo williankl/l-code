@@ -393,6 +393,29 @@ class WorkspaceFlowUiTest {
   }
 
   @Test
+  fun `a session archived from its menu waits under Archived and comes back where it was`() {
+    sessions.setSessions(listOf(ShowcaseFixtures.session("ar", "api-ratelimit"), ShowcaseFixtures.session("cf", "checkout-flake")))
+    flow {
+      onNodeWithText("checkout-flake").performMouseInput { rightClick(center) }
+      waitFor(hasText("Archive"))
+      onNodeWithText("Archive").performClick()
+      waitFor(hasContentDescription("Show archived sessions"))
+      // Folded at first: the session isn't listed anywhere, but the toast says where it went.
+      onNode(hasText("checkout-flake") and hasAnyAncestor(hasContentDescription("Sessions"))).assertDoesNotExist()
+      onNodeWithText("Archived checkout-flake").assertExists()
+      assertEquals(listOf(SessionId("cf")), sessions.archivedIds)
+      assertTrue(sessions.closed.isEmpty())
+
+      onNodeWithContentDescription("Show archived sessions").performClick()
+      waitFor(hasContentDescription("Restore checkout-flake"))
+      onNodeWithContentDescription("Restore checkout-flake").performClick()
+      waitFor(hasTestTag("terminal:cf"))
+      waitUntil(timeoutMillis = 5_000) { onAllNodes(hasContentDescription("Hide archived sessions")).fetchSemanticsNodes().isEmpty() }
+      assertEquals(listOf(SessionId("cf")), sessions.unarchivedIds)
+    }
+  }
+
+  @Test
   fun `a device's log narrows to the apps ticked, and goes back to the app in front`() {
     withRepository()
     runBlocking { settings.update { it.copy(mobilePlugin = true) } }

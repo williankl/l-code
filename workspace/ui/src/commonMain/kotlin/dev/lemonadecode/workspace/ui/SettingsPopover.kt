@@ -80,6 +80,8 @@ import dev.lemonadecode.platform.localization.resolve
 import dev.lemonadecode.workspace.strings.Res
 import dev.lemonadecode.workspace.strings.animations_description
 import dev.lemonadecode.workspace.strings.animations_title
+import dev.lemonadecode.workspace.strings.copy_on_select_description
+import dev.lemonadecode.workspace.strings.copy_on_select_title
 import dev.lemonadecode.workspace.strings.keep_awake_description
 import dev.lemonadecode.workspace.strings.keep_awake_title
 import dev.lemonadecode.workspace.strings.language_english
@@ -179,6 +181,7 @@ internal fun SettingsPopover(
               SettingsPage.List -> Unit
               SettingsPage.Appearance -> AppearancePage(settings = settings, onEvent = onEvent)
               SettingsPage.Language -> LanguagePage(settings = settings, onEvent = onEvent)
+              SettingsPage.CopyOnSelect -> CopyOnSelectPage(settings = settings, onEvent = onEvent)
               SettingsPage.KeepAwake -> KeepAwakePage(settings = settings, onEvent = onEvent)
               SettingsPage.Sounds -> SoundsPage(settings = settings, onEvent = onEvent)
               SettingsPage.Plugins -> PluginsPage(settings = settings, onEvent = onEvent)
@@ -232,6 +235,12 @@ private fun ColumnScope.SettingsList(
       value = if (settings.language == LanguageOption.System) stringResource(Res.string.language_match_system) else settings.language.nativeName,
       flag = settings.language.flag,
       onClick = { onEvent(WorkspaceEvent.OpenSettingsPage(SettingsPage.Language)) },
+    )
+    SettingsRow(
+      icon = LemonadeIcons.Copy,
+      label = stringResource(Res.string.copy_on_select_title),
+      value = stringResource(if (settings.copyOnSelect) Res.string.value_on else Res.string.value_off),
+      onClick = { onEvent(WorkspaceEvent.OpenSettingsPage(SettingsPage.CopyOnSelect)) },
     )
     SettingsRow(
       icon = LemonadeIcons.Lightning,
@@ -311,6 +320,7 @@ private fun SettingsPageHeader(
   val title = when (page) {
     SettingsPage.List, SettingsPage.Appearance -> Res.string.settings_appearance
     SettingsPage.Language -> Res.string.settings_language
+    SettingsPage.CopyOnSelect -> Res.string.copy_on_select_title
     SettingsPage.KeepAwake -> Res.string.keep_awake_title
     SettingsPage.Sounds -> Res.string.settings_sounds
     SettingsPage.Plugins -> Res.string.settings_plugins
@@ -404,6 +414,30 @@ private fun LanguagePage(
         }
       }
     }
+  }
+}
+
+@Composable
+private fun CopyOnSelectPage(
+  settings: SettingsModel,
+  onEvent: (WorkspaceEvent) -> Unit,
+) {
+  val colors = LemonadeTheme.colors
+  Row(
+    horizontalArrangement = Arrangement.spacedBy(LemonadeTheme.spaces.spacing300),
+    modifier = Modifier.toggleable(value = settings.copyOnSelect, role = Role.Switch, onValueChange = { onEvent(WorkspaceEvent.SetCopyOnSelect(it)) }),
+  ) {
+    LemonadeUi.Text(
+      text = stringResource(Res.string.copy_on_select_description),
+      textStyle = LemonadeTheme.typography.bodySmallRegular,
+      color = colors.content.contentSecondary,
+      modifier = Modifier.weight(1f),
+    )
+    LemonadeUi.Switch(
+      checked = settings.copyOnSelect,
+      onCheckedChange = { onEvent(WorkspaceEvent.SetCopyOnSelect(it)) },
+      modifier = Modifier.padding(top = 2.dp),
+    )
   }
 }
 

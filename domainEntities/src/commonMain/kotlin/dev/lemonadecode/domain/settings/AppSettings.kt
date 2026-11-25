@@ -38,4 +38,6 @@ public data class AppSettings(
   val devicesPanelWideWidth: Int = 760,
   /** Panels, menus and lists open and move with motion; off, every change is instant. */
   val animations: Boolean = true,
+  /** Selecting text in the terminal copies it at once, without the indentation its lines share. */
+  val copyOnSelect: Boolean = false,
 )

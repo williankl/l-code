@@ -340,6 +340,7 @@ class WorkspaceContentUiTest {
     onNodeWithText("1.9.0 available").assertExists()
     expect(WorkspaceEvent.OpenSettingsPage(SettingsPage.Appearance)) { onNodeWithText("Appearance").performClick() }
     expect(WorkspaceEvent.OpenSettingsPage(SettingsPage.Language)) { onNodeWithText("Language").performClick() }
+    expect(WorkspaceEvent.OpenSettingsPage(SettingsPage.CopyOnSelect)) { onNodeWithText("Copy on select").performClick() }
     expect(WorkspaceEvent.OpenSettingsPage(SettingsPage.KeepAwake)) { onNodeWithText("Keep awake while sessions work").performClick() }
     expect(WorkspaceEvent.OpenSettingsPage(SettingsPage.Sounds)) { onNodeWithText("Sounds").performClick() }
     expect(WorkspaceEvent.OpenSettingsPage(SettingsPage.Plugins)) { onNodeWithText("Plugins").performClick() }
@@ -400,6 +401,20 @@ class WorkspaceContentUiTest {
     play.assertCountEquals(2)
     expect(WorkspaceEvent.PlayStatusSound(StatusSound.Finished)) { play[0].performClick() }
     expect(WorkspaceEvent.PlayStatusSound(StatusSound.NeedsInput)) { play[1].performClick() }
+  }
+
+  @Test
+  fun `the copy on select row says whether it's on`() {
+    show(WorkspaceShowcase.SettingsList) { onNode(hasText("Copy on select") and hasText("Off")).assertExists() }
+    show(WorkspaceShowcase.SettingsList, edit = { it.copy(settings = it.settings.copy(copyOnSelect = true)) }) {
+      onNode(hasText("Copy on select") and hasText("On")).assertExists()
+    }
+  }
+
+  @Test
+  fun `the copy on select page turns it on`() = show(WorkspaceShowcase.SettingsList, edit = { it.copy(settings = it.settings.copy(page = SettingsPage.CopyOnSelect)) }) {
+    onNodeWithText("Selecting text in the terminal copies it right away", substring = true).assertExists()
+    expect(WorkspaceEvent.SetCopyOnSelect(true)) { onNode(isToggleable()).performClick() }
   }
 
   @Test

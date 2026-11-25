@@ -22,6 +22,7 @@ internal data class SettingsRecord(
   val devicesPanelWidth: Int? = null,
   val devicesPanelWideWidth: Int? = null,
   val animations: Boolean? = null,
+  val copyOnSelect: Boolean? = null,
 )
 
 internal fun SettingsRecord.toDomain(): AppSettings {
@@ -39,6 +40,7 @@ internal fun SettingsRecord.toDomain(): AppSettings {
     devicesPanelWidth = devicesPanelWidth?.takeIf { it > 0 } ?: defaults.devicesPanelWidth,
     devicesPanelWideWidth = devicesPanelWideWidth?.takeIf { it > 0 } ?: defaults.devicesPanelWideWidth,
     animations = animations ?: defaults.animations,
+    copyOnSelect = copyOnSelect ?: defaults.copyOnSelect,
   )
 }
 
@@ -55,4 +57,5 @@ internal fun AppSettings.toRecord(): SettingsRecord = SettingsRecord(
   devicesPanelWidth = devicesPanelWidth,
   devicesPanelWideWidth = devicesPanelWideWidth,
   animations = animations,
+  copyOnSelect = copyOnSelect,
 )

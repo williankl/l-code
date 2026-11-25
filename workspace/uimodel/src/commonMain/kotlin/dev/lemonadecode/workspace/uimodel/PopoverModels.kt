@@ -6,7 +6,7 @@ import dev.lemonadecode.platform.localization.LemonadeCodeString
 public enum class ThemeOption { Dark, Light, System }
 
 /** The settings popover shows its list, or one item's own page. */
-public enum class SettingsPage { List, Appearance, Language, KeepAwake, Sounds, Plugins, Updates, ImportSessions }
+public enum class SettingsPage { List, Appearance, Language, CopyOnSelect, KeepAwake, Sounds, Plugins, Updates, ImportSessions }
 
 /** The sounds Settings › Sounds lets you hear: one ding when an agent finishes, two when it needs input. */
 public enum class StatusSound { Finished, NeedsInput }
@@ -38,6 +38,8 @@ public data class SettingsModel(
   val updates: UpdatesModel = UpdatesModel.Unknown,
   /** Panels, menus and lists open and move with motion. */
   val animations: Boolean = true,
+  /** Selecting text in the terminal copies it at once. */
+  val copyOnSelect: Boolean = false,
   val imports: ImportSessionsModel = ImportSessionsModel.Empty,
 )
 

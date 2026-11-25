@@ -114,6 +114,9 @@ public sealed interface WorkspaceEvent {
   /** Settings › Appearance › Animations. */
   public data class SetAnimations(val enabled: Boolean) : WorkspaceEvent
 
+  /** Settings › Copy on select. */
+  public data class SetCopyOnSelect(val enabled: Boolean) : WorkspaceEvent
+
   public data class SetMobilePlugin(val enabled: Boolean) : WorkspaceEvent
 
   public data object CheckForUpdates : WorkspaceEvent

@@ -113,6 +113,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -270,6 +271,18 @@ class WorkspacePresenterTest {
       model.eventSink(WorkspaceEvent.SetAnimations(false))
       awaitItemWhere { !it.settings.animations }
       assertEquals(false, settings.settings.value.animations)
+    }
+  }
+
+  @Test
+  fun `copy on select is off at first, and turning it on is saved`() = runTest {
+    withSession()
+    presenter.test {
+      val model = awaitItem()
+      assertFalse(model.settings.copyOnSelect)
+      model.eventSink(WorkspaceEvent.SetCopyOnSelect(true))
+      awaitItemWhere { it.settings.copyOnSelect }
+      assertEquals(true, settings.settings.value.copyOnSelect)
     }
   }
 

@@ -681,6 +681,7 @@ public class WorkspacePresenter internal constructor(
             },
           )
           is WorkspaceEvent.SetAnimations -> scope.launch { settingsService.update { it.copy(animations = event.enabled) } }
+          is WorkspaceEvent.SetCopyOnSelect -> scope.launch { settingsService.update { it.copy(copyOnSelect = event.enabled) } }
           is WorkspaceEvent.SetMobilePlugin -> {
             if (!event.enabled) update { it.copy(devices = null, deviceWindows = emptyMap()) }
             scope.launch { settingsService.update { it.copy(mobilePlugin = event.enabled) } }

@@ -115,8 +115,8 @@ lost.
 
 <table>
 <tr>
-<td width="50%"><img src="docs/images/new-worktree.png" alt="The New sub-session panel with New worktree picked, showing the folder and branch it will create"></td>
-<td width="50%"><img src="docs/images/close-worktree.png" alt="Closing sub-2 asks whether to delete its worktree too, warning that it has uncommitted changes"></td>
+<td width="50%"><img src="docs/images/new-worktree.png" alt="The New sub-session panel with New worktree picked, showing the name, folder and branch it will create"></td>
+<td width="50%"><img src="docs/images/close-worktree.png" alt="Closing generating-bugs asks whether to delete its worktree too, warning that it has uncommitted changes"></td>
 </tr>
 <tr>
 <td align="center"><sub><b>Branch out</b>, in the same folder or a fresh worktree</sub></td>
@@ -183,7 +183,7 @@ macOS and Windows even the window's title bar follows along.
 <table>
 <tr>
 <td width="33%" valign="top"><img src="docs/images/touch-keep-awake.png" alt="The settings list with Keep awake on, and the Keeping awake tag in the top bar"><br><b>Keep awake</b><br><sub>Your computer won't sleep or lock while an agent is working.</sub></td>
-<td width="33%" valign="top"><img src="docs/images/touch-session-menu.png" alt="The right-click menu of a session"><br><b>Right-click menu</b><br><sub>Rename a session, copy its folder, branch off from it, or close it.</sub></td>
+<td width="33%" valign="top"><img src="docs/images/touch-session-menu.png" alt="The right-click menu of a session"><br><b>Right-click menu</b><br><sub>Rename a session, copy its folder, move it, branch off from it, archive it or close it.</sub></td>
 <td width="33%" valign="top"><img src="docs/images/touch-update.png" alt="Settings › Updates offering a new version"><br><b>Updates itself</b><br><sub>Update from Settings, and your sessions come right back.</sub></td>
 </tr>
 <tr>
@@ -202,6 +202,12 @@ And a few more:
 
 - 🔁 **Sessions come back.** Quit and reopen: every session returns in the folder it was in, with its
   last output on screen. Claude Code conversations pick up where they left off.
+- ↕️ **Your order.** Drag sessions up and down the sidebar, sub-sessions and all, and they stay
+  that way.
+- 🗃️ **Archive, don't close.** Put a session away with its sub-sessions and bring it back later, right
+  where it was, conversation and all.
+- 🧳 **Coming from herdr?** Settings › Import sessions brings its sessions over, worktrees nested
+  and Claude Code conversations resumed. herdr keeps its own.
 - 🔗 **Clickable links.** Ctrl-click (or ⌘-click) any web address in the terminal to open it.
 - ⌨️ **Every keyboard works.** Accents, dead keys and input methods type just like anywhere else.
 - 📋 **Paths to go.** Select a file's path right in the diff, or copy it with one click.

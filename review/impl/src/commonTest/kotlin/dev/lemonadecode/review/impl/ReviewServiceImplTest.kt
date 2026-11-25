@@ -21,6 +21,7 @@ import dev.lemonadecode.platform.architecture.testing.FakeLemonadeCodeCoroutineD
 import dev.lemonadecode.platform.core.LemonadeCodeResult
 import dev.lemonadecode.platform.core.getOrNull
 import dev.lemonadecode.review.api.ReviewError
+import dev.lemonadecode.sessions.api.SessionError
 import dev.lemonadecode.sessions.api.SessionService
 import dev.lemonadecode.sessions.fake.FakeSessionService
 import kotlinx.coroutines.test.runTest
@@ -167,6 +168,20 @@ class ReviewServiceImplTest {
     assertTrue(call.initialInput.orEmpty().startsWith("Address these review comments on branch feat/rate-limit. Run git diff main first"))
     service.review(id).test {
       assertEquals(CommentStatus.InSubSession(subId!!, "review-1"), awaitItem().comments.single().status)
+      cancelAndIgnoreRemainingEvents()
+    }
+  }
+
+  @Test
+  fun `a sub-session that isn't created, its session archived as it started, leaves the comments unsent`() = runTest {
+    val service = service(backgroundScope)
+    service.refresh(id)
+    val _ = service.addComment(id, NewComment("src/app.ts", LineAnchor(LineSide.New, 2), LineAnchor(LineSide.New, 2), "Use a constant"))
+    sessions.startResult = LemonadeCodeResult.failure(SessionError.ParentArchived)
+
+    assertEquals(LemonadeCodeResult.failure(ReviewError.UnknownSession), service.sendToNewSubSession(id))
+    service.review(id).test {
+      assertEquals(CommentStatus.Unsent, awaitItem().comments.single().status, "nothing pretends they were delivered")
       cancelAndIgnoreRemainingEvents()
     }
   }

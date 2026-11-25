@@ -1,7 +1,9 @@
 package dev.lemonadecode.workspace.impl
 
+import dev.lemonadecode.domain.session.ArchivedSession
 import dev.lemonadecode.domain.session.Session
 import dev.lemonadecode.domain.session.SessionId
+import dev.lemonadecode.domain.session.SessionOrder
 import dev.lemonadecode.domain.session.SessionPlacement
 import dev.lemonadecode.domain.session.SessionStatus
 import dev.lemonadecode.platform.localization.LemonadeCodeString
@@ -11,8 +13,12 @@ import dev.lemonadecode.workspace.strings.Res
 import dev.lemonadecode.workspace.strings.session_meta
 import dev.lemonadecode.workspace.strings.tag_sub_session_same_folder
 import dev.lemonadecode.workspace.strings.tag_sub_session_worktree
+import dev.lemonadecode.workspace.uimodel.ArchivedSessionRowModel
+import dev.lemonadecode.workspace.uimodel.ArchivedSessionsModel
 import dev.lemonadecode.workspace.uimodel.HeaderTagIcon
 import dev.lemonadecode.workspace.uimodel.HeaderTagModel
+import dev.lemonadecode.workspace.uimodel.SessionDragModel
+import dev.lemonadecode.workspace.uimodel.SessionDropModel
 import dev.lemonadecode.workspace.uimodel.SessionHeaderModel
 import dev.lemonadecode.workspace.uimodel.SessionListRowModel
 import dev.lemonadecode.workspace.uimodel.SessionMenuModel
@@ -28,7 +34,14 @@ import dev.lemonadecode.workspace.uimodel.SessionStatus as StatusModel
 
 /** Session list, tiles and header. */
 internal object SessionsMapper {
-  fun navigation(sessions: List<Session>, selected: Session?, style: NavigationStyle, folded: Set<SessionId>, home: String): SessionNavigationModel = when (style) {
+  fun navigation(
+    sessions: List<Session>,
+    selected: Session?,
+    style: NavigationStyle,
+    folded: Set<SessionId>,
+    home: String,
+    drag: SessionDrag?,
+  ): SessionNavigationModel = when (style) {
     NavigationStyle.Flat -> SessionNavigationModel.Flat(
       sessions.map { session ->
         SessionListRowModel(
@@ -41,7 +54,34 @@ internal object SessionsMapper {
         )
       },
     )
-    NavigationStyle.Tree -> SessionNavigationModel.Tree(treeRows(sessions, selected, folded, home))
+    NavigationStyle.Tree -> {
+      val rows = treeRows(sessions, selected, folded, home)
+      SessionNavigationModel.Tree(rows, drag = drag?.let { drag(sessions, rows, it) })
+    }
+  }
+
+  /**
+   * The session being dragged, and the line where letting go would put it: over the sibling it
+   * would go before, or under the last row of the last sibling. None where it already is.
+   */
+  private fun drag(sessions: List<Session>, rows: List<SessionTreeRowModel>, drag: SessionDrag): SessionDragModel? {
+    val id = drag.sessionId
+    val siblings = SessionOrder.siblings(sessions, id)
+    val from = siblings.indexOfFirst { it.id == id }
+    if (from < 0 || rows.none { it.id == id.value }) return null
+    val to = drag.index.coerceIn(0, siblings.lastIndex)
+    val others = siblings.filterNot { it.id == id }
+    val drop = when {
+      to == from -> null
+      to < others.size -> SessionDropModel(rowId = others[to].id.value, below = false)
+      else -> {
+        val last = rows.indexOfFirst { it.id == others.last().id.value }
+        var end = last
+        while (end + 1 < rows.size && rows[end + 1].depth > rows[last].depth) end++
+        SessionDropModel(rowId = rows[end].id, below = true)
+      }
+    }
+    return SessionDragModel(sessionId = id.value, drop = drop)
   }
 
   fun tiles(sessions: List<Session>, selected: Session?): List<SessionTileModel> = sessions.map { session ->
@@ -78,6 +118,7 @@ internal object SessionsMapper {
   /**
    * The right-click menu of [session]. Sub-sessions can be started from it where the list nests
    * them. [renaming] shows the name field; [newWorktree], the field for a new worktree's branch.
+   * It moves the session up or down among its [siblings], it included.
    */
   fun menu(
     session: Session,
@@ -85,6 +126,7 @@ internal object SessionsMapper {
     home: String,
     renaming: Boolean,
     newWorktree: WorktreeBranchModel? = null,
+    siblings: List<Session>,
   ): SessionMenuModel {
     val folder = abbreviateHome(session.workingDirectory, home)
     return SessionMenuModel(
@@ -97,6 +139,8 @@ internal object SessionsMapper {
       worktreeAvailable = session.repositoryRoot != null,
       rename = if (renaming) SessionRenameModel(name = session.displayName, automaticName = session.name) else null,
       newWorktree = newWorktree,
+      canMoveUp = siblings.isNotEmpty() && siblings.first().id != session.id,
+      canMoveDown = siblings.isNotEmpty() && siblings.last().id != session.id,
     )
   }
 
@@ -109,6 +153,35 @@ internal object SessionsMapper {
       sessions.forEach { if (it.parentId in result && result.add(it.id)) grew = true }
     }
     return result
+  }
+
+  /**
+   * The session to select once [id] and its sub-sessions leave the list: its parent, else the next
+   * session at its level, else the one before it, else whichever is left. Null when none is.
+   */
+  fun neighbour(sessions: List<Session>, id: SessionId): SessionId? {
+    val session = sessions.firstOrNull { it.id == id } ?: return null
+    val going = subtree(sessions, id)
+    val staying = sessions.filterNot { it.id in going }
+    session.parentId?.let { parent -> staying.firstOrNull { it.id == parent } }?.let { return it.id }
+    val index = sessions.indexOf(session)
+    val level = staying.filter { it.parentId == session.parentId }
+    return (level.firstOrNull { sessions.indexOf(it) > index } ?: level.lastOrNull { sessions.indexOf(it) < index } ?: staying.firstOrNull())?.id
+  }
+
+  /** The Archived section: each archived session as a row, the most recently archived first. Null while there's none. */
+  fun archived(archived: List<ArchivedSession>, open: Boolean, home: String): ArchivedSessionsModel? = archived.takeIf { it.isNotEmpty() }?.let { list ->
+    ArchivedSessionsModel(
+      open = open,
+      rows = list.map { entry ->
+        ArchivedSessionRowModel(
+          id = entry.id.value,
+          name = entry.session.displayName,
+          meta = meta(entry.session, home),
+          subSessionCount = entry.subSessions.size,
+        )
+      },
+    )
   }
 
   /**

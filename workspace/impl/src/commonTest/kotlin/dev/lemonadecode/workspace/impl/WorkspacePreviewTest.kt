@@ -16,6 +16,7 @@ import dev.lemonadecode.domain.review.PreviewKind
 import dev.lemonadecode.domain.review.Review
 import dev.lemonadecode.domain.review.ReviewComment
 import dev.lemonadecode.domain.session.SessionId
+import dev.lemonadecode.imports.fake.FakeSessionImportService
 import dev.lemonadecode.mobile.fake.FakeMobileService
 import dev.lemonadecode.platform.core.LemonadeCodeResult
 import dev.lemonadecode.platform.presenter.testing.awaitItemWhere
@@ -61,6 +62,7 @@ class WorkspacePreviewTest {
     FakeUpdateService(),
     FakeMobileService(),
     FakeSoundPlayer(),
+    FakeSessionImportService(),
   ) { 0L }
 
   private val logo = FileDiff("art/logo.png", null, FileChange.Modified, "PNG", emptyList(), isBinary = true)

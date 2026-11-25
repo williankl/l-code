@@ -76,6 +76,10 @@ private fun SettingsUpdatesPreview() = ShowcasePreview(WorkspaceShowcase.Setting
 
 @Preview
 @Composable
+private fun SettingsImportPreview() = ShowcasePreview(WorkspaceShowcase.SettingsImport)
+
+@Preview
+@Composable
 private fun DeviceListPreview() = ShowcasePreview(WorkspaceShowcase.DeviceList)
 
 @Preview

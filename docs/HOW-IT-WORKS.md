@@ -118,10 +118,25 @@ running `git worktree add`, so a bad name leaves nothing half-made behind.
 Both share one git history, so the work can be merged back like any branch, but edits in one never
 touch the other.
 
+The sub-session takes the folder's name, `generating-bugs` above, where a sub-session in the same
+folder is numbered `sub-1`, `sub-2` and so on. The check of git's rules for branch names keeps
+spaces, control characters, `\`, `:`, `*`, `?`, `[`, `~` and `^` out of that last part, and keeps it
+from starting with a dot, so it can't be `.` or `..`. It doesn't rule out what only Windows forbids in a folder name, like `"`,
+`<`, `>` and `|` or names such as `con` and `nul`. When a folder by that name is
+already there, like a worktree kept from an earlier sub-session, or another sub-session of the same
+parent goes by it, `-2`, `-3`… is added to the folder and the name alike; the branch stays as typed. A
+name you give the sub-session yourself replaces it, and clearing yours brings it back. Sub-sessions
+saved before keep the names they were saved with.
+
+A session that isn't a sub-session is named after its folder anyway, so one whose agent moves it
+into a worktree of its own, like Claude Code's `.claude/worktrees/<name>`, already shows that
+worktree's name. A sub-session keeps the name it started with wherever its agent goes.
+
 **Closing.** Before a session closes, Lemonade Code asks git about the folder of the session and of
 each sub-session closing with it. A folder is in a *linked* worktree when `git rev-parse --git-dir`
 and `--git-common-dir`, asked from its top-level folder, name different folders; in a repository's
-main checkout they're the same one. A worktree that a session staying open is still in is left out.
+main checkout they're the same one. A worktree that a session staying open, or an archived one, is
+still in is left out.
 If any are left, the dialog asks about them, with what `git status` says about uncommitted changes
 and untracked files.
 
@@ -135,8 +150,9 @@ session stays closed, the worktree stays where it was, and the error banner says
 ## Saving and restoring sessions
 
 When you quit, Lemonade Code saves every session to `sessions.json`, next to your settings: its name,
-its place in the tree, the folder it was in, and the last 1,000 lines it showed. Then it ends
-the sessions and whatever was running in them.
+its place in the tree, the folder it was in, and the last 1,000 lines it showed. They're saved in the
+order the sidebar shows them, each followed by its sub-sessions, so sessions dragged into a new order
+come back in it. Then it ends the sessions and whatever was running in them.
 
 At the next launch each session opens again in a fresh shell in the same folder, with its old output
 above the new prompt. If that folder is gone, it starts at home instead.
@@ -147,6 +163,26 @@ had already quit isn't resumed.
 
 The file is also kept up to date while the app runs, so after a crash your sessions still come back,
 just without their latest output.
+
+**Archived sessions** are kept in the same file. Archiving a session saves it and its sub-sessions
+the same way, with what each terminal showed and the conversation to resume, plus its branch and
+the siblings it sat between, then ends their shells. Nothing starts for them at launch. Restoring
+one opens each again in a fresh shell, the way launch does, and puts it back before the sibling it
+sat before, or after the one it sat after; under its parent if that's open, else at the top. Unlike
+launch, a session whose folder has gone starts at home without resuming its agent, since a Claude
+Code conversation belongs to the folder it was in.
+
+Each session leaves the archive only as it joins the open ones, in the same step, so whatever is
+saved meanwhile, or when the app quits part way, still has every session in one list or the other.
+A sub-session that can't come back stays archived, with those under it, and the error banner says
+so; if the first one can't, the whole archive stays where it was. What's left of an archive that
+stopped part way shows each session left at the top as an archive of its own. While a restore
+runs, its archive's rows are hidden, so it can't be restored or deleted twice.
+
+A session never runs on its own under an archived parent. A new sub-session whose parent is archived
+while its shell starts isn't created, and a review handed to it keeps its comments unsent; one
+coming back from the archive stays archived. A `sessions.json` from before archiving has none, and
+loads as it always did; one that lists a session twice brings it back once.
 
 ## Keep awake
 
@@ -171,7 +207,7 @@ With **Sounds** on, as they are from the start, Lemonade Code listens to every s
 - **→ needs input**, from anything else, plays a double ding, the second a little higher.
 
 A session that just opened, or came back at launch, plays nothing until its status changes. A plain
-shell, an agent quitting and a session that exited play nothing either. When several sessions change
+shell, an agent quitting, a session that exited and an archived one play nothing either. When several sessions change
 within a third of a second, they play one sound, the double ding if any of them needs you.
 
 The dings are drawn in code, a soft bell tone that fades away, and play through Java Sound on a

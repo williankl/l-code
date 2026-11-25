@@ -6,7 +6,7 @@ import dev.lemonadecode.platform.localization.LemonadeCodeString
 public enum class ThemeOption { Dark, Light, System }
 
 /** The settings popover shows its list, or one item's own page. */
-public enum class SettingsPage { List, Appearance, Language, KeepAwake, Sounds, Plugins, Updates }
+public enum class SettingsPage { List, Appearance, Language, KeepAwake, Sounds, Plugins, Updates, ImportSessions }
 
 /** The sounds Settings › Sounds lets you hear: one ding when an agent finishes, two when it needs input. */
 public enum class StatusSound { Finished, NeedsInput }
@@ -38,6 +38,7 @@ public data class SettingsModel(
   val updates: UpdatesModel = UpdatesModel.Unknown,
   /** Panels, menus and lists open and move with motion. */
   val animations: Boolean = true,
+  val imports: ImportSessionsModel = ImportSessionsModel.Empty,
 )
 
 /** Plugins › Mobile. */
@@ -133,6 +134,8 @@ public data class WorktreeBranchModel(
   val name: String,
   /** Where the worktree will be, with `~` for home: a folder named after the branch's last part. */
   val path: String,
+  /** What the sub-session will be called in the list: the folder's name, like `generating-bugs`. */
+  val sessionName: String,
   /** Why the worktree can't be created on this branch; null when it can, or while nothing is typed. */
   val problem: LemonadeCodeString?,
   /** False while the name is blank, or one git won't take or already has. */

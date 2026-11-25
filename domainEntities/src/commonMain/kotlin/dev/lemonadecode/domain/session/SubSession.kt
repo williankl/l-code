@@ -4,6 +4,7 @@ public enum class SubSessionLocation { SameFolder, NewWorktree }
 
 /** What a new sub-session would be, shown before anything is created. */
 public data class SubSessionPlan(
+  /** What the sub-session is called: `sub-1` in the same folder, its folder's name in a new worktree. */
   val name: String,
   val location: SubSessionLocation,
   val workingDirectory: String,

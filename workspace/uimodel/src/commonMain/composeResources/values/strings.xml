@@ -50,6 +50,43 @@
   <string name="plugins_value_none">None on</string>
   <string name="plugins_mobile_status">%1$d Android · %2$d iOS connected</string>
   <string name="plugins_open_devices">Open devices</string>
+  <string name="settings_import">Import sessions</string>
+  <string name="import_intro">Bring sessions over from another tool, with their folders, names and worktrees. Claude Code picks up where it left off. The other tool keeps its own.</string>
+  <string name="import_looking">Looking for sessions…</string>
+  <plurals name="import_found">
+    <item quantity="one">%1$d session found</item>
+    <item quantity="other">%1$d sessions found</item>
+  </plurals>
+  <string name="import_none">No sessions to bring over</string>
+  <string name="import_not_installed">Not installed on this computer</string>
+  <string name="import_unknown_format">Its sessions are saved in a way Lemonade Code doesn’t know yet</string>
+  <string name="import_read_failed">Couldn’t read its sessions</string>
+  <plurals name="import_skipped">
+    <item quantity="one">%1$d saved layout couldn’t be read, so its sessions aren’t listed</item>
+    <item quantity="other">%1$d saved layouts couldn’t be read, so their sessions aren’t listed</item>
+  </plurals>
+  <string name="import_interrupted">The import stopped before it finished. The sessions that opened stay open.</string>
+  <string name="import_running">%1$s is still running. Quit it first, so no conversation is open in both.</string>
+  <string name="import_select_all">Select all</string>
+  <string name="import_select_none">Select none</string>
+  <string name="import_note_worktree">Worktree</string>
+  <string name="import_note_conversation">Claude Code conversation</string>
+  <string name="import_note_worktree_conversation">Worktree · Claude Code conversation</string>
+  <string name="import_already_imported">Already imported</string>
+  <string name="import_folder_missing">Folder no longer exists</string>
+  <plurals name="import_button">
+    <item quantity="one">Import %1$d session</item>
+    <item quantity="other">Import %1$d sessions</item>
+  </plurals>
+  <string name="import_busy">Importing…</string>
+  <plurals name="import_done">
+    <item quantity="one">%1$d session imported</item>
+    <item quantity="other">%1$d sessions imported</item>
+  </plurals>
+  <plurals name="import_some_failed">
+    <item quantity="one">Couldn’t import %1$d session: its folder is gone or its shell didn’t start</item>
+    <item quantity="other">Couldn’t import %1$d sessions: their folders are gone or their shells didn’t start</item>
+  </plurals>
 
   <!-- Settings › Updates -->
   <string name="updates_version">Lemonade Code %1$s</string>
@@ -149,6 +186,8 @@
   <string name="session_name_field">Session name</string>
   <string name="session_copy_path">Copy folder path</string>
   <string name="session_path_copied">Copied %1$s</string>
+  <string name="session_move_up">Move up</string>
+  <string name="session_move_down">Move down</string>
   <string name="session_close">Close session</string>
 
   <!-- Closing a session that leaves worktrees no other session uses -->
@@ -172,6 +211,36 @@
     <item quantity="other">Deleted %1$d worktrees</item>
   </plurals>
   <string name="error_worktree_delete">Couldn’t delete the worktree %1$s: %2$s</string>
+
+  <!-- Archived sessions: put away from the session menu, kept under Archived to restore or delete -->
+  <string name="session_archive">Archive</string>
+  <string name="session_archive_detail">Stops it, keeps it under Archived</string>
+  <string name="session_archive_action">Archive session</string>
+  <string name="session_archived">Archived %1$s</string>
+  <string name="archived_title">Archived</string>
+  <string name="archived_show">Show archived sessions</string>
+  <string name="archived_hide">Hide archived sessions</string>
+  <plurals name="archived_sub_sessions">
+    <item quantity="one">With %1$d sub-session</item>
+    <item quantity="other">With %1$d sub-sessions</item>
+  </plurals>
+  <string name="archived_restore">Restore</string>
+  <string name="archived_restore_session">Restore %1$s</string>
+  <string name="archived_delete">Delete for good</string>
+  <string name="archived_delete_session">Delete %1$s for good</string>
+  <string name="archived_restored_at_home">%2$s is gone, so %1$s came back in your home folder</string>
+  <plurals name="archived_restored_at_home_many">
+    <item quantity="one">%1$d folder is gone, so its session came back in your home folder</item>
+    <item quantity="other">%1$d folders are gone, so their sessions came back in your home folder</item>
+  </plurals>
+  <plurals name="archived_some_stayed">
+    <item quantity="one">%1$d sub-session couldn’t come back and stayed under Archived</item>
+    <item quantity="other">%1$d sub-sessions couldn’t come back and stayed under Archived</item>
+  </plurals>
+  <string name="archived_parent_archived">%1$s stayed under Archived, as the session it goes under was archived meanwhile</string>
+  <string name="error_parent_archived">The session was archived while its sub-session started, so the sub-session wasn’t created.</string>
+  <string name="no_open_sessions_title">No open sessions</string>
+  <string name="no_open_sessions_detail">Open a new terminal, or restore an archived session from the sidebar.</string>
 
   <!-- New session -->
   <string name="action_new_terminal">New terminal</string>

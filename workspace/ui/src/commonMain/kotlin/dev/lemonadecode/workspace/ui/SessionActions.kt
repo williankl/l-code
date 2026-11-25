@@ -55,8 +55,13 @@ import dev.lemonadecode.platform.designsystem.rememberLastNonNull
 import dev.lemonadecode.workspace.strings.Res
 import dev.lemonadecode.workspace.strings.action_cancel
 import dev.lemonadecode.workspace.strings.action_create_sub_session
+import dev.lemonadecode.workspace.strings.session_archive
+import dev.lemonadecode.workspace.strings.session_archive_action
+import dev.lemonadecode.workspace.strings.session_archive_detail
 import dev.lemonadecode.workspace.strings.session_close
 import dev.lemonadecode.workspace.strings.session_copy_path
+import dev.lemonadecode.workspace.strings.session_move_down
+import dev.lemonadecode.workspace.strings.session_move_up
 import dev.lemonadecode.workspace.strings.session_name_field
 import dev.lemonadecode.workspace.strings.session_new_sub_same_folder
 import dev.lemonadecode.workspace.strings.session_new_sub_worktree
@@ -79,6 +84,7 @@ import org.jetbrains.compose.resources.stringResource
 internal class SessionActionLabels(
   val options: String,
   val rename: String,
+  val archive: String,
   val close: String,
 )
 
@@ -86,6 +92,7 @@ internal class SessionActionLabels(
 internal fun sessionActionLabels(): SessionActionLabels = SessionActionLabels(
   options = stringResource(Res.string.session_options),
   rename = stringResource(Res.string.session_rename_action),
+  archive = stringResource(Res.string.session_archive_action),
   close = stringResource(Res.string.session_close),
 )
 
@@ -109,6 +116,10 @@ internal fun Modifier.sessionActions(
     CustomAccessibilityAction(labels.rename) {
       menuAt.value = null
       onEvent(WorkspaceEvent.StartRenamingSession(sessionId))
+      true
+    },
+    CustomAccessibilityAction(labels.archive) {
+      onEvent(WorkspaceEvent.ArchiveSession(sessionId))
       true
     },
     CustomAccessibilityAction(labels.close) {
@@ -204,6 +215,24 @@ private fun SessionMenuItems(
       }
     },
   )
+  // Dragging a tree row does the same. This moves one place at a time, for the rail's tiles, which
+  // can't be dragged, and for assistive technology, which opens the menu through Session options.
+  // The menu stays open on the row as it moves.
+  if (menu.canMoveUp || menu.canMoveDown) {
+    ContextMenuDivider()
+    ContextMenuItem(
+      label = stringResource(Res.string.session_move_up),
+      icon = LemonadeIcons.ArrowUp,
+      enabled = menu.canMoveUp,
+      onClick = { onEvent(WorkspaceEvent.MoveSessionUp(id)) },
+    )
+    ContextMenuItem(
+      label = stringResource(Res.string.session_move_down),
+      icon = LemonadeIcons.ArrowDown,
+      enabled = menu.canMoveDown,
+      onClick = { onEvent(WorkspaceEvent.MoveSessionDown(id)) },
+    )
+  }
   if (menu.canStartSubSession) {
     ContextMenuDivider()
     ContextMenuItem(
@@ -226,8 +255,15 @@ private fun SessionMenuItems(
       onClick = { onEvent(WorkspaceEvent.StartNamingWorktree(id)) },
     )
   }
-  // Last, and apart: like a middle click, it ends the session and its sub-sessions.
+  // Last, and apart: both end the session and its sub-sessions; Archive keeps them to bring back,
+  // Close, like a middle click, doesn't.
   ContextMenuDivider()
+  ContextMenuItem(
+    label = stringResource(Res.string.session_archive),
+    icon = LemonadeIcons.Package,
+    detail = stringResource(Res.string.session_archive_detail),
+    onClick = { onEvent(WorkspaceEvent.ArchiveSession(id)) },
+  )
   ContextMenuItem(
     label = stringResource(Res.string.session_close),
     icon = LemonadeIcons.Trash,
@@ -305,8 +341,8 @@ private fun RenameForm(
 }
 
 /**
- * The branch field the menu turns into for a new worktree, with the folder it will get. Enter or
- * Create starts it, Esc or Cancel closes the menu.
+ * The branch field the menu turns into for a new worktree, with the name and folder it will get.
+ * Enter or Create starts it, Esc or Cancel closes the menu.
  */
 @Composable
 private fun NewWorktreeForm(
@@ -323,6 +359,7 @@ private fun NewWorktreeForm(
   ) {
     Column(verticalArrangement = Arrangement.spacedBy(spaces.spacing100)) {
       WorktreeBranchField(branch = branch, onCreate = create, onCancel = cancel, onEvent = onEvent, modifier = Modifier.fillMaxWidth())
+      WorktreeSessionName(branch.sessionName)
       Mono(text = branch.path, style = LemonadeCodeTheme.typography.codeSmall, color = LemonadeCodeTheme.code.path)
     }
     Row(

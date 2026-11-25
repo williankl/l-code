@@ -52,6 +52,53 @@
   <string name="plugins_value_none">Žiadne zapnuté</string>
   <string name="plugins_mobile_status">Pripojené: %1$d Android · %2$d iOS</string>
   <string name="plugins_open_devices">Otvoriť zariadenia</string>
+  <string name="settings_import">Importovať relácie</string>
+  <string name="import_intro">Prenesie relácie z iného nástroja aj s ich priečinkami, názvami a worktree. Claude Code pokračuje tam, kde skončil. Druhý nástroj si tie svoje ponechá.</string>
+  <string name="import_looking">Hľadajú sa relácie…</string>
+  <plurals name="import_found">
+    <item quantity="one">Nájdená %1$d relácia</item>
+    <item quantity="few">Nájdené %1$d relácie</item>
+    <item quantity="many">Nájdených %1$d relácií</item>
+    <item quantity="other">Nájdených %1$d relácií</item>
+  </plurals>
+  <string name="import_none">Žiadne relácie na prenesenie</string>
+  <string name="import_not_installed">Na tomto počítači nie je nainštalovaný</string>
+  <string name="import_unknown_format">Relácie ukladá spôsobom, ktorý Lemonade Code ešte nepozná</string>
+  <string name="import_read_failed">Jeho relácie sa nepodarilo prečítať</string>
+  <plurals name="import_skipped">
+    <item quantity="one">%1$d uložené rozloženie sa nepodarilo prečítať, jeho relácie tu nie sú</item>
+    <item quantity="few">%1$d uložené rozloženia sa nepodarilo prečítať, ich relácie tu nie sú</item>
+    <item quantity="many">%1$d uložených rozložení sa nepodarilo prečítať, ich relácie tu nie sú</item>
+    <item quantity="other">%1$d uložených rozložení sa nepodarilo prečítať, ich relácie tu nie sú</item>
+  </plurals>
+  <string name="import_interrupted">Import sa zastavil pred dokončením. Relácie, ktoré sa otvorili, zostávajú otvorené.</string>
+  <string name="import_running">%1$s stále beží. Najprv ho ukončite, aby žiadna konverzácia nebola otvorená v oboch.</string>
+  <string name="import_select_all">Vybrať všetko</string>
+  <string name="import_select_none">Zrušiť výber</string>
+  <string name="import_note_worktree">Worktree</string>
+  <string name="import_note_conversation">Konverzácia Claude Code</string>
+  <string name="import_note_worktree_conversation">Worktree · Konverzácia Claude Code</string>
+  <string name="import_already_imported">Už importovaná</string>
+  <string name="import_folder_missing">Priečinok už neexistuje</string>
+  <plurals name="import_button">
+    <item quantity="one">Importovať %1$d reláciu</item>
+    <item quantity="few">Importovať %1$d relácie</item>
+    <item quantity="many">Importovať %1$d relácií</item>
+    <item quantity="other">Importovať %1$d relácií</item>
+  </plurals>
+  <string name="import_busy">Importuje sa…</string>
+  <plurals name="import_done">
+    <item quantity="one">Importovaná %1$d relácia</item>
+    <item quantity="few">Importované %1$d relácie</item>
+    <item quantity="many">Importovaných %1$d relácií</item>
+    <item quantity="other">Importovaných %1$d relácií</item>
+  </plurals>
+  <plurals name="import_some_failed">
+    <item quantity="one">%1$d reláciu sa nepodarilo importovať: jej priečinok chýba alebo sa jej shell nespustil</item>
+    <item quantity="few">%1$d relácie sa nepodarilo importovať: ich priečinky chýbajú alebo sa ich shelly nespustili</item>
+    <item quantity="many">%1$d relácií sa nepodarilo importovať: ich priečinky chýbajú alebo sa ich shelly nespustili</item>
+    <item quantity="other">%1$d relácií sa nepodarilo importovať: ich priečinky chýbajú alebo sa ich shelly nespustili</item>
+  </plurals>
 
   <!-- Settings › Updates -->
   <string name="updates_version">Lemonade Code %1$s</string>
@@ -167,6 +214,8 @@
   <string name="session_name_field">Názov relácie</string>
   <string name="session_copy_path">Kopírovať cestu k priečinku</string>
   <string name="session_path_copied">Skopírované: %1$s</string>
+  <string name="session_move_up">Posunúť vyššie</string>
+  <string name="session_move_down">Posunúť nižšie</string>
   <string name="session_close">Zavrieť reláciu</string>
 
   <!-- Closing a session that leaves worktrees no other session uses -->
@@ -192,6 +241,42 @@
     <item quantity="other">Odstránených %1$d worktree</item>
   </plurals>
   <string name="error_worktree_delete">Worktree %1$s sa nepodarilo odstrániť: %2$s</string>
+
+  <!-- Archived sessions: put away from the session menu, kept under Archived to restore or delete -->
+  <string name="session_archive">Archivovať</string>
+  <string name="session_archive_detail">Zastaví ju a ponechá v Archivovaných</string>
+  <string name="session_archive_action">Archivovať reláciu</string>
+  <string name="session_archived">Relácia %1$s bola archivovaná</string>
+  <string name="archived_title">Archivované</string>
+  <string name="archived_show">Zobraziť archivované relácie</string>
+  <string name="archived_hide">Skryť archivované relácie</string>
+  <plurals name="archived_sub_sessions">
+    <item quantity="one">S %1$d podreláciou</item>
+    <item quantity="few">S %1$d podreláciami</item>
+    <item quantity="many">S %1$d podreláciami</item>
+    <item quantity="other">S %1$d podreláciami</item>
+  </plurals>
+  <string name="archived_restore">Obnoviť</string>
+  <string name="archived_restore_session">Obnoviť %1$s</string>
+  <string name="archived_delete">Natrvalo odstrániť</string>
+  <string name="archived_delete_session">Natrvalo odstrániť %1$s</string>
+  <string name="archived_restored_at_home">%2$s už neexistuje, preto sa %1$s vrátila do vášho domovského priečinka</string>
+  <plurals name="archived_restored_at_home_many">
+    <item quantity="one">%1$d priečinok už neexistuje, preto sa jeho relácia vrátila do vášho domovského priečinka</item>
+    <item quantity="few">%1$d priečinky už neexistujú, preto sa ich relácie vrátili do vášho domovského priečinka</item>
+    <item quantity="many">%1$d priečinkov už neexistuje, preto sa ich relácie vrátili do vášho domovského priečinka</item>
+    <item quantity="other">%1$d priečinkov už neexistuje, preto sa ich relácie vrátili do vášho domovského priečinka</item>
+  </plurals>
+  <plurals name="archived_some_stayed">
+    <item quantity="one">%1$d podrelácia sa nemohla vrátiť a zostala v Archivovaných</item>
+    <item quantity="few">%1$d podrelácie sa nemohli vrátiť a zostali v Archivovaných</item>
+    <item quantity="many">%1$d podrelácií sa nemohlo vrátiť a zostalo v Archivovaných</item>
+    <item quantity="other">%1$d podrelácií sa nemohlo vrátiť a zostalo v Archivovaných</item>
+  </plurals>
+  <string name="archived_parent_archived">%1$s zostala v Archivovaných, lebo relácia, pod ktorú patrí, bola medzitým archivovaná</string>
+  <string name="error_parent_archived">Relácia bola archivovaná počas spúšťania jej podrelácie, preto sa podrelácia nevytvorila.</string>
+  <string name="no_open_sessions_title">Žiadne otvorené relácie</string>
+  <string name="no_open_sessions_detail">Otvorte nový terminál alebo obnovte archivovanú reláciu z bočného panela.</string>
 
   <!-- New session -->
   <string name="action_new_terminal">Nový terminál</string>

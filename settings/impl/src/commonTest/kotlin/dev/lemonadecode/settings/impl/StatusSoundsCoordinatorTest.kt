@@ -63,6 +63,20 @@ class StatusSoundsCoordinatorTest {
   }
 
   @Test
+  fun `archiving a working session, or bringing it back, plays nothing`() = runTest {
+    sessions.setSessions(listOf(session(a, SessionStatus.Working), session(b, SessionStatus.NeedsInput)))
+    start()
+
+    sessions.archive(a)
+    settle()
+    assertEquals(1, sessions.archived.value.size)
+    assertEquals(true, sessions.unarchive(a).isSuccess)
+    settle()
+
+    assertEquals(emptyList(), player.played)
+  }
+
+  @Test
   fun `plain shells, agents quitting and exited sessions play nothing`() = runTest {
     sessions.setSessions(listOf(session(a, SessionStatus.Shell), session(b, SessionStatus.Working)))
     start()

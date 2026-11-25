@@ -707,13 +707,15 @@ public class WorkspacePresenter internal constructor(
       }
     }
 
-    val subSessionLocation = view.subSessionMenu ?: settings.subSessionLocation
+    // Planning looks at the disk for a worktree's folder, so it runs only while the panel or a
+    // menu's branch field shows the plan, not on every draw. Closing, the panel shows its last one.
+    val subSessionPlan = view.subSessionMenu?.let { location -> selectedId?.let { sessionService.planSubSession(it, location, branch = view.worktreeBranch) } }
     val input = WorkspaceInput(
       sessions = sessions,
       review = review,
       settings = settings,
       view = view,
-      subSessionPlan = selectedId?.let { sessionService.planSubSession(it, subSessionLocation, branch = view.worktreeBranch) },
+      subSessionPlan = subSessionPlan,
       menuWorktreePlan = view.namingWorktree?.let { sessionService.planSubSession(it, SubSessionLocation.NewWorktree, branch = view.worktreeBranch) },
       pendingMessage = if (view.previewOpen) selectedId?.let(reviewService::pendingMessage) else null,
       homeDirectory = homeDirectory.path,

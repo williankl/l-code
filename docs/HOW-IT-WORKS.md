@@ -118,6 +118,20 @@ running `git worktree add`, so a bad name leaves nothing half-made behind.
 Both share one git history, so the work can be merged back like any branch, but edits in one never
 touch the other.
 
+The sub-session takes the folder's name, `generating-bugs` above, where a sub-session in the same
+folder is numbered `sub-1`, `sub-2` and so on. The check of git's rules for branch names keeps
+spaces, control characters, `\`, `:`, `*`, `?`, `[`, `~` and `^` out of that last part, and keeps it
+from starting with a dot, so it can't be `.` or `..`. It doesn't rule out what only Windows forbids in a folder name, like `"`,
+`<`, `>` and `|` or names such as `con` and `nul`. When a folder by that name is
+already there, like a worktree kept from an earlier sub-session, or another sub-session of the same
+parent goes by it, `-2`, `-3`… is added to the folder and the name alike; the branch stays as typed. A
+name you give the sub-session yourself replaces it, and clearing yours brings it back. Sub-sessions
+saved before keep the names they were saved with.
+
+A session that isn't a sub-session is named after its folder anyway, so one whose agent moves it
+into a worktree of its own, like Claude Code's `.claude/worktrees/<name>`, already shows that
+worktree's name. A sub-session keeps the name it started with wherever its agent goes.
+
 **Closing.** Before a session closes, Lemonade Code asks git about the folder of the session and of
 each sub-session closing with it. A folder is in a *linked* worktree when `git rev-parse --git-dir`
 and `--git-common-dir`, asked from its top-level folder, name different folders; in a repository's

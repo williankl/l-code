@@ -60,6 +60,7 @@ import dev.lemonadecode.workspace.uimodel.MobilePlatformModel
 import dev.lemonadecode.workspace.uimodel.PairingMethod
 import dev.lemonadecode.workspace.uimodel.ReleaseNotesModel
 import dev.lemonadecode.workspace.uimodel.SessionMenuModel
+import dev.lemonadecode.workspace.uimodel.SessionNavigationModel
 import dev.lemonadecode.workspace.uimodel.SessionRenameModel
 import dev.lemonadecode.workspace.uimodel.SessionsPanelModel
 import dev.lemonadecode.workspace.uimodel.SettingsPage
@@ -706,7 +707,8 @@ class WorkspacePresenterTest {
       menu.eventSink(WorkspaceEvent.SetSubSessionLocation(dev.lemonadecode.workspace.uimodel.SubSessionLocation.NewWorktree))
       awaitItemWhere { it.newSubSession.location == dev.lemonadecode.workspace.uimodel.SubSessionLocation.NewWorktree }
         .eventSink(WorkspaceEvent.CreateSubSession)
-      val created = awaitItemWhere { it.header?.name == "sub-1" }
+      // Named after its worktree, from the suggested `worktree/testing-things`.
+      val created = awaitItemWhere { it.header?.name == "testing-things" }
       assertEquals(false, created.newSubSession.open)
       assertEquals(dev.lemonadecode.domain.session.SubSessionLocation.NewWorktree, settings.settings.value.subSessionLocation)
     }
@@ -721,20 +723,84 @@ class WorkspacePresenterTest {
       awaitItemWhere { it.newSubSession.open }.eventSink(WorkspaceEvent.SetSubSessionLocation(LocationModel.NewWorktree))
       val suggested = awaitItemWhere { it.newSubSession.worktreeBranch != null }
       assertEquals(
-        WorktreeBranchModel(name = "worktree/generating-bugs", path = "~/code/storefront.worktrees/generating-bugs", problem = null, canCreate = true),
+        WorktreeBranchModel(
+          name = "worktree/generating-bugs",
+          path = "~/code/storefront.worktrees/generating-bugs",
+          sessionName = "generating-bugs",
+          problem = null,
+          canCreate = true,
+        ),
         suggested.newSubSession.worktreeBranch,
       )
 
       suggested.eventSink(WorkspaceEvent.SetWorktreeBranch("feat/login"))
       val typed = awaitItemWhere { it.newSubSession.worktreeBranch?.name == "feat/login" }
       assertEquals("~/code/storefront.worktrees/login", typed.newSubSession.worktreeBranch?.path)
+      assertEquals("login", typed.newSubSession.worktreeBranch?.sessionName)
 
       typed.eventSink(WorkspaceEvent.CreateSubSession)
       // Enter held down, or pressed again while git works: still one worktree.
       typed.eventSink(WorkspaceEvent.CreateSubSession)
-      val created = awaitItemWhere { it.header?.name == "sub-1" }
+      val created = awaitItemWhere { it.header?.name == "login" }
       assertEquals(false, created.newSubSession.open)
       assertEquals(listOf<String?>("feat/login"), sessions.started.map { it.branch })
+      val rows = assertIs<SessionNavigationModel.Tree>(created.sessions.navigation).rows
+      assertEquals(listOf("api-ratelimit", "login"), rows.map { it.name }, "the list shows the worktree's name too")
+    }
+  }
+
+  @Test
+  fun `the name the plan gives a worktree, even one kept apart, is the one shown, and a rename still wins`() = runTest {
+    withSession()
+    sessions.worktreeBranchSuggestion = "worktree/generating-bugs"
+    // As the real planner names it beside a `generating-bugs` folder already there.
+    sessions.plannedWorktreeName = "generating-bugs-2"
+    settings.update { it.copy(subSessionLocation = dev.lemonadecode.domain.session.SubSessionLocation.NewWorktree) }
+    presenter.test {
+      awaitItem().eventSink(WorkspaceEvent.ToggleNewSubSessionMenu)
+      val open = awaitItemWhere { it.newSubSession.worktreeBranch != null }
+      assertEquals("generating-bugs-2", open.newSubSession.worktreeBranch?.sessionName)
+      assertEquals("~/code/storefront.worktrees/generating-bugs-2", open.newSubSession.worktreeBranch?.path)
+      open.eventSink(WorkspaceEvent.CreateSubSession)
+      val created = awaitItemWhere { it.header?.name == "generating-bugs-2" }
+      assertEquals(listOf("api-ratelimit", "generating-bugs-2"), assertIs<SessionNavigationModel.Tree>(created.sessions.navigation).rows.map { it.name })
+
+      val id = sessions.sessions.value.single { it.name == "generating-bugs-2" }.id.value
+      created.eventSink(WorkspaceEvent.StartRenamingSession(id))
+      awaitItemWhere { it.sessions.menu?.rename != null }.eventSink(WorkspaceEvent.RenameSession(id, "flaky login"))
+      val renamed = awaitItemWhere { it.header?.name == "flaky login" }
+      assertEquals(listOf("api-ratelimit", "flaky login"), assertIs<SessionNavigationModel.Tree>(renamed.sessions.navigation).rows.map { it.name })
+    }
+  }
+
+  @Test
+  fun `a sub-session is planned only while the panel or a menu's branch field shows the plan`() = runTest {
+    withFamily()
+    presenter.test {
+      val first = awaitItem()
+      // Statuses changing, and a plain menu, draw the workspace again without planning anything.
+      sessions.setStatus(SessionId("ar"), dev.lemonadecode.domain.session.SessionStatus.Working)
+      awaitItemWhere { it.sessions.tiles.first { tile -> tile.id == "ar" }.status == dev.lemonadecode.workspace.uimodel.SessionStatus.Working }
+      first.eventSink(WorkspaceEvent.OpenSessionMenu("d2"))
+      awaitItemWhere { it.sessions.menu != null }.eventSink(WorkspaceEvent.DismissSessionMenu)
+      awaitItemWhere { it.sessions.menu == null }
+      assertEquals(emptyList(), sessions.planned, "nothing open asks for a plan")
+
+      first.eventSink(WorkspaceEvent.ToggleNewSubSessionMenu)
+      awaitItemWhere { it.newSubSession.open }.eventSink(WorkspaceEvent.DismissNewSubSessionMenu)
+      awaitItemWhere { !it.newSubSession.open }
+      assertTrue(sessions.planned.isNotEmpty(), "the open panel shows a plan")
+
+      sessions.planned.clear()
+      first.eventSink(WorkspaceEvent.StartNamingWorktree("d2"))
+      awaitItemWhere { it.sessions.menu?.newWorktree != null }.eventSink(WorkspaceEvent.DismissSessionMenu)
+      awaitItemWhere { it.sessions.menu == null }
+      assertEquals(SessionId("d2"), sessions.planned.firstOrNull(), "the menu's branch field shows a plan")
+
+      sessions.planned.clear()
+      sessions.setStatus(SessionId("ar"), dev.lemonadecode.domain.session.SessionStatus.Idle)
+      awaitItemWhere { it.sessions.tiles.first { tile -> tile.id == "ar" }.status == dev.lemonadecode.workspace.uimodel.SessionStatus.Idle }
+      assertEquals(emptyList(), sessions.planned, "closed again, nothing is planned")
     }
   }
 
@@ -1034,15 +1100,22 @@ class WorkspacePresenterTest {
       val naming = awaitItemWhere { it.sessions.menu?.newWorktree != null }
       assertEquals("d2", naming.sessions.menu?.sessionId, "the field takes the menu's place")
       assertEquals(
-        WorktreeBranchModel(name = "worktree/generating-bugs", path = "~/code/storefront.worktrees/generating-bugs", problem = null, canCreate = true),
+        WorktreeBranchModel(
+          name = "worktree/generating-bugs",
+          path = "~/code/storefront.worktrees/generating-bugs",
+          sessionName = "generating-bugs",
+          problem = null,
+          canCreate = true,
+        ),
         naming.sessions.menu?.newWorktree,
       )
       assertTrue(sessions.started.isEmpty(), "nothing is created before the branch is named")
 
       naming.eventSink(WorkspaceEvent.SetWorktreeBranch("fix/flaky-login"))
-      awaitItemWhere { it.sessions.menu?.newWorktree?.name == "fix/flaky-login" }
-        .eventSink(WorkspaceEvent.CreateSubSessionFrom("d2", LocationModel.NewWorktree))
-      val created = awaitItemWhere { it.header?.name == "sub-1" }
+      val typed = awaitItemWhere { it.sessions.menu?.newWorktree?.name == "fix/flaky-login" }
+      assertEquals("flaky-login", typed.sessions.menu?.newWorktree?.sessionName)
+      typed.eventSink(WorkspaceEvent.CreateSubSessionFrom("d2", LocationModel.NewWorktree))
+      val created = awaitItemWhere { it.header?.name == "flaky-login" }
       assertEquals(null, created.sessions.menu)
       val call = sessions.started.single()
       assertEquals(Triple(SessionId("d2"), dev.lemonadecode.domain.session.SubSessionLocation.NewWorktree, "fix/flaky-login"), Triple(call.parentId, call.location, call.branch))

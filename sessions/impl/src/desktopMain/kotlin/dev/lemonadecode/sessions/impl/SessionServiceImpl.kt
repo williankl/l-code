@@ -111,7 +111,8 @@ internal class SessionServiceImpl(
   override fun planSubSession(parentId: SessionId, location: SubSessionLocation, namePrefix: String, branch: String?): SubSessionPlan? {
     val sessions = state.value
     val parent = sessions.firstOrNull { it.id == parentId } ?: return null
-    return SubSessionPlanner.plan(parent, sessions, location, namePrefix, branch)
+    // A folder already there, like a worktree kept from an earlier sub-session, would make git refuse.
+    return SubSessionPlanner.plan(parent, sessions, location, namePrefix, branch) { File(it).exists() }
   }
 
   override fun suggestWorktreeBranch(): String = WorktreeNames.suggest(Random.Default)

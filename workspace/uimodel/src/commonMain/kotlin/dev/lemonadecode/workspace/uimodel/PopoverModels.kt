@@ -133,6 +133,8 @@ public data class WorktreeBranchModel(
   val name: String,
   /** Where the worktree will be, with `~` for home: a folder named after the branch's last part. */
   val path: String,
+  /** What the sub-session will be called in the list: the folder's name, like `generating-bugs`. */
+  val sessionName: String,
   /** Why the worktree can't be created on this branch; null when it can, or while nothing is typed. */
   val problem: LemonadeCodeString?,
   /** False while the name is blank, or one git won't take or already has. */

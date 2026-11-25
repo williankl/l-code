@@ -189,8 +189,8 @@ A few rules the interface follows everywhere.
   tree, the main action on screen and your unsent comment counts. It's used sparingly, so it keeps
   meaning something.
 - **Nothing runs without you.** Sending comments pastes them; it never presses Enter.
-- **Show before you create.** The new sub-session panel shows the exact folder and branch before
-  anything exists.
+- **Show before you create.** The new sub-session panel shows the exact folder and branch, and for
+  a new worktree the name it will have, before anything exists.
 - **Scrims are flat, never blurred**, following Lemonade.
 - **The mark keeps its colours** in both themes, like the app icon.
 - **Edit in place.** Renaming happens right in the session menu, with no dialog.

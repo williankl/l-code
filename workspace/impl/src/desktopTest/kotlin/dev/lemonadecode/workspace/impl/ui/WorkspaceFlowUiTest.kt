@@ -192,11 +192,15 @@ class WorkspaceFlowUiTest {
       waitFor(hasSetTextAction() and hasText("worktree/testing-things"))
       onNode(hasSetTextAction()).performTextReplacement("feat/login")
       waitFor(hasText("~/code/storefront.worktrees/login"))
+      // The panel names the sub-session as the list will.
+      onNodeWithText("login").assertExists()
       onNode(hasSetTextAction()).performKeyInput { pressKey(Key.Enter) }
       waitFor(hasText("sub-session · worktree"))
       val call = sessions.started.single()
       assertEquals(SubSessionLocation.NewWorktree to "feat/login", call.location to call.branch)
       assertEquals(SubSessionLocation.NewWorktree, settings.settings.value.subSessionLocation)
+      // The list names it after its worktree too.
+      waitFor(hasText("login") and hasAnyAncestor(hasContentDescription("Sessions")))
     }
   }
 
@@ -209,10 +213,13 @@ class WorkspaceFlowUiTest {
       waitFor(hasText("New sub-session in new worktree"))
       onNodeWithText("New sub-session in new worktree").performClick()
       waitFor(hasSetTextAction() and hasText("worktree/generating-bugs"))
+      onNodeWithText("~/code/storefront.worktrees/generating-bugs").assertExists()
       onNode(hasSetTextAction()).performKeyInput { pressKey(Key.Enter) }
       waitFor(hasText("sub-session · worktree"))
       val call = sessions.started.single()
       assertEquals(SessionId("cf") to "worktree/generating-bugs", call.parentId to call.branch)
+      // Under checkout-flake, by its worktree's name.
+      waitFor(hasText("generating-bugs") and hasAnyAncestor(hasContentDescription("Sessions")))
     }
   }
 
@@ -311,17 +318,17 @@ class WorkspaceFlowUiTest {
       onNode(hasSetTextAction()).performKeyInput { pressKey(Key.Enter) }
       waitFor(hasText("sub-session · worktree"))
 
-      // The row in the sidebar, not the header naming the selected session.
-      onNode(hasText("sub-1") and hasAnyAncestor(hasContentDescription("Sessions"))).performMouseInput {
+      // The row in the sidebar, named after its worktree, not the header naming the selected session.
+      onNode(hasText("testing-things") and hasAnyAncestor(hasContentDescription("Sessions"))).performMouseInput {
         moveTo(center)
         press(MouseButton.Tertiary)
         release(MouseButton.Tertiary)
       }
-      waitFor(hasText("Close sub-1?"))
+      waitFor(hasText("Close testing-things?"))
       onNodeWithText("Has uncommitted changes that will be lost").assertDoesNotExist()
       onNodeWithText("Only the folder is deleted. The branch worktree/testing-things stays.").assertExists()
       onNodeWithText("Close, keep worktree").performClick()
-      waitUntil(timeoutMillis = 5_000) { onAllNodes(hasText("sub-1")).fetchSemanticsNodes().isEmpty() }
+      waitUntil(timeoutMillis = 5_000) { onAllNodes(hasText("testing-things")).fetchSemanticsNodes().isEmpty() }
       assertEquals(1, sessions.closed.size)
       assertTrue(sessions.removedWorktrees.isEmpty())
       assertEquals(1, sessions.worktrees.size, "the worktree stays")

@@ -726,6 +726,8 @@ class WorkspaceContentUiTest {
   @Test
   fun `the sub-session panel switches location, creates and cancels`() = show(WorkspaceShowcase.ChoosingWorktree) {
     onNodeWithText("~/code/storefront.worktrees/generating-bugs").assertExists()
+    // The name the sub-session will have in the list: its worktree's.
+    onNodeWithText("generating-bugs").assertExists()
     expect(WorkspaceEvent.SetSubSessionLocation(SubSessionLocation.SameFolder)) { onNodeWithText("Same folder").performClick() }
     expect(WorkspaceEvent.CreateSubSession) { onNodeWithText("Create sub-session").performClick() }
     expect(WorkspaceEvent.DismissNewSubSessionMenu) { onNodeWithText("Cancel").performClick() }
@@ -762,6 +764,7 @@ class WorkspaceContentUiTest {
   fun `the menu's branch field creates on Enter or Create and closes on Escape or Cancel`() = show(WorkspaceShowcase.NamingWorktree, edit = { it }) {
     onNodeWithText("Copy folder path").assertDoesNotExist()
     onNodeWithText("~/code/storefront.worktrees/generating-bugs").assertExists()
+    onNodeWithText("generating-bugs").assertExists()
     val field = onNode(hasSetTextAction() and hasText("Branch"))
     field.assertIsFocused()
     expect(WorkspaceEvent.SetWorktreeBranch("fix/flaky")) { field.performTextReplacement("fix/flaky") }
@@ -858,12 +861,12 @@ class WorkspaceContentUiTest {
     val inDialog = hasAnyAncestor(isDialog())
     // It takes the keys from whatever had them behind it, like the terminal.
     onNode(isDialog()).assertIsFocused()
-    onNode(hasText("Close sub-2?") and inDialog).assertExists()
+    onNode(hasText("Close generating-bugs?") and inDialog).assertExists()
     onNode(hasText("No other session uses this worktree. Delete it too?") and inDialog).assertExists()
-    onNode(hasText("~/code/storefront.worktrees/sub-2") and inDialog).assertExists()
-    onNode(hasText("feat/rate-limit-sub-2") and inDialog).assertExists()
+    onNode(hasText("~/code/storefront.worktrees/generating-bugs") and inDialog).assertExists()
+    onNode(hasText("worktree/generating-bugs") and inDialog).assertExists()
     onNode(hasText("Has uncommitted changes that will be lost") and inDialog).assertExists()
-    onNode(hasText("Only the folder is deleted. The branch feat/rate-limit-sub-2 stays.") and inDialog).assertExists()
+    onNode(hasText("Only the folder is deleted. The branch worktree/generating-bugs stays.") and inDialog).assertExists()
 
     expect(WorkspaceEvent.ConfirmCloseSession(deleteWorktrees = true)) { onNodeWithText("Close and delete worktree").performClick() }
     expect(WorkspaceEvent.ConfirmCloseSession(deleteWorktrees = false)) { onNodeWithText("Close, keep worktree").performClick() }

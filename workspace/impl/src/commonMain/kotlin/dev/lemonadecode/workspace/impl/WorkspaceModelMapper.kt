@@ -52,7 +52,7 @@ internal data class WorkspaceInput(
   val review: Review?,
   val settings: AppSettings,
   val view: WorkspaceViewState,
-  /** What the new sub-session panel would create, for its current location. */
+  /** What the new sub-session panel would create, for its current location; null while it's closed. */
   val subSessionPlan: SubSessionPlan?,
   val pendingMessage: String?,
   val homeDirectory: String,
@@ -193,6 +193,7 @@ internal object WorkspaceModelMapper {
   private fun worktreeBranch(name: String, plan: SubSessionPlan?, taken: String?, home: String): WorktreeBranchModel = WorktreeBranchModel(
     name = name,
     path = plan?.workingDirectory?.let { abbreviateHome(it, home) }.orEmpty(),
+    sessionName = plan?.name.orEmpty(),
     problem = when {
       name.isEmpty() -> null
       !BranchName.isValid(name) -> Res.string.worktree_branch_invalid.asLemonadeCodeString()

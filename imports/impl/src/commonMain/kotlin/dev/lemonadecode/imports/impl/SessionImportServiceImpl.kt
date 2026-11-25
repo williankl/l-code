@@ -28,8 +28,7 @@ import kotlinx.serialization.json.Json
 
 /**
  * Reads every [SessionSource], then marks what can't come over: sessions imported before, which are
- * remembered in the preferences by their key, and those whose folder is gone. Imports open through
- * the session service, parents first.
+ * remembered in the preferences by their key as each one opens, and those whose folder is gone.
  */
 @ContributesBinding(AppScope::class)
 @SingleIn(AppScope::class)
@@ -50,9 +49,7 @@ internal class SessionImportServiceImpl(
   override suspend fun scan(): List<SourceScan> {
     val imported = ledger().keys
     return readers.map { source ->
-      val read = safeSuspendRunCatching { source.read() }.getOrElse { error ->
-        SourceScan.Failed(source.info, error.message ?: error::class.simpleName.orEmpty())
-      }
+      val read = safeSuspendRunCatching { source.read() }.getOrElse { error -> SourceScan.Failed(source.info, error.message) }
       if (read is SourceScan.Found) read.copy(sessions = withContext(dispatchers.io) { read.sessions.map { it.checked(imported) } }) else read
     }
   }
@@ -80,15 +77,20 @@ internal class SessionImportServiceImpl(
         is LemonadeCodeResult.Success -> {
           opened += result.value
           ledger[session.key] = result.value.value
+          // Right away, so one that opened is never offered again, even if the import stops here.
+          remember(session.key, result.value)
         }
         is LemonadeCodeResult.Failure -> failed += session
       }
     }
-    if (opened.isNotEmpty()) {
-      val encoded = json.encodeToJsonElement(LedgerSerializer, ledger)
-      store.update { it + (LedgerKey to encoded) }
-    }
     ImportResult(opened, failed)
+  }
+
+  private suspend fun remember(key: String, id: SessionId) {
+    store.update { entries ->
+      val saved = entries[LedgerKey]?.let { runCatching { json.decodeFromJsonElement(LedgerSerializer, it) }.getOrNull() }.orEmpty()
+      entries + (LedgerKey to json.encodeToJsonElement(LedgerSerializer, saved + (key to id.value)))
+    }
   }
 
   private fun ImportableSession.checked(imported: Set<String>): ImportableSession = copy(

@@ -261,8 +261,9 @@ class SessionServiceImplTest {
   fun `an imported session opens under its parent and resumes its Claude Code conversation`() = runBlocking<Unit> {
     val parent = service.openTerminal().getOrNull()!!
     val folder = File(home, "rate-limit").apply { mkdirs() }
+    val conversation = "0b6f3c2e-4a51-4f7d-9d8e-1c2b3a4d5e6f"
     val id = service.openImported(
-      ImportedSession(folder.path, "rate limit", customName = "rate limit", parentId = parent, placement = SessionPlacement.Worktree, claudeConversation = "0b6f3c2e-4a51"),
+      ImportedSession(folder.path, "rate limit", customName = "rate limit", parentId = parent, placement = SessionPlacement.Worktree, claudeConversation = conversation),
     ).getOrNull()!!
     val session = service.sessions.value.single { it.id == id }
     assertEquals(parent, session.parentId)
@@ -270,17 +271,21 @@ class SessionServiceImplTest {
     assertEquals("rate limit", session.displayName)
     assertEquals(folder.path, session.workingDirectory)
     withTimeout(10_000) {
-      while (registry.terminal(id)!!.screen().lines().none { "claude --resume 0b6f3c2e-4a51" in it }) delay(50)
+      while (registry.terminal(id)!!.screen().lines().none { "claude --resume $conversation" in it }) delay(50)
     }
-
-    // An id the shell would read as code never reaches it, and a folder that's gone opens nothing.
-    val unsafe = service.openImported(ImportedSession(home.path, "~", claudeConversation = "x; echo pwned")).getOrNull()!!
-    delay(1_500)
-    assertTrue(registry.terminal(unsafe)!!.screen().lines().none { "pwned" in it })
     assertEquals(
       LemonadeCodeResult.failure(SessionError.FolderNotFound("/no/such/folder")),
       service.openImported(ImportedSession("/no/such/folder", "gone")),
     )
+
+    // An id the shell would read as code, or Claude as an option, is never resumed.
+    val asCode = service.openImported(ImportedSession(home.path, "~", claudeConversation = "x; echo pwned")).getOrNull()!!
+    val asOption = service.openImported(ImportedSession(home.path, "~", claudeConversation = "--dangerously-skip-permissions")).getOrNull()!!
+    service.shutdown()
+    fun resumeOf(session: dev.lemonadecode.domain.session.SessionId) = store.saved!!.sessions.first { it.id == session.value }.resume
+    assertEquals("claude --resume $conversation", resumeOf(id))
+    assertEquals(null, resumeOf(asCode))
+    assertEquals(null, resumeOf(asOption))
   }
 
   @Test

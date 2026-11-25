@@ -70,4 +70,10 @@ class ClaudeAgentLocatorTest {
     claudeSession(program(), "x; touch pwned")
     assertNull(locator.resumeCommand(shell.pid()))
   }
+
+  @Test
+  fun `an id Claude would read as an option never reaches it`() {
+    claudeSession(program(), "--dangerously-skip-permissions")
+    assertNull(locator.resumeCommand(shell.pid()))
+  }
 }

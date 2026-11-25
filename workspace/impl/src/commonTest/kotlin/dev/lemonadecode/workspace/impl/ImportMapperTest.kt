@@ -16,6 +16,7 @@ import dev.lemonadecode.workspace.strings.import_note_worktree
 import dev.lemonadecode.workspace.strings.import_note_worktree_conversation
 import dev.lemonadecode.workspace.strings.import_read_failed
 import dev.lemonadecode.workspace.strings.import_running
+import dev.lemonadecode.workspace.strings.import_skipped
 import dev.lemonadecode.workspace.strings.import_unknown_format
 import dev.lemonadecode.workspace.uimodel.ImportRowModel
 import kotlin.test.Test
@@ -49,7 +50,7 @@ class ImportMapperTest {
     val model = ImportMapper.model(listOf("herdr"), ImportViewState(scans = listOf(SourceScan.Found(herdr, sessions)), ticked = setOf("app", "old")), home)
     val source = model.sources.single()
     assertEquals(Res.plurals.import_found.asLemonadeCodeString(6), source.status)
-    assertEquals(null, source.warning)
+    assertEquals(emptyList(), source.notes)
     assertEquals(1, model.tickedCount)
     assertEquals(
       listOf(
@@ -65,14 +66,22 @@ class ImportMapperTest {
   }
 
   @Test
-  fun `a tool still running is warned about, and one with nothing, or nothing to read, says so`() {
-    val running = ImportMapper.model(listOf("herdr"), ImportViewState(scans = listOf(SourceScan.Found(herdr, listOf(session("a", "/a")), running = true))), home)
-    assertEquals(Res.string.import_running.asLemonadeCodeString("herdr"), running.sources.single().warning)
+  fun `a tool still running, or with layouts it couldn't read, is warned about`() {
+    val found = SourceScan.Found(herdr, listOf(session("a", "/a")), running = true, skipped = 2)
+    val notes = ImportMapper.model(listOf("herdr"), ImportViewState(scans = listOf(found)), home).sources.single().notes
+    assertEquals(listOf(Res.string.import_running.asLemonadeCodeString("herdr"), Res.plurals.import_skipped.asLemonadeCodeString(2)), notes)
+  }
 
-    fun status(scan: SourceScan) = ImportMapper.model(listOf("herdr"), ImportViewState(scans = listOf(scan)), home).sources.single().let { it.status to it.problem }
+  @Test
+  fun `a tool with nothing, or nothing to read, says so in the app's words and the tool's`() {
+    fun source(scan: SourceScan) = ImportMapper.model(listOf("herdr"), ImportViewState(scans = listOf(scan)), home).sources.single()
+    fun status(scan: SourceScan) = source(scan).let { it.status to it.problem }
     assertEquals(Res.string.import_none.asLemonadeCodeString() to false, status(SourceScan.Found(herdr, emptyList(), running = true)))
+    assertEquals(emptyList(), source(SourceScan.Found(herdr, emptyList(), running = true)).notes)
     assertEquals(Res.string.import_not_installed.asLemonadeCodeString() to false, status(SourceScan.NotInstalled(herdr)))
-    assertEquals(Res.string.import_unknown_format.asLemonadeCodeString("session.json version 4") to true, status(SourceScan.UnknownFormat(herdr, "session.json version 4")))
-    assertEquals(Res.string.import_read_failed.asLemonadeCodeString("denied") to true, status(SourceScan.Failed(herdr, "denied")))
+    assertEquals(Res.string.import_unknown_format.asLemonadeCodeString() to true, status(SourceScan.UnknownFormat(herdr)))
+    assertEquals(Res.string.import_read_failed.asLemonadeCodeString() to true, status(SourceScan.Failed(herdr, "permission denied")))
+    assertEquals("permission denied", source(SourceScan.Failed(herdr, "permission denied")).detail)
+    assertEquals(null, source(SourceScan.Failed(herdr, null)).detail)
   }
 }

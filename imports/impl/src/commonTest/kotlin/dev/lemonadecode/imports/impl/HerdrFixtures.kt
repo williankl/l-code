@@ -222,7 +222,10 @@ internal object HerdrFixtures {
   /** What a newer herdr might write. */
   val newerLayout: String = """{"version": 4, "workspaces": [], "selected": 0}"""
 
-  /** Agent references Lemonade Code must not run: a value the shell would read as code, a path, another source. */
+  /**
+   * Agent references Lemonade Code must not run: a value the shell would read as code, another
+   * source, a path, and one Claude would read as an option.
+   */
   val untrustedAgents: String = """
     {
       "version": 3,
@@ -243,6 +246,12 @@ internal object HerdrFixtures {
           "id": "w3",
           "identity_cwd": "/home/me/code/c",
           "tabs": [{"layout": {"Pane": 3}, "panes": {"3": {"cwd": "/home/me/code/c", "agent_session": {"source": "herdr:claude", "agent": "claude", "kind": "path", "value": "/tmp/session"}}}, "zoomed": false}],
+          "active_tab": 0
+        },
+        {
+          "id": "w4",
+          "identity_cwd": "/home/me/code/d",
+          "tabs": [{"layout": {"Pane": 4}, "panes": {"4": {"cwd": "/home/me/code/d", "agent_session": {"source": "herdr:claude", "agent": "claude", "kind": "id", "value": "--dangerously-skip-permissions"}}}, "zoomed": false}],
           "active_tab": 0
         }
       ],

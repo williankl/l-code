@@ -42,6 +42,7 @@ import dev.lemonadecode.workspace.strings.Res
 import dev.lemonadecode.workspace.strings.error_worktree_delete
 import dev.lemonadecode.workspace.strings.file_path_copied
 import dev.lemonadecode.workspace.strings.import_done
+import dev.lemonadecode.workspace.strings.import_interrupted
 import dev.lemonadecode.workspace.strings.import_some_failed
 import dev.lemonadecode.workspace.strings.session_path_copied
 import dev.lemonadecode.workspace.strings.time_hours_ago
@@ -341,6 +342,36 @@ class WorkspacePresenterTest {
       assertEquals(Res.plurals.import_some_failed.asLemonadeCodeString(1), failed.error)
       assertTrue(failed.settings.open)
       yieldUntil { imports.scanCount == 2 }
+    }
+  }
+
+  @Test
+  fun `an import that breaks off says so and frees the page`() = runTest {
+    imports.scans = listOf(SourceScan.Found(FakeSessionImportService.Herdr, listOf(storefrontImport)))
+    imports.importError = IllegalStateException("No space left on device")
+    presenter.test {
+      awaitItem().eventSink(WorkspaceEvent.OpenSettingsPage(SettingsPage.ImportSessions))
+      awaitItemWhere { it.settings.imports.sources.isNotEmpty() }.eventSink(WorkspaceEvent.ToggleImportSession(storefrontImport.key))
+      awaitItemWhere { it.settings.imports.tickedCount == 1 }.eventSink(WorkspaceEvent.ImportSessions)
+      val failed = awaitItemWhere { it.error != null && !it.settings.imports.importing }
+      assertEquals(Res.string.import_interrupted.asLemonadeCodeString(), failed.error)
+      assertTrue(failed.settings.open)
+      yieldUntil { imports.scanCount == 2 }
+    }
+  }
+
+  @Test
+  fun `an import with nothing left to open frees the page and looks again`() = runTest {
+    imports.scans = listOf(SourceScan.Found(FakeSessionImportService.Herdr, listOf(storefrontImport)))
+    imports.importResult = ImportResult(emptyList())
+    presenter.test {
+      awaitItem().eventSink(WorkspaceEvent.OpenSettingsPage(SettingsPage.ImportSessions))
+      awaitItemWhere { it.settings.imports.sources.isNotEmpty() }.eventSink(WorkspaceEvent.ToggleImportSession(storefrontImport.key))
+      awaitItemWhere { it.settings.imports.tickedCount == 1 }.eventSink(WorkspaceEvent.ImportSessions)
+      yieldUntil { imports.scanCount == 2 }
+      val page = awaitItemWhere { !it.settings.imports.importing && !it.settings.imports.loading }
+      assertEquals(null, page.error)
+      assertTrue(page.settings.open)
     }
   }
 

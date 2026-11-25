@@ -120,6 +120,9 @@ private fun ImportSource(
           textStyle = LemonadeTheme.typography.bodyXSmallRegular,
           color = if (source.problem) colors.content.contentCritical else colors.content.contentSecondary,
         )
+        source.detail?.let { detail ->
+          LemonadeUi.Text(text = detail, textStyle = LemonadeTheme.typography.bodyXSmallRegular, color = colors.content.contentTertiary)
+        }
       }
       if (source.canTick) {
         LemonadeUi.Link(
@@ -129,8 +132,8 @@ private fun ImportSource(
         )
       }
     }
-    source.warning?.let { warning ->
-      DotLabel(text = warning.resolve(), dotColor = colors.background.bgCaution, textColor = colors.content.contentCaution)
+    source.notes.forEach { note ->
+      DotLabel(text = note.resolve(), dotColor = colors.background.bgCaution, textColor = colors.content.contentCaution)
     }
     if (source.rows.isNotEmpty()) {
       Column {

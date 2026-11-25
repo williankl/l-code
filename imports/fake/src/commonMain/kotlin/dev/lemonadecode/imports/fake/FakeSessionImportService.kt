@@ -20,6 +20,9 @@ public class FakeSessionImportService(
 
   /** What [import] answers; null opens one session per importable one, named `imported-1`, `imported-2`… */
   public var importResult: ImportResult? = null
+
+  /** Thrown by [import] when set, as when the import's record can't be saved. */
+  public var importError: Throwable? = null
   private var nextId = 1
 
   override suspend fun scan(): List<SourceScan> {
@@ -29,6 +32,7 @@ public class FakeSessionImportService(
 
   override suspend fun import(sessions: List<ImportableSession>): ImportResult {
     imported += sessions
+    importError?.let { throw it }
     return importResult ?: ImportResult(sessions.filter { it.blocked == null }.map { SessionId("imported-${nextId++}") })
   }
 

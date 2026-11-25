@@ -17,6 +17,7 @@ import dev.lemonadecode.workspace.strings.import_note_worktree
 import dev.lemonadecode.workspace.strings.import_note_worktree_conversation
 import dev.lemonadecode.workspace.strings.import_read_failed
 import dev.lemonadecode.workspace.strings.import_running
+import dev.lemonadecode.workspace.strings.import_skipped
 import dev.lemonadecode.workspace.strings.import_unknown_format
 import dev.lemonadecode.workspace.uimodel.ImportRowModel
 import dev.lemonadecode.workspace.uimodel.ImportSessionsModel
@@ -50,15 +51,18 @@ internal object ImportMapper {
           } else {
             Res.plurals.import_found.asLemonadeCodeString(scan.sessions.size)
           },
-          warning = if (scan.running && importable.isNotEmpty()) Res.string.import_running.asLemonadeCodeString(name) else null,
+          notes = listOfNotNull(
+            Res.string.import_running.asLemonadeCodeString(name).takeIf { scan.running && importable.isNotEmpty() },
+            Res.plurals.import_skipped.asLemonadeCodeString(scan.skipped).takeIf { scan.skipped > 0 },
+          ),
           rows = scan.sessions.map { row(it, nested = it.parentKey in listed, ticked = it.key in ticked, home = home) },
           canTick = importable.isNotEmpty(),
           allTicked = importable.isNotEmpty() && importable.all { it.key in ticked },
         )
       }
       is SourceScan.NotInstalled -> ImportSourceModel(id, name, Res.string.import_not_installed.asLemonadeCodeString())
-      is SourceScan.UnknownFormat -> ImportSourceModel(id, name, Res.string.import_unknown_format.asLemonadeCodeString(scan.detail), problem = true)
-      is SourceScan.Failed -> ImportSourceModel(id, name, Res.string.import_read_failed.asLemonadeCodeString(scan.message), problem = true)
+      is SourceScan.UnknownFormat -> ImportSourceModel(id, name, Res.string.import_unknown_format.asLemonadeCodeString(), problem = true)
+      is SourceScan.Failed -> ImportSourceModel(id, name, Res.string.import_read_failed.asLemonadeCodeString(), problem = true, detail = scan.message)
     }
   }
 

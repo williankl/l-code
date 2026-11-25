@@ -346,7 +346,8 @@ Each one becomes a Lemonade Code session the way a saved session comes back afte
 Importing copies: herdr's sessions stay as they are, and nothing in herdr is started, stopped or
 changed. A session you imported before can't be imported twice, and one whose folder no longer
 exists says so and stays unticked. If herdr is still running, the page asks you to quit it first, so
-a conversation isn't open in both. herdr is the first tool Lemonade Code imports from; the page lists
+a conversation isn't open in both. A saved herdr layout Lemonade Code can't read, like one from a
+newer herdr, is left out, and the page says so. herdr is the first tool Lemonade Code imports from; the page lists
 each tool on its own.
 
 <img src="images/import-sessions.png" width="100%" alt="Settings › Import sessions listing herdr's workspaces, a worktree nested under its repository, one already imported and one whose folder is gone">

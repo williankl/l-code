@@ -457,7 +457,7 @@ private fun sceneFor(showcase: WorkspaceShowcase): Scene = when (showcase) {
 /** Made-up sessions herdr has, for Settings › Import sessions. */
 private object ShowcaseImports {
   private val herdrSource = ImportSource(id = "herdr", name = "herdr")
-  private val storefront = ImportableSession("herdr:default:w1", "storefront", null, Repo, conversation = "0b6f3c2e-4a51")
+  private val storefront = ImportableSession("herdr:default:w1", "storefront", null, Repo, conversation = "0b6f3c2e-4a51-4f7d-9d8e-1c2b3a4d5e6f")
   private val rateLimit = ImportableSession(
     "herdr:default:w2",
     "rate-limit",
@@ -465,7 +465,7 @@ private object ShowcaseImports {
     "$Repo.worktrees/rate-limit",
     parentKey = storefront.key,
     worktree = true,
-    conversation = "7e9d8c7b-6a5f",
+    conversation = "7e9d8c7b-6a5f-4e3d-8c2b-1a0f9e8d7c6b",
   )
   private val payments = ImportableSession("herdr:default:w3", "payments-api", null, "${ShowcaseFixtures.Home}/code/payments-api", blocked = ImportBlock.AlreadyImported)
   private val notes = ImportableSession("herdr:default:w4", "design notes", "design notes", "${ShowcaseFixtures.Home}/notes")

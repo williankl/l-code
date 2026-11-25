@@ -15,10 +15,14 @@ class HerdrSessionSourceTest {
   ) : HerdrAccess {
     val read = mutableListOf<String>()
 
+    /** Files that can't be read, as when they belong to someone else. */
+    val unreadable = mutableSetOf<String>()
+
     override suspend fun listSessions(): HerdrOutput = output
 
     override suspend fun readText(path: String): String? {
       read += path
+      if (path in unreadable) error("Permission denied")
       return files[path]
     }
   }
@@ -47,6 +51,27 @@ class HerdrSessionSourceTest {
     val found = assertIs<SourceScan.Found>(source.read())
     assertEquals(listOf("fix-tax", "storefront", "rate limit", "~", "infra"), found.sessions.map { it.name })
     assertTrue(found.running)
+  }
+
+  @Test
+  fun `a layout it can't read hides only that herdr session's workspaces`() = runTest {
+    herdr.output = HerdrOutput.Printed(HerdrFixtures.twoSessions)
+    herdr.files["${HerdrFixtures.SessionDir}/session.json"] = HerdrFixtures.newerLayout
+    herdr.files["${HerdrFixtures.NamedSessionDir}/session.json"] = HerdrFixtures.workLayout
+    val found = assertIs<SourceScan.Found>(source.read())
+    assertEquals(listOf("infra"), found.sessions.map { it.name })
+    assertEquals(1, found.skipped)
+
+    // The same for one it isn't allowed to read.
+    herdr.files["${HerdrFixtures.SessionDir}/session.json"] = HerdrFixtures.layout
+    herdr.unreadable += "${HerdrFixtures.NamedSessionDir}/session.json"
+    val readable = assertIs<SourceScan.Found>(source.read())
+    assertEquals(listOf("fix-tax", "storefront", "rate limit", "~"), readable.sessions.map { it.name })
+    assertEquals(1, readable.skipped)
+
+    // With nothing readable at all, it says why.
+    herdr.unreadable += "${HerdrFixtures.SessionDir}/session.json"
+    assertEquals("Permission denied", assertIs<SourceScan.Failed>(source.read()).message)
   }
 
   @Test

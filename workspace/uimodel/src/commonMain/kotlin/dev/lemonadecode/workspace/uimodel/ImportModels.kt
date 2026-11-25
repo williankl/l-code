@@ -32,8 +32,10 @@ public data class ImportSourceModel(
   val status: LemonadeCodeString,
   /** [status] says something went wrong. */
   val problem: Boolean = false,
-  /** Said when the tool still has its sessions open; null when it doesn't. */
-  val warning: LemonadeCodeString? = null,
+  /** What the tool or the system said went wrong, in its own words; null when it said nothing. */
+  val detail: String? = null,
+  /** Things to know first: the tool still has its sessions open, or some of them couldn't be read. */
+  val notes: List<LemonadeCodeString> = emptyList(),
   val rows: List<ImportRowModel> = emptyList(),
   /** Some row can be ticked. */
   val canTick: Boolean = false,

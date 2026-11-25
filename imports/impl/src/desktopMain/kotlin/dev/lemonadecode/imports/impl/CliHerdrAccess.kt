@@ -36,10 +36,10 @@ internal class CliHerdrAccess(
         if (output.isSuccess) {
           HerdrOutput.Printed(output.stdout)
         } else {
-          HerdrOutput.Failed(output.stderr.lineSequence().map { it.trim() }.firstOrNull { it.isNotEmpty() } ?: "herdr exited with ${output.exitCode}")
+          HerdrOutput.Failed(output.stderr.lineSequence().map { it.trim() }.firstOrNull { it.isNotEmpty() })
         }
       }
-      is LemonadeCodeResult.Failure -> HerdrOutput.Failed(ran.error.message ?: "herdr didn't run")
+      is LemonadeCodeResult.Failure -> HerdrOutput.Failed(ran.error.message)
     }
   }
 

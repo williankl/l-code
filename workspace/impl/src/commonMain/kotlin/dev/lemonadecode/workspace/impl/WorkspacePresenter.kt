@@ -44,6 +44,8 @@ import dev.lemonadecode.imports.api.SessionImportService
 import dev.lemonadecode.mobile.api.MobileService
 import dev.lemonadecode.platform.architecture.WallClock
 import dev.lemonadecode.platform.core.LemonadeCodeResult
+import dev.lemonadecode.platform.core.getOrNull
+import dev.lemonadecode.platform.core.safeSuspendRunCatching
 import dev.lemonadecode.platform.localization.LemonadeCodeString
 import dev.lemonadecode.platform.localization.asLemonadeCodeString
 import dev.lemonadecode.platform.localization.systemLanguageTag
@@ -65,6 +67,7 @@ import dev.lemonadecode.workspace.strings.Res
 import dev.lemonadecode.workspace.strings.devices_disconnected
 import dev.lemonadecode.workspace.strings.file_path_copied
 import dev.lemonadecode.workspace.strings.import_done
+import dev.lemonadecode.workspace.strings.import_interrupted
 import dev.lemonadecode.workspace.strings.import_some_failed
 import dev.lemonadecode.workspace.strings.logs_errors_sent
 import dev.lemonadecode.workspace.strings.screenshot_attached
@@ -375,16 +378,19 @@ public class WorkspacePresenter internal constructor(
           if (imports.importing || picked.isEmpty()) return
           update { it.copy(imports = imports.copy(importing = true)) }
           scope.launch {
-            val result = sessionImports.import(picked)
-            val first = result.opened.firstOrNull()
+            val imported = safeSuspendRunCatching { sessionImports.import(picked) }
+            val result = imported.getOrNull()
+            val first = result?.opened?.firstOrNull()
             if (first != null) {
               update { it.closingPopovers().copy(imports = null).selecting(first).copy(view = WorkspaceView.Terminal) }
               showToast(Res.plurals.import_done.asLemonadeCodeString(result.opened.size))
+            } else {
+              // Nothing opened: the page stays, freed, and looks again at what changed since.
+              scanImports()
             }
-            if (result.failed.isNotEmpty()) {
-              fail(Res.plurals.import_some_failed.asLemonadeCodeString(result.failed.size))
-              // Nothing opened: the page stays, showing what changed since.
-              if (first == null) scanImports()
+            when {
+              result == null -> fail(Res.string.import_interrupted.asLemonadeCodeString())
+              result.failed.isNotEmpty() -> fail(Res.plurals.import_some_failed.asLemonadeCodeString(result.failed.size))
             }
           }
         }

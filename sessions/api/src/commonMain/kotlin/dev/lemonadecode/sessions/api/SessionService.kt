@@ -100,7 +100,7 @@ public interface SessionService {
 public data class ImportedSession(
   /** Absolute. */
   val directory: String,
-  /** What a sub-session is called; a top-level session is named after its folder, as any is. */
+  /** What it was called there, for a sub-session's name. */
   val name: String,
   /** The name the user gave it there, kept as its own; null for none. */
   val customName: String? = null,

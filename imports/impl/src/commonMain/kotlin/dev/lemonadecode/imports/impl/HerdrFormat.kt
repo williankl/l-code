@@ -1,5 +1,6 @@
 package dev.lemonadecode.imports.impl
 
+import dev.lemonadecode.domain.session.ClaudeConversation
 import dev.lemonadecode.domain.session.ImportableSession
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -43,7 +44,9 @@ internal object HerdrFormat {
       val workspace = runCatching { json.decodeFromJsonElement(Workspace.serializer(), raw) }.getOrNull()
         ?.let(::current)
         ?: return Layout.Unknown("session.json: workspace ${index + 1} is in neither herdr's current nor its earlier format")
-      Entry(workspace, key = "herdr:$session:${workspace.id ?: "#$index"}:${workspace.identityCwd}")
+      // herdr keeps a workspace's id across restarts, but rewrites its folder on every save from where
+      // its first pane is now. Only a layout from before ids falls back to its place and folder.
+      Entry(workspace, key = workspace.id?.let { "herdr:$session:$it" } ?: "herdr:$session:#$index:${workspace.identityCwd}")
     }
     return Layout.Read(arrange(workspaces, home))
   }
@@ -98,9 +101,9 @@ internal object HerdrFormat {
       .firstNotNullOfOrNull { pane -> pane.agentSession?.claudeConversation()?.let { it to pane.cwd } }
   }
 
-  /** Only what herdr's own Claude Code integration reported, and only a plain id: it ends up in a command. */
+  /** Only what herdr's own Claude Code integration reported, and only a Claude session id: it ends up in a command. */
   private fun AgentSession.claudeConversation(): String? = value.takeIf {
-    source == "herdr:claude" && agent == "claude" && kind == "id" && SafeId.matches(it)
+    source == "herdr:claude" && agent == "claude" && kind == "id" && ClaudeConversation.isId(it)
   }
 
   private fun panesInOrder(tab: Tab): List<Int> {
@@ -136,8 +139,6 @@ internal object HerdrFormat {
   }
 
   private fun samePath(a: String?, b: String?): Boolean = a != null && b != null && a.trimEnd('/', '\\') == b.trimEnd('/', '\\')
-
-  private val SafeId = Regex("[A-Za-z0-9_-]{1,128}")
 
   @Serializable
   private data class HerdrSessionList(val sessions: List<HerdrSession> = emptyList())

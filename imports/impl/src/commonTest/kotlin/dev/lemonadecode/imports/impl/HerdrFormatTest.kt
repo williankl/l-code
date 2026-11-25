@@ -30,7 +30,7 @@ class HerdrFormatTest {
 
     assertEquals(
       ImportableSession(
-        key = "herdr:default:w1:/home/me/code/storefront",
+        key = "herdr:default:w1",
         name = "storefront",
         customName = null,
         folder = "/home/me/code/storefront",
@@ -67,13 +67,30 @@ class HerdrFormatTest {
   fun `only conversations herdr's Claude Code integration reported, by a plain id, are picked up`() {
     // Codex runs in the home workspace; Lemonade Code resumes Claude Code only.
     assertNull(read(HerdrFixtures.layout).single { it.name == "~" }.conversation)
-    assertEquals(listOf(null, null, null), read(HerdrFixtures.untrustedAgents).map { it.conversation })
+    assertEquals(listOf(null, null, null, null), read(HerdrFixtures.untrustedAgents).map { it.conversation })
   }
 
   @Test
-  fun `keys are stable and tell sessions of different herdr sessions apart`() {
-    assertEquals(read(HerdrFixtures.layout).map { it.key }, read(HerdrFixtures.layout).map { it.key })
-    assertEquals("herdr:work:w1:/home/me/code/infra", read(HerdrFixtures.workLayout, session = "work").single().key)
+  fun `keys and parents stay the same after the user moves around in herdr`() {
+    // herdr rewrites identity_cwd on every save, from where the first tab's root pane is now.
+    fun moved(layout: String, from: String, to: String) = layout.replace(Regex("(\"(?:identity_cwd|cwd)\": \")${Regex.escape(from)}\""), "$1$to\"")
+    val before = read(HerdrFixtures.layout)
+    val after = read(
+      moved(
+        moved(HerdrFixtures.layout, "/home/me/code/storefront", "/home/me/code/storefront/src"),
+        "/home/me/code/storefront.worktrees/rate-limit",
+        "/home/me/code/storefront.worktrees/rate-limit/docs",
+      ),
+    )
+    assertEquals("/home/me/code/storefront/src", after.single { it.name == "storefront" }.folder)
+    assertEquals(before.map { it.key }, after.map { it.key })
+    assertEquals(before.map { it.parentKey }, after.map { it.parentKey })
+  }
+
+  @Test
+  fun `keys tell sessions of different herdr sessions apart`() {
+    assertEquals("herdr:work:w1", read(HerdrFixtures.workLayout, session = "work").single().key)
+    assertEquals("herdr:default:w1", read(HerdrFixtures.layout).single { it.name == "storefront" }.key)
   }
 
   @Test

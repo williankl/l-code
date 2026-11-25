@@ -3,6 +3,7 @@ package dev.lemonadecode.sessions.impl
 import dev.lemonadecode.data.git.GitDataSource
 import dev.lemonadecode.data.git.GitError
 import dev.lemonadecode.domain.session.BranchName
+import dev.lemonadecode.domain.session.ClaudeConversation
 import dev.lemonadecode.domain.session.LinkedWorktree
 import dev.lemonadecode.domain.session.Session
 import dev.lemonadecode.domain.session.SessionId
@@ -127,7 +128,7 @@ internal class SessionServiceImpl(
       id = UUID.randomUUID().toString(),
       name = session.name,
       workingDirectory = folder.absolutePath,
-      resume = session.claudeConversation?.takeIf { ConversationId.matches(it) }?.let { "claude --resume $it" },
+      resume = session.claudeConversation?.let(ClaudeConversation::resumeCommand),
       customName = session.customName?.trim()?.takeIf { it.isNotEmpty() },
     )
     return launch(folder.absolutePath, initialInput = null, restored = entry) { id ->
@@ -460,9 +461,6 @@ internal class SessionServiceImpl(
     const val MaxRestoredLines = 1_000
     val EndingWait = 3.seconds
     val EndingPoll = 50.milliseconds
-
-    /** It goes into a shell command: only a plain id, never anything the shell would read as code. */
-    val ConversationId = Regex("[A-Za-z0-9_-]{1,128}")
   }
 }
 

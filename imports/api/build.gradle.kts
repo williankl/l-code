@@ -6,7 +6,6 @@ kotlin {
   sourceSets {
     commonMain.dependencies {
       api(projects.domainEntities)
-      api(projects.platform.core)
     }
   }
 }

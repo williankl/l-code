@@ -44,19 +44,24 @@ public enum class ImportBlock {
 public sealed interface SourceScan {
   public val source: ImportSource
 
-  /** [running]: the tool still has them open, so a conversation could end up open in both. */
+  /**
+   * [running]: the tool still has them open, so a conversation could end up open in both.
+   * [skipped]: how many of the tool's saved layouts couldn't be read, so their sessions aren't listed.
+   */
   public data class Found(
     override val source: ImportSource,
     val sessions: List<ImportableSession>,
     val running: Boolean = false,
+    val skipped: Int = 0,
   ) : SourceScan
 
   public data class NotInstalled(override val source: ImportSource) : SourceScan
 
-  /** The tool keeps its sessions in a way Lemonade Code doesn't know, e.g. a newer version's; [detail] says how. */
-  public data class UnknownFormat(override val source: ImportSource, val detail: String) : SourceScan
+  /** The tool keeps its sessions in a way Lemonade Code doesn't know, e.g. a newer version's. */
+  public data class UnknownFormat(override val source: ImportSource) : SourceScan
 
-  public data class Failed(override val source: ImportSource, val message: String) : SourceScan
+  /** [message] is what the tool or the system said, if anything. */
+  public data class Failed(override val source: ImportSource, val message: String?) : SourceScan
 }
 
 /** What an import did: the sessions it opened, in order, and those it couldn't. */

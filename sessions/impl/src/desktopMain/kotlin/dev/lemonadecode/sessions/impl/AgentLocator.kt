@@ -1,5 +1,6 @@
 package dev.lemonadecode.sessions.impl
 
+import dev.lemonadecode.domain.session.ClaudeConversation
 import dev.lemonadecode.platform.di.AppScope
 import dev.lemonadecode.platform.process.HomeDirectory
 import dev.zacsweers.metro.ContributesBinding
@@ -17,16 +18,14 @@ internal fun interface AgentLocator {
 /**
  * Claude Code keeps a file per running interactive session, `~/.claude/sessions/<pid>.json`, with
  * the conversation it has open. A session whose process descends from the shell runs in that
- * terminal, and `claude --resume <id>` opens the same conversation again. Claude only writes a
- * conversation to disk (`~/.claude/projects/<folder>/<id>.jsonl`) once something is said in it, so
- * one still empty has nothing to resume: plain `claude` starts it afresh instead.
+ * terminal. Claude only writes a conversation's transcript once something is said in it, so one
+ * still empty has nothing to resume: plain `claude` starts it afresh instead.
  */
 @ContributesBinding(AppScope::class)
 @Inject
 internal class ClaudeAgentLocator(home: HomeDirectory) : AgentLocator {
-  private val config = File(System.getenv("CLAUDE_CONFIG_DIR") ?: File(home.path, ".claude").path)
+  private val config = File(ClaudeConversation.configFolder(home.path, System.getenv("CLAUDE_CONFIG_DIR")))
   private val folder = File(config, "sessions")
-  private val projects = File(config, "projects")
   private val json = Json { ignoreUnknownKeys = true }
 
   override fun resumeCommand(shellPid: Long): String? {
@@ -35,16 +34,14 @@ internal class ClaudeAgentLocator(home: HomeDirectory) : AgentLocator {
       .filter { (pid, _) -> descendsFrom(pid, shellPid) }
       .mapNotNull { (_, file) -> runCatching { json.decodeFromString(ClaudeSessionFile.serializer(), file.readText()) }.getOrNull() }
       .filter { it.kind == null || it.kind == "interactive" }
-      // It goes into a shell command: only a plain id, never anything the shell would read as code.
-      .filter { SafeId.matches(it.sessionId) }
+      .filter { ClaudeConversation.isId(it.sessionId) }
     val newest = running.maxByOrNull { it.startedAt ?: 0L } ?: return null
-    return if (hasTranscript(newest)) "claude --resume ${newest.sessionId}" else "claude"
+    return if (hasTranscript(newest)) ClaudeConversation.resumeCommand(newest.sessionId) else "claude"
   }
 
-  /** Claude names a project's folder after its path, every character but letters and digits made a dash. */
   private fun hasTranscript(session: ClaudeSessionFile): Boolean {
     val cwd = session.cwd ?: return false
-    return File(File(projects, cwd.replace(NotAlphanumeric, "-")), "${session.sessionId}.jsonl").isFile
+    return File(config, ClaudeConversation.transcript(session.sessionId, cwd)).isFile
   }
 
   private fun descendsFrom(pid: Long, ancestor: Long): Boolean {
@@ -67,7 +64,5 @@ internal class ClaudeAgentLocator(home: HomeDirectory) : AgentLocator {
 
   private companion object {
     const val MaxDepth = 8
-    val SafeId = Regex("[A-Za-z0-9_-]{1,128}")
-    val NotAlphanumeric = Regex("[^A-Za-z0-9]")
   }
 }

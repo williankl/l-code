@@ -22,7 +22,8 @@ public interface SessionImportService {
   /**
    * Opens [sessions] as Lemonade Code sessions, each in its folder with its name, under its parent
    * when that comes along too or came before, resuming its Claude Code conversation. Each is
-   * remembered, so it's never imported twice; one imported before, or blocked, is skipped.
+   * remembered as it opens, so it's never imported twice; one imported before, or blocked, is
+   * skipped. Throws when that record can't be saved, which stops the import there.
    */
   public suspend fun import(sessions: List<ImportableSession>): ImportResult
 }

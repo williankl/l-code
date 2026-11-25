@@ -59,8 +59,13 @@
   </plurals>
   <string name="import_none">No sessions to bring over</string>
   <string name="import_not_installed">Not installed on this computer</string>
-  <string name="import_unknown_format">Its sessions are saved in a way Lemonade Code doesn’t know yet (%1$s)</string>
-  <string name="import_read_failed">Couldn’t read its sessions: %1$s</string>
+  <string name="import_unknown_format">Its sessions are saved in a way Lemonade Code doesn’t know yet</string>
+  <string name="import_read_failed">Couldn’t read its sessions</string>
+  <plurals name="import_skipped">
+    <item quantity="one">%1$d saved layout couldn’t be read, so its sessions aren’t listed</item>
+    <item quantity="other">%1$d saved layouts couldn’t be read, so their sessions aren’t listed</item>
+  </plurals>
+  <string name="import_interrupted">The import stopped before it finished. The sessions that opened stay open.</string>
   <string name="import_running">%1$s is still running. Quit it first, so no conversation is open in both.</string>
   <string name="import_select_all">Select all</string>
   <string name="import_select_none">Select none</string>

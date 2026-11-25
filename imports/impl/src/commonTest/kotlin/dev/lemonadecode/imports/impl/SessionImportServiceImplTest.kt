@@ -6,12 +6,15 @@ import dev.lemonadecode.domain.session.ImportableSession
 import dev.lemonadecode.domain.session.SessionPlacement
 import dev.lemonadecode.domain.session.SourceScan
 import dev.lemonadecode.platform.architecture.testing.FakeLemonadeCodeCoroutineDispatchers
+import dev.lemonadecode.platform.preferences.PreferenceStore
 import dev.lemonadecode.platform.preferences.testing.FakePreferenceStore
 import dev.lemonadecode.sessions.api.ImportedSession
 import dev.lemonadecode.sessions.fake.FakeSessionService
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.JsonElement
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
@@ -38,6 +41,8 @@ class SessionImportServiceImplTest {
   }
   private val sessions = FakeSessionService()
   private val store = FakePreferenceStore()
+
+  private class DiskFull : Exception("No space left on device")
 
   private fun service(sources: Set<SessionSource> = setOf(source)) = SessionImportServiceImpl(sources, sessions, store, environment, FakeLemonadeCodeCoroutineDispatchers())
 
@@ -84,6 +89,24 @@ class SessionImportServiceImplTest {
 
     // Remembered across launches: a new service over the same preferences.
     assertEquals(ImportBlock.AlreadyImported, assertIs<SourceScan.Found>(service().scan().single()).sessions[0].blocked)
+  }
+
+  @Test
+  fun `each import is remembered as soon as it opens, so a store that fails loses at most that one`() = runTest {
+    // The first save works; the second finds the disk full.
+    val failing = object : PreferenceStore by store {
+      var saves = 0
+
+      override suspend fun update(transform: (Map<String, JsonElement>) -> Map<String, JsonElement>) {
+        if (++saves == 2) throw DiskFull()
+        store.update(transform)
+      }
+    }
+    val service = SessionImportServiceImpl(setOf(source), sessions, failing, environment, FakeLemonadeCodeCoroutineDispatchers())
+    val scanned = assertIs<SourceScan.Found>(service.scan().single()).sessions
+    assertFailsWith<DiskFull> { service.import(listOf(scanned[0], scanned[1])) }
+    assertEquals(2, sessions.imported.size)
+    assertEquals(ImportBlock.AlreadyImported, assertIs<SourceScan.Found>(service.scan().single()).sessions[0].blocked)
   }
 
   @Test

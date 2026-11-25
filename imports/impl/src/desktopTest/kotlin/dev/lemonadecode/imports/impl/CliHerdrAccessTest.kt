@@ -105,11 +105,4 @@ class CliHerdrAccessTest {
       herdrCandidates(mapOf("Path" to "C:\\Tools;\"C:\\Users\\me\\bin\""), "C:\\Users\\me", windows = true),
     )
   }
-
-  @Test
-  fun `a conversation can be resumed where Claude Code kept its transcript`() {
-    val projects = File(folder, "projects")
-    val transcript = claudeTranscript(projects, "0b6f3c2e-4a51", "/home/me/code/store.front")
-    assertEquals(File(projects, "-home-me-code-store-front/0b6f3c2e-4a51.jsonl"), transcript)
-  }
 }

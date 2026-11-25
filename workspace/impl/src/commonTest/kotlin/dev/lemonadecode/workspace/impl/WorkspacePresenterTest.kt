@@ -750,30 +750,57 @@ class WorkspacePresenterTest {
   }
 
   @Test
-  fun `a second worktree of the same name is kept apart, and a rename still wins`() = runTest {
+  fun `the name the plan gives a worktree, even one kept apart, is the one shown, and a rename still wins`() = runTest {
     withSession()
     sessions.worktreeBranchSuggestion = "worktree/generating-bugs"
+    // As the real planner names it beside a `generating-bugs` folder already there.
+    sessions.plannedWorktreeName = "generating-bugs-2"
     settings.update { it.copy(subSessionLocation = dev.lemonadecode.domain.session.SubSessionLocation.NewWorktree) }
     presenter.test {
       awaitItem().eventSink(WorkspaceEvent.ToggleNewSubSessionMenu)
-      awaitItemWhere { it.newSubSession.worktreeBranch?.sessionName == "generating-bugs" }.eventSink(WorkspaceEvent.CreateSubSession)
-      val first = awaitItemWhere { it.header?.name == "generating-bugs" }
-
-      first.eventSink(WorkspaceEvent.OpenParentSession)
-      awaitItemWhere { it.header?.name == "api-ratelimit" }.eventSink(WorkspaceEvent.ToggleNewSubSessionMenu)
-      val again = awaitItemWhere { it.newSubSession.open && it.newSubSession.worktreeBranch != null }
-      assertEquals("generating-bugs-2", again.newSubSession.worktreeBranch?.sessionName)
-      assertEquals("~/code/storefront.worktrees/generating-bugs-2", again.newSubSession.worktreeBranch?.path)
-      again.eventSink(WorkspaceEvent.SetWorktreeBranch("fix/generating-bugs"))
-      awaitItemWhere { it.newSubSession.worktreeBranch?.name == "fix/generating-bugs" }.eventSink(WorkspaceEvent.CreateSubSession)
-      val second = awaitItemWhere { it.header?.name == "generating-bugs-2" }
+      val open = awaitItemWhere { it.newSubSession.worktreeBranch != null }
+      assertEquals("generating-bugs-2", open.newSubSession.worktreeBranch?.sessionName)
+      assertEquals("~/code/storefront.worktrees/generating-bugs-2", open.newSubSession.worktreeBranch?.path)
+      open.eventSink(WorkspaceEvent.CreateSubSession)
+      val created = awaitItemWhere { it.header?.name == "generating-bugs-2" }
+      assertEquals(listOf("api-ratelimit", "generating-bugs-2"), assertIs<SessionNavigationModel.Tree>(created.sessions.navigation).rows.map { it.name })
 
       val id = sessions.sessions.value.single { it.name == "generating-bugs-2" }.id.value
-      second.eventSink(WorkspaceEvent.StartRenamingSession(id))
+      created.eventSink(WorkspaceEvent.StartRenamingSession(id))
       awaitItemWhere { it.sessions.menu?.rename != null }.eventSink(WorkspaceEvent.RenameSession(id, "flaky login"))
       val renamed = awaitItemWhere { it.header?.name == "flaky login" }
-      val rows = assertIs<SessionNavigationModel.Tree>(renamed.sessions.navigation).rows
-      assertEquals(listOf("api-ratelimit", "generating-bugs", "flaky login"), rows.map { it.name })
+      assertEquals(listOf("api-ratelimit", "flaky login"), assertIs<SessionNavigationModel.Tree>(renamed.sessions.navigation).rows.map { it.name })
+    }
+  }
+
+  @Test
+  fun `a sub-session is planned only while the panel or a menu's branch field shows the plan`() = runTest {
+    withFamily()
+    presenter.test {
+      val first = awaitItem()
+      // Statuses changing, and a plain menu, draw the workspace again without planning anything.
+      sessions.setStatus(SessionId("ar"), dev.lemonadecode.domain.session.SessionStatus.Working)
+      awaitItemWhere { it.sessions.tiles.first { tile -> tile.id == "ar" }.status == dev.lemonadecode.workspace.uimodel.SessionStatus.Working }
+      first.eventSink(WorkspaceEvent.OpenSessionMenu("d2"))
+      awaitItemWhere { it.sessions.menu != null }.eventSink(WorkspaceEvent.DismissSessionMenu)
+      awaitItemWhere { it.sessions.menu == null }
+      assertEquals(emptyList(), sessions.planned, "nothing open asks for a plan")
+
+      first.eventSink(WorkspaceEvent.ToggleNewSubSessionMenu)
+      awaitItemWhere { it.newSubSession.open }.eventSink(WorkspaceEvent.DismissNewSubSessionMenu)
+      awaitItemWhere { !it.newSubSession.open }
+      assertTrue(sessions.planned.isNotEmpty(), "the open panel shows a plan")
+
+      sessions.planned.clear()
+      first.eventSink(WorkspaceEvent.StartNamingWorktree("d2"))
+      awaitItemWhere { it.sessions.menu?.newWorktree != null }.eventSink(WorkspaceEvent.DismissSessionMenu)
+      awaitItemWhere { it.sessions.menu == null }
+      assertEquals(SessionId("d2"), sessions.planned.firstOrNull(), "the menu's branch field shows a plan")
+
+      sessions.planned.clear()
+      sessions.setStatus(SessionId("ar"), dev.lemonadecode.domain.session.SessionStatus.Idle)
+      awaitItemWhere { it.sessions.tiles.first { tile -> tile.id == "ar" }.status == dev.lemonadecode.workspace.uimodel.SessionStatus.Idle }
+      assertEquals(emptyList(), sessions.planned, "closed again, nothing is planned")
     }
   }
 

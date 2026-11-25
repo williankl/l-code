@@ -119,8 +119,10 @@ Both share one git history, so the work can be merged back like any branch, but 
 touch the other.
 
 The sub-session takes the folder's name, `generating-bugs` above, where a sub-session in the same
-folder is numbered `sub-1`, `sub-2` and so on. Git's rules already keep the branch's last part a plain
-folder name: no spaces, no `\`, `:`, `*` or `?`, never `.` or `..`. When a folder by that name is
+folder is numbered `sub-1`, `sub-2` and so on. The check of git's rules for branch names keeps
+spaces, control characters, `\`, `:`, `*`, `?`, `[`, `~` and `^` out of that last part, and keeps it
+from starting with a dot, so it can't be `.` or `..`. It doesn't rule out what only Windows forbids in a folder name, like `"`,
+`<`, `>` and `|` or names such as `con` and `nul`. When a folder by that name is
 already there, like a worktree kept from an earlier sub-session, or another sub-session of the same
 parent goes by it, `-2`, `-3`… is added to the folder and the name alike; the branch stays as typed. A
 name you give the sub-session yourself replaces it, and clearing yours brings it back. Sub-sessions

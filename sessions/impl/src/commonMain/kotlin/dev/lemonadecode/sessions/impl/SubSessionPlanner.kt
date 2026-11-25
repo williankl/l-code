@@ -54,9 +54,10 @@ internal object SubSessionPlanner {
 
   /**
    * The name of a new worktree on [branch], for its folder and its sub-session alike: the branch's
-   * last part, which git's rules for branch names already keep a plain folder name. When a folder by
-   * that name is [taken], or a sibling goes by it, `-2`, `-3`… follow, so neither the folder nor the
-   * name in the list is ever a copy.
+   * last part, which [dev.lemonadecode.domain.session.BranchName] keeps free of `/`, `\`, spaces and a
+   * leading dot (not of what only Windows forbids, like `|` or `con`). When a folder by that name is
+   * [taken], or a sibling goes by it, `-2`, `-3`… follow, so neither the folder nor the name in the
+   * list is ever a copy.
    */
   fun worktreeName(branch: String, siblings: List<Session>, taken: (String) -> Boolean): String {
     val base = branch.substringAfterLast('/')

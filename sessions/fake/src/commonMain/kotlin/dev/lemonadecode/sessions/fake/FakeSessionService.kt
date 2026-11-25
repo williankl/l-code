@@ -96,21 +96,26 @@ public class FakeSessionService(initial: List<Session> = emptyList()) : SessionS
     return LemonadeCodeResult.success(id)
   }
 
+  /** Every [planSubSession] call, by the session it plans under. */
+  public val planned: MutableList<SessionId> = mutableListOf()
+
+  /**
+   * The name a plan for a new worktree on a typed branch gives, folder and sub-session alike, like
+   * the real one's `generating-bugs-2` beside a folder already there. Null takes the branch's last
+   * part: this fake keeps nothing apart itself.
+   */
+  public var plannedWorktreeName: String? = null
+
   override fun planSubSession(parentId: SessionId, location: SubSessionLocation, namePrefix: String, branch: String?): SubSessionPlan? {
+    planned += parentId
     val parent = state.value.firstOrNull { it.id == parentId } ?: return null
     val worktree = location == SubSessionLocation.NewWorktree
-    val folder = "${parent.repositoryRoot}.worktrees"
-    // Like the real one: a new worktree's sub-session takes its folder's name, kept apart from the
-    // worktrees there already and from its siblings.
     val name = if (worktree && branch != null) {
-      val base = branch.substringAfterLast('/')
-      generateSequence(1) { it + 1 }.map { if (it == 1) base else "$base-$it" }.first { n ->
-        base.isEmpty() ||
-          (state.value.none { it.parentId == parentId && (it.name == n || it.displayName == n) } && worktrees.none { it.path == "$folder/$n" })
-      }
+      plannedWorktreeName ?: branch.substringAfterLast('/')
     } else {
       generateSequence(1) { it + 1 }.map { "$namePrefix-$it" }.first { n -> state.value.none { it.name == n } }
     }
+    val folder = "${parent.repositoryRoot}.worktrees"
     return SubSessionPlan(
       name = name,
       location = location,

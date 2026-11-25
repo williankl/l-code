@@ -52,7 +52,7 @@ internal data class WorkspaceInput(
   val review: Review?,
   val settings: AppSettings,
   val view: WorkspaceViewState,
-  /** What the new sub-session panel would create, for its current location. */
+  /** What the new sub-session panel would create, for its current location; null while it's closed. */
   val subSessionPlan: SubSessionPlan?,
   val pendingMessage: String?,
   val homeDirectory: String,

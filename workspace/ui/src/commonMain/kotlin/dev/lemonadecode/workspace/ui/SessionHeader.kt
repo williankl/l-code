@@ -37,6 +37,7 @@ import dev.lemonadecode.platform.designsystem.SlotSegmentedControl
 import dev.lemonadecode.platform.designsystem.TooltipPlacement
 import dev.lemonadecode.platform.designsystem.bottomHairline
 import dev.lemonadecode.platform.designsystem.rememberCharWidth
+import dev.lemonadecode.platform.designsystem.rememberLastNonNull
 import dev.lemonadecode.platform.localization.resolve
 import dev.lemonadecode.workspace.strings.Res
 import dev.lemonadecode.workspace.strings.action_cancel
@@ -131,7 +132,7 @@ internal fun SessionHeaderBar(
               size = LemonadeButtonSize.Small,
             )
           }
-          NewSubSessionPopover(menu = newSubSession, onEvent = onEvent)
+          NewSubSessionPopover(model = newSubSession, onEvent = onEvent)
         }
       }
       ViewSwitcher(
@@ -197,16 +198,18 @@ private val LocationTabs = listOf(
   SubSessionLocation.NewWorktree to Res.string.location_new_worktree,
 )
 
+/** The new sub-session panel. It fades out showing what it showed open: closed, nothing is planned. */
 @Composable
 private fun NewSubSessionPopover(
-  menu: NewSubSessionModel,
+  model: NewSubSessionModel,
   onEvent: (WorkspaceEvent) -> Unit,
 ) {
   val spaces = LemonadeTheme.spaces
   val colors = LemonadeTheme.colors
   val mono = LemonadeCodeTheme.typography.codeSmall
   val code = LemonadeCodeTheme.code
-  AnchoredPopover(visible = menu.open, onDismissRequest = { onEvent(WorkspaceEvent.DismissNewSubSessionMenu) }) {
+  val menu = rememberLastNonNull(model.takeIf { it.open }) ?: model
+  AnchoredPopover(visible = model.open, onDismissRequest = { onEvent(WorkspaceEvent.DismissNewSubSessionMenu) }) {
     Column {
       LemonadeUi.Text(text = stringResource(Res.string.sub_session_title), textStyle = LemonadeTheme.typography.headingXXSmall)
       LemonadeUi.Text(

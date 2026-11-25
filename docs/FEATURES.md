@@ -91,6 +91,13 @@ programs and coding agents.
   the selection.
 - **Copy, paste and select all** with ⌘C, ⌘V and ⌘A on macOS, or Ctrl+Shift+C, Ctrl+Shift+V and
   Ctrl+Shift+A on Windows and Linux.
+- **Copy as you select.** With [Settings › Copy on select](#settings) on, a selection you make with
+  the mouse is copied as soon as you finish it, whether you drag, Shift-click to extend it,
+  double-click or triple-click. It's copied without the indentation its lines share, so text from an
+  agent's indented reply pastes flush left, even when you start dragging at the first letter of a
+  line rather than in the space before it. ⌘C (Ctrl+Shift+C) leaves the indentation out too while
+  the setting is on. Select all doesn't copy by itself, and a click or a drag over empty space
+  leaves the clipboard as it was.
 - **Scroll back** with the mouse wheel. Full-screen programs that handle the mouse themselves, like
   Claude Code's fullscreen mode, get the wheel instead, so it scrolls their own view.
 - **Open links** with Ctrl-click (or ⌘-click). That covers web addresses written out, even when they
@@ -358,7 +365,7 @@ Lemonade Code finds them on your `PATH`, in the Android SDK and in Homebrew's fo
 The gear at the top right opens settings: a short list where every item shows its value. Open one to
 change it on its own page; the back arrow or Esc returns to the list.
 
-<img src="images/settings.png" width="100%" alt="The settings list: Appearance, Language, Keep awake, Sounds, Plugins, Updates and Import sessions">
+<img src="images/settings.png" width="100%" alt="The settings list: Appearance, Language, Copy on select, Keep awake, Sounds, Plugins, Updates and Import sessions">
 
 - **Appearance:** Dark, Light, or follow the System. The window's title bar follows it on macOS and
   Windows. **Animations** is on by default: menus and panels open with a short fade, the sidebar
@@ -366,6 +373,9 @@ change it on its own page; the back arrow or Esc returns to the list.
   and opened files push the diff along. Turn it off and every change happens at once.
 - **Language:** English, Deutsch, Español, Français, Português or Slovenčina, or match the computer's
   own. The whole app changes at once.
+- **Copy on select:** a selection you make with the mouse in [the terminal](#the-terminal) is
+  copied as soon as you finish it, without the indentation its lines share. Off from the start.
+  Only the terminal does this, not the diff or the device logs.
 - **Keep awake while sessions work:** while any session is working, your computer won't go to
   sleep and the screen won't dim or lock. Once nothing is working, both behave as usual again. While
   it's holding the computer awake, a tag in the top bar says so.
@@ -461,3 +471,4 @@ With the mouse:
 | Drag across lines | Comment on a range |
 | Drag a 3D model | Turn it around |
 | Double-click / triple-click in the terminal | Select a word / a line |
+| Select in the terminal with **Copy on select** on | Copy the selection as soon as you finish |

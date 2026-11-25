@@ -62,7 +62,7 @@ public class WorkspaceScreen internal constructor(
     Themed(model, onBackground, onDarkTheme) {
       WorkspaceContent(
         model = model,
-        terminal = { sessionId, slotModifier -> LiveTerminal(sessionId, slotModifier) },
+        terminal = { sessionId, slotModifier -> LiveTerminal(sessionId, slotModifier, model.settings.copyOnSelect) },
         modifier = modifier,
       )
     }
@@ -119,7 +119,7 @@ public class WorkspaceScreen internal constructor(
   }
 
   @Composable
-  private fun LiveTerminal(sessionId: String, modifier: Modifier) {
+  private fun LiveTerminal(sessionId: String, modifier: Modifier, copyOnSelect: Boolean) {
     val session = terminals.terminal(SessionId(sessionId)) ?: return
     val focusRequester = remember(sessionId) { FocusRequester() }
     TerminalView(
@@ -133,6 +133,7 @@ public class WorkspaceScreen internal constructor(
         top = LemonadeTheme.spaces.spacing400,
         bottom = LemonadeTheme.spaces.spacing400,
       ),
+      copyOnSelect = copyOnSelect,
     )
     LaunchedEffect(sessionId) { focusRequester.requestFocus() }
   }

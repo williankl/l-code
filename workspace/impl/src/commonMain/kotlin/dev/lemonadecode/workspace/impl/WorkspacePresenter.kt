@@ -27,6 +27,7 @@ import dev.lemonadecode.domain.mobile.MobileDevice
 import dev.lemonadecode.domain.mobile.MobileError
 import dev.lemonadecode.domain.mobile.NearbyKind
 import dev.lemonadecode.domain.mobile.QrPairing
+import dev.lemonadecode.domain.mobile.ScreenPicture
 import dev.lemonadecode.domain.mobile.ScreenRecording
 import dev.lemonadecode.domain.review.CommentId
 import dev.lemonadecode.domain.review.DiffState
@@ -173,9 +174,6 @@ public class WorkspacePresenter internal constructor(
         val before = seenRecordings[id]
         if (recording is ScreenRecording.Recording) {
           mobileService.devices.value.firstOrNull { it.id == id }?.let { recordingNames[id] = it.name }
-          // The disk starts running low: said once, where it shows whichever window is in front.
-          val left = recording.spaceLeft
-          if (left != null && (before as? ScreenRecording.Recording)?.spaceLeft == null) view = view.copy(error = DevicesMapper.lowSpaceWarning(left))
         } else if (before is ScreenRecording.Recording) {
           val (message, failed) = DevicesMapper.recordingEnded(recording, recordingNames[id] ?: id.value, homeDirectory.path) ?: continue
           if (failed) {
@@ -188,6 +186,16 @@ public class WorkspacePresenter internal constructor(
       }
       seenRecordings.clear()
       seenRecordings.putAll(mobileRecordings)
+    }
+    // A choice of size left open where it can't be used, as the device records or its screen isn't
+    // video, closes on every page of the device, so it doesn't open again by itself later.
+    val staleChoices = (listOfNotNull(view.devices?.page) + view.deviceWindows.values.map { it.page })
+      .filter { it.recordingChoiceOpen }
+      .map { it.deviceId }
+      .filter { id -> mobileRecordings[id] is ScreenRecording.Recording || (deviceScreens[id] as? DeviceScreen.Frame)?.picture !is ScreenPicture.Bgra }
+      .toSet()
+    LaunchedEffect(staleChoices) {
+      if (staleChoices.isNotEmpty()) view = view.closingRecordingChoices(staleChoices)
     }
     // A device's window closes when the device goes: unplugged, its emulator closed, or disconnected.
     LaunchedEffect(mobileDevices) {
@@ -272,8 +280,7 @@ public class WorkspacePresenter internal constructor(
             }
             is WorkspaceEvent.StartScreenRecording -> {
               val resolution = event.resolution.toDomain()
-              updatePage(window) { it.copy(recordingChoiceOpen = false) }
-              update { it.copy(lastRecording = resolution) }
+              update { it.closingRecordingChoices(setOf(device)).copy(lastRecording = resolution) }
               scope.launch {
                 when (val started = mobileService.startRecording(device, resolution)) {
                   is LemonadeCodeResult.Success -> Unit

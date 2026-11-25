@@ -521,7 +521,7 @@ class WorkspacePresenterTest {
   }
 
   @Test
-  fun `full resolution is asked of the service, and a disk running low warns once while it goes on`() = runTest {
+  fun `full resolution is asked of the service, and a disk running low is a warning under the screen, not an error`() = runTest {
     withSession()
     settings.update { it.copy(mobilePlugin = true) }
     mobile.setDevices(ShowcaseDevices.connected)
@@ -537,16 +537,55 @@ class WorkspacePresenterTest {
       assertEquals(listOf("record ${pixel.value} full"), mobile.actions)
 
       mobile.recordings.value = mapOf(pixel to ScreenRecording.Recording(Now, RecordingResolution.Full, spaceLeft = 1_600_000_000L))
-      val low = awaitItemWhere { it.error != null }
       val warning = Res.string.recording_low_space.asLemonadeCodeString(Res.string.size_gigabytes.asLemonadeCodeString(1))
-      assertEquals(warning, low.error)
+      val low = awaitItemWhere { it.page()?.recording?.lowSpace != null }
       assertEquals(warning, low.page()?.recording?.lowSpace)
-      // Said once: dismissed, it stays away while the disk stays low, and the page keeps saying it.
-      low.eventSink(WorkspaceEvent.DismissError)
-      awaitItemWhere { it.error == null }
-      mobile.recordings.value = mapOf(pixel to ScreenRecording.Recording(Now, RecordingResolution.Full, spaceLeft = 900_000_000L))
-      val lower = awaitItemWhere { it.page()?.recording?.lowSpace != warning && it.page()?.recording?.lowSpace != null }
-      assertNull(lower.error)
+      assertNull(low.error, "the app has no warning banner; the line under the screen says it")
+    }
+  }
+
+  @Test
+  fun `a choice of size left open closes once the device records, so it doesn't open again after`() = runTest {
+    withSession()
+    settings.update { it.copy(mobilePlugin = true) }
+    mobile.setDevices(ShowcaseDevices.connected)
+    mobile.screens.value = mapOf(ShowcaseDevices.pixel.id to ShowcaseDevices.screen())
+    val pixel = ShowcaseDevices.pixel.id
+    fun WorkspaceModel.page() = devices?.content as? DevicesContentModel.Device
+    presenter.test {
+      awaitItem().eventSink(WorkspaceEvent.ToggleDevices)
+      awaitItemWhere { it.devices != null }.eventSink(WorkspaceEvent.SelectDevice(pixel.value))
+      awaitItemWhere { it.page()?.screen is DeviceScreenModel.Frame }.eventSink(WorkspaceEvent.ToggleScreenRecording)
+      awaitItemWhere { it.page()?.recording?.choice != null }
+      // Recording starts from another page of the device, e.g. its own window.
+      mobile.recordings.value = mapOf(pixel to ScreenRecording.Recording(Now))
+      awaitItemWhere { it.page()?.recording?.recording == true }
+      testScheduler.runCurrent()
+      mobile.recordings.value = mapOf(pixel to ShowcaseDevices.savedRecording)
+      val stopped = awaitItemWhere { it.page()?.recording?.saved != null }
+      assertNull(stopped.page()?.recording?.choice)
+    }
+  }
+
+  @Test
+  fun `a choice of size left open closes when the screen comes as screenshots, and stays closed when video returns`() = runTest {
+    withSession()
+    settings.update { it.copy(mobilePlugin = true) }
+    mobile.setDevices(ShowcaseDevices.connected)
+    mobile.screens.value = mapOf(ShowcaseDevices.pixel.id to ShowcaseDevices.screen())
+    val pixel = ShowcaseDevices.pixel.id
+    fun WorkspaceModel.page() = devices?.content as? DevicesContentModel.Device
+    presenter.test {
+      awaitItem().eventSink(WorkspaceEvent.ToggleDevices)
+      awaitItemWhere { it.devices != null }.eventSink(WorkspaceEvent.SelectDevice(pixel.value))
+      awaitItemWhere { it.page()?.screen is DeviceScreenModel.Frame }.eventSink(WorkspaceEvent.ToggleScreenRecording)
+      awaitItemWhere { it.page()?.recording?.choice != null }
+      mobile.screens.value = mapOf(pixel to ShowcaseDevices.screen(video = false))
+      awaitItemWhere { it.page()?.recording?.unavailable != null }
+      testScheduler.runCurrent()
+      mobile.screens.value = mapOf(pixel to ShowcaseDevices.screen())
+      val back = awaitItemWhere { it.page()?.recording?.unavailable == null }
+      assertNull(back.page()?.recording?.choice)
     }
   }
 

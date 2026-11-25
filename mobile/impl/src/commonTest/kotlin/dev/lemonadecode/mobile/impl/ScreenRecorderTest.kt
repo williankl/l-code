@@ -310,20 +310,19 @@ class ScreenRecorderTest {
   }
 
   @Test
-  fun `a device that refuses its full size after a turn keeps the video it made before`() = runTest {
+  fun `a full-size stream that won't start again after recording a while is trouble with the stream, not a refusal`() = runTest {
     val recorder = recorder()
     assertTrue(recorder.start(pixel, "Pixel 8", RecordingResolution.Full))
     send(recorder, streamStart, width = 1080, height = 2400)
-    send(recorder, picture(), after = 100, width = 1080, height = 2400)
-    advanceTimeBy(100.milliseconds)
+    // Minutes later the screen turns, and the landscape stream at its own size doesn't start.
+    advanceTimeBy(2.minutes)
     recorder.onRefused(pixel)
+    recorder.onStreamEnded(pixel)
     runCurrent()
-
-    assertEquals(
-      ScreenRecording.Failed(RecordingFailure.FullResolutionRefused, listOf("/home/me/Videos/Lemonade Code/Pixel 8-1.mp4")),
-      recorder.recordings.value[pixel],
-    )
-    assertEquals(200L, videos.opened.single().finishedAt)
+    assertIs<ScreenRecording.Recording>(recorder.recordings.value[pixel])
+    advanceTimeBy(StallLimit)
+    runCurrent()
+    assertEquals(ScreenRecording.Failed(RecordingFailure.VideoLost, listOf("/home/me/Videos/Lemonade Code/Pixel 8-1.mp4")), recorder.recordings.value[pixel])
   }
 
   @Test

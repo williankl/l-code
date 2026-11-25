@@ -249,6 +249,8 @@ internal class MobileServiceImpl(
     val quiet = if (device.connection == DeviceConnection.Wifi) WifiQuietFlush else QuietFlush
     val pictures = android.recordScreen(adb, device, recordedWidth, recordedHeight)
     var sized = false
+    var smaller = false
+    var cancelled = false
     try {
       emitAll(
         decodeVideo(
@@ -259,7 +261,8 @@ internal class MobileServiceImpl(
             val first = decoded.firstOrNull()
             if (full && !sized && first != null) {
               sized = true
-              if (first.width != recordedWidth || first.height != recordedHeight) throw FullSizeRefused()
+              smaller = first.width != recordedWidth || first.height != recordedHeight
+              if (smaller) throw FullSizeRefused()
             }
             recorder.onPicture(id, recordedWidth, recordedHeight, unit)
           },
@@ -267,12 +270,14 @@ internal class MobileServiceImpl(
         ),
       )
     } catch (e: CancellationException) {
-      throw e
-    } catch (e: Throwable) {
-      // At its own size, a stream that fails before its first picture, or comes smaller, is refused.
-      if (full && (e is FullSizeRefused || !sized)) recorder.onRefused(id)
+      cancelled = true
       throw e
     } finally {
+      // `adb exec-out` exits 0 and sends screenrecord's error down the stream as text, so a size
+      // the encoder refuses shows as a stream that ends, by itself or failing, before its first
+      // picture; or it comes smaller. The recorder takes that as a refusal before its own first
+      // picture, and as trouble with the stream after.
+      if (full && !cancelled && (!sized || smaller)) recorder.onRefused(id)
       recorder.onStreamEnded(id)
     }
   }

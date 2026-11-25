@@ -221,6 +221,34 @@ class ScreenStreamTest {
   }
 
   @Test
+  fun `asked to start over while screenshots stand in, it tries video again at once`() = runTest {
+    val restart = Channel<Unit>(Channel.UNLIMITED)
+    var recordings = 0
+    var works = false
+    mirrorScreens(
+      timeSource = testScheduler.timeSource,
+      size = { 1080 to 2400 },
+      stream = { _, _ ->
+        recordings++
+        if (works) Channel<ScreenPicture.Bgra>(1).apply { trySend(bgra()) }.receiveAsFlow() else emptyFlow()
+      },
+      capture = { Capture.Picture(PngPicture(png(1080, 2400), 1080, 2400)) },
+      restart = restart.receiveAsFlow(),
+    ).test {
+      assertEquals(DeviceScreen.Loading, awaitItem())
+      assertIs<ScreenPicture.Encoded>(assertIs<DeviceScreen.Frame>(awaitItem()).picture)
+      assertEquals(3, recordings)
+      // Back at a size the device takes: well before RecordingAgainAfter.
+      works = true
+      restart.send(Unit)
+      testScheduler.advanceTimeBy(1_000)
+      assertEquals(4, recordings)
+      assertIs<ScreenPicture.Bgra>(expectMostRecentItem().let { assertIs<DeviceScreen.Frame>(it) }.picture)
+      cancelAndIgnoreRemainingEvents()
+    }
+  }
+
+  @Test
   fun `each access unit is handed over as it's decoded, to be recorded`() = runTest {
     val chunks = Channel<ByteArray>(Channel.UNLIMITED)
     val units = mutableListOf<ByteArray>()

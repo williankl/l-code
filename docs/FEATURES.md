@@ -272,8 +272,9 @@ Lemonade Code finds them on your `PATH`, in the Android SDK and in Homebrew's fo
   Windows, named after the device and the time, and **Show in folder** finds it. A recording
   carries on when `screenrecord` starts again every few minutes, goes on in a second video when
   the screen turns, and keeps what it has when the phone is unplugged or the plugin is turned off.
-  There's no length limit: when the disk has less than 2 GB free, it warns and goes on, and if the
-  disk fills up, what was written is kept and can still be found.
+  There's no length limit: when the disk has less than 2 GB free, a yellow line under the screen
+  says so and the recording goes on, and if the disk fills up, what was written is kept and can
+  still be found.
 - **Told when a recording goes wrong.** A recording stops, keeping what it recorded, and says why
   under the screen and in the window's banner, when:
   - the video stops coming, because the mirror falls back on screenshots or the stream stays down

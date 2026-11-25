@@ -569,9 +569,6 @@ internal object DevicesMapper {
     }
   }
 
-  /** What the disk running low during a recording says once, as it starts to. */
-  fun lowSpaceWarning(spaceLeft: Long): LemonadeCodeString = Res.string.recording_low_space.asLemonadeCodeString(space(spaceLeft))
-
   /** The folder [path] is in, with the home folder [home] written `~`. */
   private fun folderOf(path: String, home: String): String = abbreviateHome(path.substring(0, maxOf(path.lastIndexOf('/'), path.lastIndexOf('\\'), 0)), home)
 

@@ -125,6 +125,17 @@ internal data class DevicesViewState(
 internal val WorkspaceViewState.panelPage: DevicePageState?
   get() = devices?.takeIf { it.step == DevicesStep.Device }?.page?.takeIf { it.deviceId !in deviceWindows }
 
+/** The choice of size to record at closed for [ids] on every page that has one: the panel's and their own windows'. */
+internal fun WorkspaceViewState.closingRecordingChoices(ids: Set<DeviceId>): WorkspaceViewState = copy(
+  devices = devices?.let { panel ->
+    val page = panel.page?.takeIf { it.deviceId in ids && it.recordingChoiceOpen }
+    if (page == null) panel else panel.copy(page = page.copy(recordingChoiceOpen = false))
+  },
+  deviceWindows = deviceWindows.mapValues { (id, window) ->
+    if (id in ids && window.page.recordingChoiceOpen) window.copy(page = window.page.copy(recordingChoiceOpen = false)) else window
+  },
+)
+
 /** One device's page, in the Devices panel or in a window of its own: its screen and its logs. */
 internal data class DevicePageState(
   val deviceId: DeviceId,

@@ -33,6 +33,14 @@ What Lemonade Code doesn't do yet. Want something that isn't here?
   only Android screens can be recorded.
 - **One video per way the screen faces.** Turning the phone while recording goes on in a second
   video, since players don't follow a video that changes size.
+- **Recording at full resolution is unmeasured.** It keeps the mirror's bit rate, and what it costs
+  the mirror in memory and frame rate hasn't been measured on a phone yet.
+- **An encoder that pads its size counts as refusing full resolution.** One that rounds the size
+  up, e.g. to a multiple of 16, without saying it crops back, gives pictures of another size than
+  asked, which reads as a refusal.
+- **A screen that turns off while recording ends it.** The phone sends no video with its screen
+  off, so at `screenrecord`'s next restart, within three minutes, the stream doesn't start again and
+  the recording stops as "stopped sending video".
 - **Recording at the edges of a cut-short picture.** When the stream goes quiet, the mirror hands
   over the picture in hand so the screen's last change shows. If more of that picture comes after,
   it was cut short: the recording takes it back, and the video has a short gap there until the next

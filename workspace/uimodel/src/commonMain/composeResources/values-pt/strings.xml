@@ -376,7 +376,7 @@
   <string name="recording_failed_no_video">Não foi possível gravar %1$s: não enviou vídeo.</string>
   <string name="recording_failed_unwritable">Não foi possível guardar a gravação.</string>
   <string name="recording_failed_partly">Não foi possível escrever toda a gravação. O que foi escrito está em %1$s.</string>
-  <string name="recording_choose_title">Gravar o ecrã em</string>
+  <string name="recording_choose_title">Tamanho da gravação</string>
   <string name="recording_full">Resolução completa</string>
   <string name="recording_full_note">O tamanho do próprio telemóvel: mais nítido, ficheiros maiores</string>
   <string name="recording_mirror">Tamanho do espelho</string>

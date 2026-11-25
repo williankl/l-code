@@ -460,6 +460,38 @@ class MobileServiceImplTest {
   }
 
   @Test
+  fun `a refused size, which adb reports as text and a clean end, says so, and the mirror is back on video at once`() = runTest {
+    answerPixel()
+    commands.answer("adb -s 38021FDH2000AB shell dumpsys window displays", "cur=1080x2400\n")
+    commands.picture("adb -s 38021FDH2000AB exec-out screencap -p", png(1080, 2400))
+    val mirror = commands.byteStream("adb -s 38021FDH2000AB exec-out screenrecord --output-format=h264 --size 576x1280 --bit-rate 8000000 -")
+    val full = commands.byteStream("adb -s 38021FDH2000AB exec-out screenrecord --output-format=h264 --size 1080x2400 --bit-rate 8000000 -")
+    // What `adb exec-out screenrecord` gives for a size the encoder won't take: exit 0, the error as output.
+    full.send("ERROR: unable to configure video/avc codec at 1080x2400 (err=-22)\n".encodeToByteArray())
+    full.close()
+    val streamStart = nal(7, 0x42) + nal(8, 0xCE) + picture(idr = true)
+    val service = service()
+    runCurrent()
+
+    service.screen(pixel).test {
+      assertEquals(DeviceScreen.Loading, awaitItem())
+      mirror.send(streamStart)
+      assertIs<DeviceScreen.Frame>(awaitItem())
+      assertEquals(LemonadeCodeResult.success(Unit), service.startRecording(pixel, RecordingResolution.Full))
+      advanceTimeBy(2.seconds)
+      runCurrent()
+      assertEquals(ScreenRecording.Failed(RecordingFailure.FullResolutionRefused), service.recordings.value[pixel])
+      assertEquals(1, commands.count("adb -s 38021FDH2000AB exec-out screenrecord --output-format=h264 --size 1080x2400"))
+      // Straight back to video at the mirror's size, not screenshots.
+      assertEquals(2, commands.count("adb -s 38021FDH2000AB exec-out screenrecord --output-format=h264 --size 576x1280"))
+      mirror.send(streamStart)
+      assertIs<ScreenPicture.Bgra>(assertIs<DeviceScreen.Frame>(awaitItem()).picture)
+      cancelAndIgnoreRemainingEvents()
+    }
+    assertEquals(0, commands.count("adb -s 38021FDH2000AB exec-out screencap"))
+  }
+
+  @Test
   fun `a device that records its own size smaller has refused it too`() = runTest {
     answerPixel()
     commands.answer("adb -s 38021FDH2000AB shell dumpsys window displays", "cur=1080x2400\n")

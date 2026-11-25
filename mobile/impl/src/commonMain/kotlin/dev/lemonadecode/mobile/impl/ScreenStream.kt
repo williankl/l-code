@@ -14,7 +14,6 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.produceIn
-import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.selects.onTimeout
 import kotlinx.coroutines.selects.select
@@ -44,7 +43,8 @@ internal fun interface ScreenDecoders {
  * only squeeze into its old size; [turned] says it was just turned from here, so its size is
  * looked at again straight away. Until the size is known, and once recording has failed a few
  * times running, it falls back on [capture]'s [Screenshots], trying to record again now and then.
- * [restart] starts the recording over at once, for a video file to begin on a whole picture, and
+ * [restart] starts the recording over at once, for a video file to begin on a whole picture or to
+ * go back to its own size; asked for while screenshots stand in, it tries video again at once.
  * [onFallback] hears each time it gives up on video for screenshots.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -62,18 +62,23 @@ internal fun mirrorScreens(
   val screenshots = Screenshots(rate, capture)
   var failures = 0
   var gaveUpAt: ComparableTimeMark? = null
+  // Restarts asked for wait here until a stream starts, which answers them.
+  val restarts = Channel<Unit>(Channel.CONFLATED)
+  launch { restart.collect { restarts.trySend(Unit) } }
   while (true) {
     if (failures >= MaxRecordingFailures) {
       val since = gaveUpAt ?: timeSource.markNow().also {
         gaveUpAt = it
         onFallback()
       }
-      if (since.elapsedNow() < RecordingAgainAfter) {
+      val asked = restarts.tryReceive().isSuccess
+      if (!asked && since.elapsedNow() < RecordingAgainAfter) {
         screenshots.next { send(it) }
         continue
       }
-      // One more try; another failure goes back to screenshots for a while.
-      failures = MaxRecordingFailures - 1
+      // Asked to start over, e.g. back at its own size after a recording: video gets its full
+      // tries again. Otherwise one more; another failure goes back to screenshots for a while.
+      failures = if (asked) 0 else MaxRecordingFailures - 1
       gaveUpAt = null
     }
     val screen = size()
@@ -81,6 +86,8 @@ internal fun mirrorScreens(
       screenshots.next { send(it) }
       continue
     }
+    // The stream starting now answers whatever restart was asked for before it.
+    val _ = restarts.tryReceive()
     val (width, height) = screen
     var frames = 0
     var turnedAway = false
@@ -117,10 +124,9 @@ internal fun mirrorScreens(
         recording.cancel()
       }
       val restarting = launch {
-        restart.take(1).collect {
-          restarted = true
-          recording.cancel()
-        }
+        restarts.receive()
+        restarted = true
+        recording.cancel()
       }
       recording.join()
       waiting.cancel()

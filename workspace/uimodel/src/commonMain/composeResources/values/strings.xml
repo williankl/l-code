@@ -356,7 +356,7 @@
   <string name="recording_failed_no_video">Couldn’t record %1$s: it sent no video.</string>
   <string name="recording_failed_unwritable">Couldn’t save the recording.</string>
   <string name="recording_failed_partly">Couldn’t write the whole recording. What was written is in %1$s.</string>
-  <string name="recording_choose_title">Record the screen at</string>
+  <string name="recording_choose_title">Recording size</string>
   <string name="recording_full">Full resolution</string>
   <string name="recording_full_note">The phone’s own size: sharpest, bigger files</string>
   <string name="recording_mirror">Mirror size</string>

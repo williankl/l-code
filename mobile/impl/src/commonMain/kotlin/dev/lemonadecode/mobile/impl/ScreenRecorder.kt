@@ -152,7 +152,7 @@ internal class ScreenRecorder(
   /** [id]'s video stream ended; one that doesn't start again within [StallLimit] ends the recording. */
   fun onStreamEnded(id: DeviceId) = send(id, Message.StreamEnded(timeSource.markNow()))
 
-  /** [id] wouldn't stream at its full size, failing or making it smaller. */
+  /** [id]'s stream at its full size ended before its first picture, or came smaller: refused, unless the recording has pictures already. */
   fun onRefused(id: DeviceId) = send(id, Message.Refused(timeSource.markNow()))
 
   /** [id]'s mirror gave up on video and shows screenshots instead. */
@@ -274,7 +274,10 @@ internal class ScreenRecorder(
             }
             Message.CutShort -> part?.discardLast()
             is Message.StreamEnded -> if (downSince == null) downSince = message.at
-            is Message.Refused -> result = failing(RecordingFailure.FullResolutionRefused, message.at)
+            // Only before its first picture: a device that recorded at its full size for a while and
+            // then can't start again, after a turn or at screenrecord's restart, has trouble with
+            // its stream, which the stall and fallback rules deal with.
+            is Message.Refused -> if (!sawVideo) result = failing(RecordingFailure.FullResolutionRefused, message.at)
             is Message.VideoLost -> result = failing(RecordingFailure.VideoLost, message.at)
             is Message.Stop -> {
               stop = message

@@ -356,7 +356,7 @@
   <string name="recording_failed_no_video">%1$s konnte nicht aufgenommen werden: Es kam kein Video.</string>
   <string name="recording_failed_unwritable">Die Aufnahme konnte nicht gespeichert werden.</string>
   <string name="recording_failed_partly">Die Aufnahme konnte nicht ganz geschrieben werden. Was geschrieben wurde, liegt in %1$s.</string>
-  <string name="recording_choose_title">Bildschirm aufnehmen in</string>
+  <string name="recording_choose_title">Aufnahmegröße</string>
   <string name="recording_full">Volle Auflösung</string>
   <string name="recording_full_note">Die eigene Größe des Telefons: am schärfsten, größere Dateien</string>
   <string name="recording_mirror">Spiegelgröße</string>

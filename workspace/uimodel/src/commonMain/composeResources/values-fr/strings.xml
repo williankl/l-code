@@ -376,7 +376,7 @@
   <string name="recording_failed_no_video">Impossible d’enregistrer %1$s : aucune vidéo reçue.</string>
   <string name="recording_failed_unwritable">Impossible de sauvegarder l’enregistrement.</string>
   <string name="recording_failed_partly">Impossible d’écrire tout l’enregistrement. Ce qui a été écrit est dans %1$s.</string>
-  <string name="recording_choose_title">Enregistrer l’écran en</string>
+  <string name="recording_choose_title">Taille de l’enregistrement</string>
   <string name="recording_full">Pleine résolution</string>
   <string name="recording_full_note">La taille du téléphone lui-même : le plus net, des fichiers plus gros</string>
   <string name="recording_mirror">Taille du miroir</string>

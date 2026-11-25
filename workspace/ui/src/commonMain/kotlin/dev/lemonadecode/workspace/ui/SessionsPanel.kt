@@ -1,5 +1,6 @@
 package dev.lemonadecode.workspace.ui
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -8,11 +9,13 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -41,6 +44,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.teya.lemonade.Icon
@@ -54,9 +58,11 @@ import com.teya.lemonade.core.LemonadeButtonType
 import com.teya.lemonade.core.LemonadeButtonVariant
 import com.teya.lemonade.core.LemonadeIcons
 import dev.lemonadecode.platform.designsystem.AnimatedItems
+import dev.lemonadecode.platform.designsystem.AnimatedPresence
 import dev.lemonadecode.platform.designsystem.DotLabel
 import dev.lemonadecode.platform.designsystem.Hairline
 import dev.lemonadecode.platform.designsystem.HoverTooltip
+import dev.lemonadecode.platform.designsystem.LemonadeCodeAnimation
 import dev.lemonadecode.platform.designsystem.StatusDot
 import dev.lemonadecode.platform.designsystem.TooltipPlacement
 import dev.lemonadecode.platform.designsystem.dashedBorder
@@ -64,10 +70,20 @@ import dev.lemonadecode.platform.localization.LemonadeCodeString
 import dev.lemonadecode.platform.localization.resolve
 import dev.lemonadecode.workspace.strings.Res
 import dev.lemonadecode.workspace.strings.action_new_terminal
+import dev.lemonadecode.workspace.strings.archived_delete
+import dev.lemonadecode.workspace.strings.archived_delete_session
+import dev.lemonadecode.workspace.strings.archived_hide
+import dev.lemonadecode.workspace.strings.archived_restore
+import dev.lemonadecode.workspace.strings.archived_restore_session
+import dev.lemonadecode.workspace.strings.archived_show
+import dev.lemonadecode.workspace.strings.archived_sub_sessions
+import dev.lemonadecode.workspace.strings.archived_title
 import dev.lemonadecode.workspace.strings.fold_hidden_count
 import dev.lemonadecode.workspace.strings.fold_hide
 import dev.lemonadecode.workspace.strings.fold_show
 import dev.lemonadecode.workspace.strings.sessions_title
+import dev.lemonadecode.workspace.uimodel.ArchivedSessionRowModel
+import dev.lemonadecode.workspace.uimodel.ArchivedSessionsModel
 import dev.lemonadecode.workspace.uimodel.SessionListRowModel
 import dev.lemonadecode.workspace.uimodel.SessionMenuModel
 import dev.lemonadecode.workspace.uimodel.SessionNavigationModel
@@ -79,21 +95,47 @@ import dev.lemonadecode.workspace.uimodel.WorkspaceEvent
 import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
 
+/**
+ * The sessions, then the Archived section pinned to the bottom while anything is archived. Open, the
+ * archived list takes up to half the height and scrolls on its own; the sessions scroll in the rest.
+ */
 @Composable
 internal fun SessionsSidebar(
   navigation: SessionNavigationModel,
   onEvent: (WorkspaceEvent) -> Unit,
   modifier: Modifier = Modifier,
   menu: SessionMenuModel? = null,
+  archived: ArchivedSessionsModel? = null,
+) {
+  val sessionsLabel = stringResource(Res.string.sessions_title)
+  BoxWithConstraints(modifier = modifier.semantics { contentDescription = sessionsLabel }) {
+    val archivedMaxHeight = maxHeight / 2
+    Column(modifier = Modifier.fillMaxSize()) {
+      OpenSessions(navigation = navigation, menu = menu, onEvent = onEvent, modifier = Modifier.weight(1f).fillMaxWidth())
+      AnimatedPresence(
+        value = archived,
+        enter = LemonadeCodeAnimation.expandIn(),
+        exit = LemonadeCodeAnimation.collapseOut(),
+      ) { section ->
+        ArchivedSessions(archived = section, maxListHeight = archivedMaxHeight, onEvent = onEvent)
+      }
+    }
+  }
+}
+
+@Composable
+private fun OpenSessions(
+  navigation: SessionNavigationModel,
+  menu: SessionMenuModel?,
+  onEvent: (WorkspaceEvent) -> Unit,
+  modifier: Modifier = Modifier,
 ) {
   val spaces = LemonadeTheme.spaces
   val sessionsLabel = stringResource(Res.string.sessions_title)
   val labels = sessionActionLabels()
   Column(
     verticalArrangement = Arrangement.spacedBy(spaces.spacing100),
-    modifier = modifier
-      .semantics { contentDescription = sessionsLabel }
-      .verticalScroll(rememberScrollState()),
+    modifier = modifier.verticalScroll(rememberScrollState()),
   ) {
     Row(
       verticalAlignment = Alignment.CenterVertically,
@@ -394,6 +436,169 @@ private fun FoldToggle(
       contentDescription = null,
       size = LemonadeAssetSize.XSmall,
       tint = tint,
+    )
+  }
+}
+
+/**
+ * The archived sessions under a header that folds them away, as it starts. Each row says what ran
+ * in it and where, and offers Restore and Delete for good; rows don't select, as nothing runs in them.
+ */
+@Composable
+private fun ArchivedSessions(
+  archived: ArchivedSessionsModel,
+  maxListHeight: Dp,
+  onEvent: (WorkspaceEvent) -> Unit,
+) {
+  val spaces = LemonadeTheme.spaces
+  val colors = LemonadeTheme.colors
+  Column(modifier = Modifier.fillMaxWidth().padding(top = spaces.spacing100)) {
+    Box(
+      modifier = Modifier
+        .padding(horizontal = spaces.spacing200)
+        .fillMaxWidth()
+        .height(1.dp)
+        .background(colors.border.borderNeutralLow),
+    )
+    ArchivedHeader(open = archived.open, count = archived.rows.size, onEvent = onEvent)
+    AnimatedVisibility(
+      visible = archived.open,
+      enter = LemonadeCodeAnimation.expandIn(),
+      exit = LemonadeCodeAnimation.collapseOut(),
+    ) {
+      Column(modifier = Modifier.heightIn(max = maxListHeight).verticalScroll(rememberScrollState())) {
+        AnimatedItems(items = archived.rows, key = { it.id }) { _, row ->
+          ArchivedSessionRow(row = row, onEvent = onEvent)
+        }
+      }
+    }
+  }
+}
+
+@Composable
+private fun ArchivedHeader(
+  open: Boolean,
+  count: Int,
+  onEvent: (WorkspaceEvent) -> Unit,
+) {
+  val spaces = LemonadeTheme.spaces
+  val colors = LemonadeTheme.colors
+  val interactionSource = remember { MutableInteractionSource() }
+  val hovered by interactionSource.collectIsHoveredAsState()
+  val label = stringResource(if (open) Res.string.archived_hide else Res.string.archived_show)
+  val tint = if (hovered) colors.content.contentPrimary else colors.content.contentSecondary
+  Row(
+    verticalAlignment = Alignment.CenterVertically,
+    horizontalArrangement = Arrangement.spacedBy(spaces.spacing200),
+    modifier = Modifier
+      .fillMaxWidth()
+      .heightIn(min = 40.dp)
+      .clip(LemonadeTheme.shapes.radius300)
+      .background(if (hovered) colors.background.bgElevated else Color.Transparent)
+      .hoverable(interactionSource)
+      .clickable(interactionSource = interactionSource, indication = null, role = Role.Button) { onEvent(WorkspaceEvent.ToggleArchivedSessions) }
+      .semantics { contentDescription = label }
+      .padding(start = spaces.spacing300, end = spaces.spacing300),
+  ) {
+    LemonadeUi.Text(
+      text = stringResource(Res.string.archived_title).uppercase(),
+      textStyle = LemonadeTheme.typography.bodyXSmallOverline,
+      color = tint,
+    )
+    LemonadeUi.Text(
+      text = count.toString(),
+      textStyle = LemonadeTheme.typography.bodyXSmallMedium,
+      color = colors.content.contentTertiary,
+      modifier = Modifier.weight(1f),
+    )
+    LemonadeUi.Icon(
+      icon = if (open) LemonadeIcons.ChevronDown else LemonadeIcons.ChevronRight,
+      contentDescription = null,
+      size = LemonadeAssetSize.XSmall,
+      tint = tint,
+    )
+  }
+}
+
+@Composable
+private fun ArchivedSessionRow(
+  row: ArchivedSessionRowModel,
+  onEvent: (WorkspaceEvent) -> Unit,
+) {
+  val spaces = LemonadeTheme.spaces
+  val colors = LemonadeTheme.colors
+  Row(
+    verticalAlignment = Alignment.CenterVertically,
+    horizontalArrangement = Arrangement.spacedBy(spaces.spacing200),
+    modifier = Modifier
+      .fillMaxWidth()
+      .padding(start = spaces.spacing300, end = spaces.spacing100, top = 6.dp, bottom = 6.dp),
+  ) {
+    LemonadeUi.Icon(
+      icon = LemonadeIcons.Computer,
+      contentDescription = null,
+      size = LemonadeAssetSize.Small,
+      tint = colors.content.contentTertiary,
+      modifier = Modifier.align(Alignment.Top).padding(top = 2.dp),
+    )
+    Column(modifier = Modifier.weight(1f)) {
+      LemonadeUi.Text(
+        text = row.name,
+        textStyle = LemonadeTheme.typography.bodySmallSemiBold,
+        color = colors.content.contentSecondary,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+      )
+      LemonadeUi.Text(
+        text = row.meta.resolve(),
+        textStyle = LemonadeTheme.typography.bodyXSmallRegular,
+        color = colors.content.contentTertiary,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+      )
+      if (row.subSessionCount > 0) {
+        LemonadeUi.Text(
+          text = pluralStringResource(Res.plurals.archived_sub_sessions, row.subSessionCount, row.subSessionCount),
+          textStyle = LemonadeTheme.typography.bodyXSmallRegular,
+          color = colors.content.contentTertiary,
+          maxLines = 1,
+          overflow = TextOverflow.Ellipsis,
+        )
+      }
+    }
+    // Side by side, so the name and where it ran keep as much room as they can.
+    Row {
+      ArchivedAction(
+        icon = LemonadeIcons.ArrowRotateCcw,
+        tooltip = stringResource(Res.string.archived_restore),
+        description = stringResource(Res.string.archived_restore_session, row.name),
+        onClick = { onEvent(WorkspaceEvent.RestoreArchivedSession(row.id)) },
+      )
+      ArchivedAction(
+        icon = LemonadeIcons.Trash,
+        tooltip = stringResource(Res.string.archived_delete),
+        description = stringResource(Res.string.archived_delete_session, row.name),
+        onClick = { onEvent(WorkspaceEvent.DeleteArchivedSession(row.id)) },
+      )
+    }
+  }
+}
+
+@Composable
+private fun ArchivedAction(
+  icon: LemonadeIcons,
+  tooltip: String,
+  description: String,
+  onClick: () -> Unit,
+) {
+  HoverTooltip(text = tooltip, placement = TooltipPlacement.AboveStart) {
+    LemonadeUi.IconButton(
+      icon = icon,
+      contentDescription = description,
+      onClick = onClick,
+      variant = LemonadeButtonVariant.Neutral,
+      type = LemonadeButtonType.Ghost,
+      size = LemonadeButtonSize.XSmall,
     )
   }
 }

@@ -76,7 +76,7 @@ An `impl` never depends on another `impl`. Bindings are contributed with
 | `platform/designsystem` | `LemonadeCodeTheme` over Lemonade, plus tooltips, popovers, a modal dialog, a context menu, a slot segmented control and the app's animations, which the Animations setting turns off. See [Design](DESIGN.md#what-lemonade-code-adds). |
 | `domainEntities` | Sessions, reviews, diffs, settings, updates. No dependencies. |
 | `data/git/{api,impl,fake}` | `GitDataSource` over the `git` command: merge-base diffs with whole-file context, untracked files, worktrees (adding, telling a linked one from a main checkout, removing). |
-| `sessions/{api,impl,fake}` | `SessionService`: opens login shells in PTYs, follows each shell's folder and branch, infers working / needs input / idle / exited, plans and starts sub-sessions. `SessionTerminals` exposes the terminals to the UI. |
+| `sessions/{api,impl,fake}` | `SessionService`: opens login shells in PTYs, follows each shell's folder and branch, infers working / needs input / idle / exited, plans and starts sub-sessions, archives sessions and brings them back. `SessionTerminals` exposes the terminals to the UI. |
 | `review/{api,impl,fake}` | `ReviewService`: the diff and comments per checkout, the review text, pasting it into the session or into a review sub-session. |
 | `settings/{api,impl,fake}` | `SettingsService` (persisted), the keep-awake coordinator, and the status sounds coordinator that dings when an agent finishes or needs input. |
 | `updates/{api,impl,fake}` | `UpdateService`: finds a newer GitHub release for this install, downloads and checks it, and, on Restart now, hands over to a helper that swaps it in after the app quits. See [RELEASING.md](../RELEASING.md). |

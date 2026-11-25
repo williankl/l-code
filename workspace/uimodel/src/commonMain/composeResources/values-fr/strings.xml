@@ -183,6 +183,32 @@
   </plurals>
   <string name="error_worktree_delete">Impossible de supprimer le worktree %1$s : %2$s</string>
 
+  <!-- Archived sessions: put away from the session menu, kept under Archived to restore or delete -->
+  <string name="session_archive">Archiver</string>
+  <string name="session_archive_detail">L’arrête et la garde dans Archivées</string>
+  <string name="session_archive_action">Archiver la session</string>
+  <string name="session_archived">%1$s archivée</string>
+  <string name="archived_title">Archivées</string>
+  <string name="archived_show">Afficher les sessions archivées</string>
+  <string name="archived_hide">Masquer les sessions archivées</string>
+  <plurals name="archived_sub_sessions">
+    <item quantity="one">Avec %1$d sous-session</item>
+    <item quantity="many">Avec %1$d sous-sessions</item>
+    <item quantity="other">Avec %1$d sous-sessions</item>
+  </plurals>
+  <string name="archived_restore">Restaurer</string>
+  <string name="archived_restore_session">Restaurer %1$s</string>
+  <string name="archived_delete">Supprimer définitivement</string>
+  <string name="archived_delete_session">Supprimer %1$s définitivement</string>
+  <string name="archived_restored_at_home">%2$s n’existe plus, donc %1$s est revenue dans votre dossier personnel</string>
+  <plurals name="archived_restored_at_home_many">
+    <item quantity="one">%1$d dossier n’existe plus, donc sa session est revenue dans votre dossier personnel</item>
+    <item quantity="many">%1$d dossiers n’existent plus, donc leurs sessions sont revenues dans votre dossier personnel</item>
+    <item quantity="other">%1$d dossiers n’existent plus, donc leurs sessions sont revenues dans votre dossier personnel</item>
+  </plurals>
+  <string name="no_open_sessions_title">Aucune session ouverte</string>
+  <string name="no_open_sessions_detail">Ouvrez un nouveau terminal ou restaurez une session archivée depuis la barre latérale.</string>
+
   <!-- New session -->
   <string name="action_new_terminal">Nouveau terminal</string>
   <string name="no_sessions_title">Aucune session pour l’instant</string>

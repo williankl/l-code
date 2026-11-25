@@ -1,5 +1,6 @@
 package dev.lemonadecode.sessions.fake
 
+import dev.lemonadecode.domain.session.ArchivedSession
 import dev.lemonadecode.domain.session.LinkedWorktree
 import dev.lemonadecode.domain.session.Session
 import dev.lemonadecode.domain.session.SessionId
@@ -11,6 +12,7 @@ import dev.lemonadecode.domain.session.SubSessionPlan
 import dev.lemonadecode.platform.core.LemonadeCodeResult
 import dev.lemonadecode.sessions.api.SessionError
 import dev.lemonadecode.sessions.api.SessionService
+import dev.lemonadecode.sessions.api.Unarchived
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
@@ -150,16 +152,60 @@ public class FakeSessionService(initial: List<Session> = emptyList()) : SessionS
 
   override fun close(id: SessionId) {
     closed += id
-    state.update { list ->
-      // Sub-sessions always come after their parent, so one pass finds every level.
-      val doomed = mutableSetOf(id)
-      list.forEach { if (it.parentId in doomed) doomed += it.id }
-      list.filterNot { it.id in doomed }
+    if (archivedState.value.any { it.id == id }) {
+      archivedState.update { list -> list.filterNot { it.id == id } }
+      return
     }
+    state.update { list -> list.filterNot { it.id in subtree(list, id) } }
+  }
+
+  /** [id] and its sub-sessions: they always come after their parent, so one pass finds every level. */
+  private fun subtree(list: List<Session>, id: SessionId): Set<SessionId> {
+    val found = mutableSetOf(id)
+    list.forEach { if (it.parentId in found) found += it.id }
+    return found
+  }
+
+  private val archivedState = MutableStateFlow<List<ArchivedSession>>(emptyList())
+  override val archived: StateFlow<List<ArchivedSession>> = archivedState
+
+  public val archivedIds: MutableList<SessionId> = mutableListOf()
+  public val unarchivedIds: MutableList<SessionId> = mutableListOf()
+
+  /** Folders [unarchive] finds gone, which it reports instead of bringing their sessions back there. */
+  public var missingFolders: Set<String> = emptySet()
+
+  /** What [unarchive] answers; null brings the session back. */
+  public var unarchiveResult: LemonadeCodeResult<Unarchived, SessionError>? = null
+
+  /** Takes the session and its sub-sessions out of the list, the most recently archived first, with no status. */
+  override fun archive(id: SessionId) {
+    archivedIds += id
+    val list = state.value
+    val going = subtree(list, id)
+    val sessions = list.filter { it.id in going }.map { it.copy(status = SessionStatus.Shell) }
+    if (sessions.isEmpty()) return
+    state.value = list.filterNot { it.id in going }
+    archivedState.update { listOf(ArchivedSession(sessions.first(), sessions.drop(1))) + it }
+  }
+
+  /** Puts the sessions back last, under the parent if it's there; a folder in [missingFolders] comes back at home. */
+  override suspend fun unarchive(id: SessionId): LemonadeCodeResult<Unarchived, SessionError> {
+    unarchivedIds += id
+    unarchiveResult?.let { return it }
+    val archive = archivedState.value.firstOrNull { it.id == id } ?: return LemonadeCodeResult.failure(SessionError.UnknownSession)
+    archivedState.update { list -> list - archive }
+    val missing = archive.sessions.filter { it.workingDirectory in missingFolders }.associate { it.id to it.workingDirectory }
+    val back = archive.sessions.map { session ->
+      val moved = if (session.id in missing) session.copy(workingDirectory = homeFolder) else session
+      if (session.id == id && state.value.none { it.id == session.parentId }) moved.copy(parentId = null, placement = SessionPlacement.Root) else moved
+    }
+    state.update { it + back }
+    return LemonadeCodeResult.success(Unarchived(id, missing))
   }
 
   override suspend fun worktreeOf(id: SessionId): LinkedWorktree? {
-    val session = state.value.firstOrNull { it.id == id } ?: return null
+    val session = (state.value + archivedState.value.flatMap { it.sessions }).firstOrNull { it.id == id } ?: return null
     return worktrees.firstOrNull { it.contains(session.workingDirectory) }
   }
 

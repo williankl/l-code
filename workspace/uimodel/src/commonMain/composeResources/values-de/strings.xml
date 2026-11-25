@@ -173,6 +173,30 @@
   </plurals>
   <string name="error_worktree_delete">Worktree %1$s konnte nicht gelöscht werden: %2$s</string>
 
+  <!-- Archived sessions: put away from the session menu, kept under Archived to restore or delete -->
+  <string name="session_archive">Archivieren</string>
+  <string name="session_archive_detail">Beendet sie, behält sie unter „Archiviert“</string>
+  <string name="session_archive_action">Sitzung archivieren</string>
+  <string name="session_archived">%1$s archiviert</string>
+  <string name="archived_title">Archiviert</string>
+  <string name="archived_show">Archivierte Sitzungen anzeigen</string>
+  <string name="archived_hide">Archivierte Sitzungen ausblenden</string>
+  <plurals name="archived_sub_sessions">
+    <item quantity="one">Mit %1$d Untersitzung</item>
+    <item quantity="other">Mit %1$d Untersitzungen</item>
+  </plurals>
+  <string name="archived_restore">Wiederherstellen</string>
+  <string name="archived_restore_session">%1$s wiederherstellen</string>
+  <string name="archived_delete">Endgültig löschen</string>
+  <string name="archived_delete_session">%1$s endgültig löschen</string>
+  <string name="archived_restored_at_home">%2$s existiert nicht mehr, daher ist %1$s in deinem Benutzerordner zurück</string>
+  <plurals name="archived_restored_at_home_many">
+    <item quantity="one">%1$d Ordner existiert nicht mehr, daher ist seine Sitzung in deinem Benutzerordner zurück</item>
+    <item quantity="other">%1$d Ordner existieren nicht mehr, daher sind ihre Sitzungen in deinem Benutzerordner zurück</item>
+  </plurals>
+  <string name="no_open_sessions_title">Keine offenen Sitzungen</string>
+  <string name="no_open_sessions_detail">Öffne ein neues Terminal oder stelle eine archivierte Sitzung aus der Seitenleiste wieder her.</string>
+
   <!-- New session -->
   <string name="action_new_terminal">Neues Terminal</string>
   <string name="no_sessions_title">Noch keine Sitzungen</string>

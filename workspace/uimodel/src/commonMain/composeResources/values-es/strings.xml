@@ -183,6 +183,32 @@
   </plurals>
   <string name="error_worktree_delete">No se pudo eliminar el worktree %1$s: %2$s</string>
 
+  <!-- Archived sessions: put away from the session menu, kept under Archived to restore or delete -->
+  <string name="session_archive">Archivar</string>
+  <string name="session_archive_detail">La detiene y la guarda en Archivadas</string>
+  <string name="session_archive_action">Archivar sesión</string>
+  <string name="session_archived">%1$s archivada</string>
+  <string name="archived_title">Archivadas</string>
+  <string name="archived_show">Mostrar sesiones archivadas</string>
+  <string name="archived_hide">Ocultar sesiones archivadas</string>
+  <plurals name="archived_sub_sessions">
+    <item quantity="one">Con %1$d subsesión</item>
+    <item quantity="many">Con %1$d subsesiones</item>
+    <item quantity="other">Con %1$d subsesiones</item>
+  </plurals>
+  <string name="archived_restore">Restaurar</string>
+  <string name="archived_restore_session">Restaurar %1$s</string>
+  <string name="archived_delete">Eliminar para siempre</string>
+  <string name="archived_delete_session">Eliminar %1$s para siempre</string>
+  <string name="archived_restored_at_home">%2$s ya no existe, así que %1$s se reabrió en tu carpeta personal</string>
+  <plurals name="archived_restored_at_home_many">
+    <item quantity="one">%1$d carpeta ya no existe, así que su sesión se reabrió en tu carpeta personal</item>
+    <item quantity="many">%1$d carpetas ya no existen, así que sus sesiones se reabrieron en tu carpeta personal</item>
+    <item quantity="other">%1$d carpetas ya no existen, así que sus sesiones se reabrieron en tu carpeta personal</item>
+  </plurals>
+  <string name="no_open_sessions_title">No hay sesiones abiertas</string>
+  <string name="no_open_sessions_detail">Abre un nuevo terminal o restaura una sesión archivada desde la barra lateral.</string>
+
   <!-- New session -->
   <string name="action_new_terminal">Nuevo terminal</string>
   <string name="no_sessions_title">Aún no hay sesiones</string>

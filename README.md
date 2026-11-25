@@ -182,7 +182,7 @@ macOS and Windows even the window's title bar follows along.
 <table>
 <tr>
 <td width="33%" valign="top"><img src="docs/images/touch-keep-awake.png" alt="The settings list with Keep awake on, and the Keeping awake tag in the top bar"><br><b>Keep awake</b><br><sub>Your computer won't sleep or lock while an agent is working.</sub></td>
-<td width="33%" valign="top"><img src="docs/images/touch-session-menu.png" alt="The right-click menu of a session"><br><b>Right-click menu</b><br><sub>Rename a session, copy its folder, branch off from it, or close it.</sub></td>
+<td width="33%" valign="top"><img src="docs/images/touch-session-menu.png" alt="The right-click menu of a session"><br><b>Right-click menu</b><br><sub>Rename a session, copy its folder, branch off from it, archive it or close it.</sub></td>
 <td width="33%" valign="top"><img src="docs/images/touch-update.png" alt="Settings › Updates offering a new version"><br><b>Updates itself</b><br><sub>Update from Settings, and your sessions come right back.</sub></td>
 </tr>
 <tr>
@@ -201,6 +201,8 @@ And a few more:
 
 - 🔁 **Sessions come back.** Quit and reopen: every session returns in the folder it was in, with its
   last output on screen. Claude Code conversations pick up where they left off.
+- 🗃️ **Archive, don't close.** Put a session away with its sub-sessions and bring it back later, right
+  where it was, conversation and all.
 - 🔗 **Clickable links.** Ctrl-click (or ⌘-click) any web address in the terminal to open it.
 - ⌨️ **Every keyboard works.** Accents, dead keys and input methods type just like anywhere else.
 - 📋 **Paths to go.** Select a file's path right in the diff, or copy it with one click.

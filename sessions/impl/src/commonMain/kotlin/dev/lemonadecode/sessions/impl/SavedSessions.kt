@@ -4,9 +4,30 @@ import dev.lemonadecode.domain.session.SessionOrigin
 import dev.lemonadecode.domain.session.SessionPlacement
 import kotlinx.serialization.Serializable
 
-/** The sessions as Lemonade Code left them, to bring back on the next launch, in display order. */
+/**
+ * The sessions as Lemonade Code left them, to bring back on the next launch, in display order, and
+ * the archived ones, the most recently archived first. A file from before archiving has none.
+ */
 @Serializable
-internal data class SavedSessions(val sessions: List<SavedSession> = emptyList())
+internal data class SavedSessions(
+  val sessions: List<SavedSession> = emptyList(),
+  val archived: List<SavedArchive> = emptyList(),
+)
+
+/**
+ * A session archived with its sub-sessions: [sessions] holds it, then the sub-sessions under it in
+ * display order. It sat right after the sibling [after] and right before [before], and goes back
+ * there if it can.
+ */
+@Serializable
+internal data class SavedArchive(
+  val sessions: List<SavedSession> = emptyList(),
+  val after: String? = null,
+  val before: String? = null,
+) {
+  /** The archived session's own id. */
+  val id: String? get() = sessions.firstOrNull()?.id
+}
 
 /**
  * One session to bring back. [resume] is the command that picks up the agent that was running in
@@ -26,6 +47,10 @@ internal data class SavedSession(
   val output: List<String>? = null,
   /** The name the user gave it, if any. */
   val customName: String? = null,
+  /** For an archived session, shown while it's archived: its checkout and branch, and the agent that ran in it. */
+  val repositoryRoot: String? = null,
+  val branch: String? = null,
+  val agent: String? = null,
 ) {
   fun placement(): SessionPlacement = SessionPlacement.entries.firstOrNull { it.name == placement } ?: SessionPlacement.Root
 

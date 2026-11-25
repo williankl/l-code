@@ -9,6 +9,7 @@ short tour.
 - [Comments](#comments)
 - [Sending comments](#sending-comments)
 - [Sub-sessions and worktrees](#sub-sessions-and-worktrees)
+- [Archiving sessions](#archiving-sessions)
 - [File previews](#file-previews)
 - [Devices](#devices)
 - [Settings](#settings)
@@ -59,10 +60,11 @@ drawer, and a dot on the toggle tells you when one of them needs input.
 </tr>
 </table>
 
-**Right-click a session** to rename it, copy its folder path, start a sub-session from it, or close
-it. Middle-click closes it too. **⌘W** closes the selected session and its sub-sessions. If that
-would leave a git worktree with no session in it, you're asked first whether to delete the worktree
-too (see [Closing a worktree's session](#closing-a-worktrees-session)).
+**Right-click a session** to rename it, copy its folder path, start a sub-session from it,
+[archive it](#archiving-sessions) or close it. Middle-click closes it too. **⌘W** closes the
+selected session and its sub-sessions. If that would leave a git worktree with no session in it,
+you're asked first whether to delete the worktree too (see
+[Closing a worktree's session](#closing-a-worktrees-session)).
 
 <img src="images/session-menu.png" width="100%" alt="The right-click menu of a session, naming it and its folder">
 
@@ -197,6 +199,36 @@ Closing a session that isn't in a worktree works as before, with no question.
 
 ---
 
+## Archiving sessions
+
+Done with a session for now, but not for good? Right-click it and pick **Archive**. Its terminal
+stops, and whatever ran in it, and the session moves with its sub-sessions into **Archived** at the
+bottom of the sidebar. Nothing about it is lost: its name, its folder, its worktree, its place in
+the tree and the Claude Code conversation it had open are all kept, across restarts too. Archiving
+never touches a worktree or a branch.
+
+<img src="images/archived.png" width="100%" alt="The Archived section open at the bottom of the sidebar, listing review-2, flaky-login with its two sub-sessions and dotfiles, each with Restore and Delete buttons">
+
+- **Archived** starts folded, with a count, and only shows while something is archived. Open it to
+  see what ran in each session and where, and how many sub-sessions went with it.
+- **Restore** brings a session back where it was in the tree, with its sub-sessions, and selects it.
+  Each starts again in a fresh shell in its folder, the way it would after a restart: Claude Code
+  resumes its conversation, and a plain shell shows what it showed before.
+- **Delete for good** works like closing: if that leaves a git worktree with no session in it,
+  you're asked first whether to delete the worktree too.
+
+| When | What happens |
+|---|---|
+| You archive the session you're in | Its parent is selected, else the next session at its level, else the one before it |
+| You archive the last open session | The main panel says nothing is open and offers a new terminal; the archived ones wait in the sidebar |
+| A sub-session's parent is closed or archived while it's archived | It comes back at the top of the tree. With its parent open, it comes back under it |
+| Its folder is gone when you restore it | It opens in your home folder, without resuming its agent, and a message names the folder |
+| Closing another session would leave unused a worktree an archived session is in | The worktree isn't offered for deletion, since the archived session still needs it |
+
+Archived sessions have no status, make no sound and don't keep the computer awake.
+
+---
+
 ## File previews
 
 Some files are easier to review when you can see them. These open on a **Preview** by default; the
@@ -324,7 +356,8 @@ a fresh shell in that folder, with its old output above the new prompt.
 
 If Claude Code was running in a session, its conversation is resumed too. Programs other than Claude
 Code start fresh. Sessions are also saved while the app runs, so even after a crash you keep them
-(just not their latest output).
+(just not their latest output). [Archived sessions](#archiving-sessions) stay archived: nothing starts
+for them until you restore them.
 
 ---
 
@@ -352,7 +385,7 @@ With the mouse:
 
 | Action | Does |
 |---|---|
-| Right-click a session | Rename, copy folder path, start a sub-session, close |
+| Right-click a session | Rename, copy folder path, start a sub-session, archive, close |
 | Middle-click a session | Close it |
 | Click **+** beside a line | Comment on that line |
 | Drag across lines | Comment on a range |

@@ -20,6 +20,8 @@ public data class SessionsPanelModel(
   val tiles: List<SessionTileModel>,
   /** The right-click menu, on the row or tile of its session; null when closed. */
   val menu: SessionMenuModel? = null,
+  /** The Archived section at the bottom of the sidebar; null while nothing is archived. */
+  val archived: ArchivedSessionsModel? = null,
 ) {
   public companion object {
     /** How far the sidebar can be dragged, in dp. */
@@ -51,6 +53,26 @@ public data class SessionMenuModel(
   val rename: SessionRenameModel? = null,
   /** Set while the menu asks for a new worktree's branch instead of showing its items. */
   val newWorktree: WorktreeBranchModel? = null,
+)
+
+/**
+ * Sessions put away with Archive, the most recently archived first: folded under its header until
+ * [open]. Each can be restored or deleted for good.
+ */
+@Immutable
+public data class ArchivedSessionsModel(
+  val open: Boolean,
+  val rows: List<ArchivedSessionRowModel>,
+)
+
+@Immutable
+public data class ArchivedSessionRowModel(
+  val id: String,
+  val name: String,
+  /** What ran in it and where, as a session row says it. */
+  val meta: LemonadeCodeString,
+  /** The sub-sessions archived with it, which come back with it. */
+  val subSessionCount: Int,
 )
 
 @Immutable

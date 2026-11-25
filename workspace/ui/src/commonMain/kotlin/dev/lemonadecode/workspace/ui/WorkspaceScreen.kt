@@ -76,6 +76,8 @@ import dev.lemonadecode.workspace.strings.Res
 import dev.lemonadecode.workspace.strings.action_dismiss
 import dev.lemonadecode.workspace.strings.action_new_terminal
 import dev.lemonadecode.workspace.strings.devices_resize
+import dev.lemonadecode.workspace.strings.no_open_sessions_detail
+import dev.lemonadecode.workspace.strings.no_open_sessions_title
 import dev.lemonadecode.workspace.strings.no_sessions_detail
 import dev.lemonadecode.workspace.strings.no_sessions_title
 import dev.lemonadecode.workspace.uimodel.DevicePageEvent
@@ -202,6 +204,7 @@ public fun WorkspaceContent(
                     onEvent = onEvent,
                     modifier = Modifier.width(sidebarWidth).fillMaxHeight(),
                     menu = panel.menu,
+                    archived = panel.archived,
                   )
                   SidebarResizeHandle(
                     sidebarWidth = sidebarWidth,
@@ -350,6 +353,7 @@ private fun AnimatedVisibilityScope.SessionsDrawerContent(
       navigation = model.sessions.navigation,
       onEvent = onEvent,
       menu = model.sessions.menu,
+      archived = model.sessions.archived,
       modifier = Modifier
         .animateEnterExit(enter = LemonadeCodeAnimation.slideIn(AnimationEdge.Start), exit = LemonadeCodeAnimation.slideOut(AnimationEdge.Start))
         .padding(start = LemonadeTheme.spaces.spacing200, bottom = LemonadeTheme.spaces.spacing200)
@@ -410,7 +414,7 @@ private fun MainPanel(
           MessageState(content = content, modifier = Modifier.weight(1f).fillMaxWidth())
         }
         is WorkspaceContentModel.Diff -> DiffPane(review = content.review, narrowLayout = narrowLayout, onEvent = onEvent, modifier = fill)
-        WorkspaceContentModel.NoSessions -> NoSessions(onEvent = onEvent, modifier = fill)
+        WorkspaceContentModel.NoSessions -> NoSessions(anyArchived = model.sessions.archived != null, onEvent = onEvent, modifier = fill)
       }
     }
   }
@@ -450,8 +454,10 @@ private fun glideOnChange(key: Any, target: Dp): Dp {
   return if (gliding.value) animatable.value else target
 }
 
+/** Nothing open: a new terminal, or, while sessions are archived, one of those back from the sidebar. */
 @Composable
 private fun NoSessions(
+  anyArchived: Boolean,
   onEvent: (WorkspaceEvent) -> Unit,
   modifier: Modifier = Modifier,
 ) {
@@ -464,9 +470,12 @@ private fun NoSessions(
       horizontalAlignment = Alignment.CenterHorizontally,
       verticalArrangement = Arrangement.spacedBy(LemonadeTheme.spaces.spacing100),
     ) {
-      LemonadeUi.Text(text = stringResource(Res.string.no_sessions_title), textStyle = LemonadeTheme.typography.headingXSmall)
       LemonadeUi.Text(
-        text = stringResource(Res.string.no_sessions_detail),
+        text = stringResource(if (anyArchived) Res.string.no_open_sessions_title else Res.string.no_sessions_title),
+        textStyle = LemonadeTheme.typography.headingXSmall,
+      )
+      LemonadeUi.Text(
+        text = stringResource(if (anyArchived) Res.string.no_open_sessions_detail else Res.string.no_sessions_detail),
         textStyle = LemonadeTheme.typography.bodySmallRegular,
         color = LemonadeTheme.colors.content.contentSecondary,
       )

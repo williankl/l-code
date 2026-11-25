@@ -173,6 +173,30 @@
   </plurals>
   <string name="error_worktree_delete">Couldn’t delete the worktree %1$s: %2$s</string>
 
+  <!-- Archived sessions: put away from the session menu, kept under Archived to restore or delete -->
+  <string name="session_archive">Archive</string>
+  <string name="session_archive_detail">Stops it, keeps it under Archived</string>
+  <string name="session_archive_action">Archive session</string>
+  <string name="session_archived">Archived %1$s</string>
+  <string name="archived_title">Archived</string>
+  <string name="archived_show">Show archived sessions</string>
+  <string name="archived_hide">Hide archived sessions</string>
+  <plurals name="archived_sub_sessions">
+    <item quantity="one">With %1$d sub-session</item>
+    <item quantity="other">With %1$d sub-sessions</item>
+  </plurals>
+  <string name="archived_restore">Restore</string>
+  <string name="archived_restore_session">Restore %1$s</string>
+  <string name="archived_delete">Delete for good</string>
+  <string name="archived_delete_session">Delete %1$s for good</string>
+  <string name="archived_restored_at_home">%2$s is gone, so %1$s came back in your home folder</string>
+  <plurals name="archived_restored_at_home_many">
+    <item quantity="one">%1$d folder is gone, so its session came back in your home folder</item>
+    <item quantity="other">%1$d folders are gone, so their sessions came back in your home folder</item>
+  </plurals>
+  <string name="no_open_sessions_title">No open sessions</string>
+  <string name="no_open_sessions_detail">Open a new terminal, or restore an archived session from the sidebar.</string>
+
   <!-- New session -->
   <string name="action_new_terminal">New terminal</string>
   <string name="no_sessions_title">No sessions yet</string>

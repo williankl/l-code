@@ -82,6 +82,8 @@ internal data class WorkspaceViewState(
   val startingSubSession: Boolean = false,
   /** A session about to close that leaves worktrees unused, while the dialog asks what to do with them. */
   val closing: ClosingSession? = null,
+  /** The Archived section at the bottom of the sidebar is open; it starts folded. */
+  val archivedOpen: Boolean = false,
   val error: LemonadeCodeString? = null,
   val toast: LemonadeCodeString? = null,
 )

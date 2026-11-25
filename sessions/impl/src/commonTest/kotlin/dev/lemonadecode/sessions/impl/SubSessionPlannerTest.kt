@@ -69,4 +69,23 @@ class SubSessionPlannerTest {
     assertEquals(listOf("a", "b", "c", "e", "d"), inserted.map { it.name })
     assertEquals(setOf("a", "b", "c", "e"), SubSessionPlanner.subtree(inserted, SessionId("a")).map { it.value }.toSet())
   }
+
+  @Test
+  fun `a session goes back before the sibling it was before, else after the one it was after`() {
+    // a has sub-sessions b (with c under it) and d; e is a root after a.
+    val sessions = listOf(session("a", "a"), session("b", "b", parent = "a"), session("c", "c", parent = "b"), session("d", "d", parent = "a"), session("e", "e"))
+    fun back(session: Session, after: String?, before: String?) = SubSessionPlanner.insertBack(sessions, session, after?.let(::SessionId), before?.let(::SessionId)).map { it.name }
+
+    val x = session("x", "x", parent = "a")
+    assertEquals(listOf("a", "b", "c", "x", "d", "e"), back(x, after = "b", before = "d"))
+    assertEquals(listOf("a", "b", "c", "x", "d", "e"), back(x, after = "b", before = "gone"), "after b and what's under it")
+    assertEquals(listOf("a", "x", "b", "c", "d", "e"), back(x, after = "gone", before = "b"))
+    assertEquals(listOf("a", "b", "c", "d", "x", "e"), back(x, after = "gone", before = "gone"), "last under its parent")
+    assertEquals(listOf("a", "b", "c", "d", "x", "e"), back(x, after = null, before = "e"), "e isn't a sibling of a sub-session")
+
+    val root = session("y", "y")
+    assertEquals(listOf("y", "a", "b", "c", "d", "e"), back(root, after = null, before = "a"))
+    assertEquals(listOf("a", "b", "c", "d", "y", "e"), back(root, after = "a", before = null))
+    assertEquals(listOf("a", "b", "c", "d", "e", "y"), back(root, after = null, before = null), "last of all")
+  }
 }

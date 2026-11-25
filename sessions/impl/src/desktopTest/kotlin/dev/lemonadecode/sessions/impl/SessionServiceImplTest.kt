@@ -15,6 +15,7 @@ import dev.lemonadecode.platform.process.HomeDirectory
 import dev.lemonadecode.platform.terminal.TerminalLaunch
 import dev.lemonadecode.platform.terminal.TerminalSession
 import dev.lemonadecode.sessions.api.SessionError
+import dev.lemonadecode.sessions.api.Unarchived
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
@@ -343,6 +344,139 @@ class SessionServiceImplTest {
       LemonadeCodeResult.failure(SessionError.WorktreeNotRemoved("/x", "'/x' contains modified or untracked files, use --force to delete it")),
       service.removeWorktree(LinkedWorktree("/x", "feat/x", "/repo", hasChanges = false), force = false),
     )
+  }
+
+  @Test
+  fun `archiving ends a session and its sub-sessions but keeps them, and restoring brings them back where they were`() = runBlocking<Unit> {
+    git.checkoutResult = LemonadeCodeResult.success(GitCheckout(root = home.path, branch = "main"))
+    val first = service.openTerminal().getOrNull()!!
+    val middle = service.openTerminal().getOrNull()!!
+    val last = service.openTerminal().getOrNull()!!
+    val sub = service.startSubSession(middle, SubSessionLocation.SameFolder).getOrNull()!!
+    service.rename(middle, "rate limits")
+    val terminal = registry.terminal(middle)!!
+    terminal.send("echo archived-line\r")
+    withTimeout(5_000) {
+      while (terminal.screen().lines().none { it.trim() == "archived-line" }) delay(20)
+    }
+
+    service.archive(middle)
+    assertEquals(listOf(first, last), service.sessions.value.map { it.id })
+    val archived = service.archived.value.single()
+    assertEquals(middle, archived.id)
+    assertEquals(listOf(sub), archived.subSessions.map { it.id })
+    assertEquals("rate limits", archived.session.displayName)
+    assertEquals("main", archived.session.branch)
+    assertEquals(home.path, archived.session.repositoryRoot)
+    assertEquals(null, registry.terminal(middle), "its terminal ends")
+    assertEquals(null, registry.terminal(sub), "and its sub-session's")
+    withTimeout(5_000) {
+      while (ProcessHandle.of(terminal.pid).map { it.isAlive }.orElse(false)) delay(20)
+    }
+    assertTrue(git.removeWorktreeCalls.isEmpty())
+
+    assertEquals(LemonadeCodeResult.success(Unarchived(middle)), service.unarchive(middle))
+    assertEquals(listOf(first, middle, sub, last), service.sessions.value.map { it.id })
+    assertEquals(middle, service.sessions.value.single { it.id == sub }.parentId)
+    assertEquals("rate limits", service.sessions.value.single { it.id == middle }.displayName)
+    assertTrue(service.archived.value.isEmpty())
+    withTimeout(5_000) {
+      while (registry.terminal(middle)!!.screen().lines().none { it.trim() == "archived-line" }) delay(20)
+    }
+    assertEquals(LemonadeCodeResult.failure(SessionError.UnknownSession), service.unarchive(middle), "it comes back once")
+  }
+
+  @Test
+  fun `archived sessions are saved, stay archived on the next launch, and resume their agent when restored`() = runBlocking<Unit> {
+    assertEquals(0, service.restore())
+    val kept = service.openTerminal().getOrNull()!!
+    val shelved = service.openTerminal().getOrNull()!!
+    val shelvedPid = registry.terminal(shelved)!!.pid
+    agent = { pid -> "echo resumed-agent".takeIf { pid == shelvedPid } }
+    withTimeout(5_000) {
+      while (store.saved?.sessions?.firstOrNull { it.id == shelved.value }?.resume == null) delay(50)
+    }
+    service.archive(shelved)
+    withTimeout(5_000) {
+      while (store.saved?.archived.isNullOrEmpty()) delay(50)
+    }
+    assertEquals(listOf(kept.value), store.saved!!.sessions.map { it.id })
+
+    service.shutdown()
+    val saved = store.saved!!.archived.single().sessions.single()
+    assertEquals(shelved.value, saved.id)
+    assertEquals("echo resumed-agent", saved.resume)
+
+    agent = { null }
+    val nextRegistry = SessionRegistry()
+    val next = newService(nextRegistry)
+    assertEquals(1, next.restore(), "only the open session starts")
+    assertEquals(null, nextRegistry.terminal(shelved))
+    val archived = next.archived.value.single()
+    assertEquals(shelved, archived.id)
+    assertEquals("echo", archived.session.agent)
+
+    assertTrue(next.unarchive(shelved).isSuccess)
+    assertEquals(listOf(kept, shelved), next.sessions.value.map { it.id })
+    withTimeout(10_000) {
+      while (nextRegistry.terminal(shelved)!!.screen().lines().none { it.trim() == "resumed-agent" }) delay(50)
+    }
+  }
+
+  @Test
+  fun `an archived session whose folder has gone comes back at home, at the top, without its agent`() = runBlocking<Unit> {
+    store.saved = SavedSessions(
+      archived = listOf(
+        SavedArchive(
+          listOf(SavedSession(id = "gone", name = "sub-1", workingDirectory = "/no/such/folder", parentId = "closed", placement = "Worktree", resume = "echo should-not-run")),
+        ),
+      ),
+    )
+    assertEquals(0, service.restore())
+    val id = dev.lemonadecode.domain.session.SessionId("gone")
+    assertEquals(LemonadeCodeResult.success(Unarchived(id, mapOf(id to "/no/such/folder"))), service.unarchive(id))
+    val session = service.sessions.value.single()
+    assertEquals(home.path, session.workingDirectory)
+    assertEquals(null, session.parentId, "its parent closed while it was archived")
+    assertEquals("~", session.name)
+    delay(1_500)
+    assertTrue(registry.terminal(id)!!.screen().lines().none { it.trim() == "should-not-run" })
+  }
+
+  @Test
+  fun `a sub-session archived on its own comes back under its parent, or at the top while the parent is archived too`() = runBlocking<Unit> {
+    val parent = service.openTerminal().getOrNull()!!
+    val first = service.startSubSession(parent, SubSessionLocation.SameFolder).getOrNull()!!
+    val second = service.startSubSession(parent, SubSessionLocation.SameFolder).getOrNull()!!
+    service.archive(first)
+    assertTrue(service.unarchive(first).isSuccess)
+    assertEquals(listOf(parent, first, second), service.sessions.value.map { it.id })
+    assertEquals(parent, service.sessions.value.single { it.id == first }.parentId)
+
+    service.archive(first)
+    service.archive(parent)
+    assertEquals(listOf(parent, first), service.archived.value.map { it.id }, "the most recently archived first")
+    assertEquals(listOf(second), service.archived.value.first().subSessions.map { it.id })
+    assertTrue(service.unarchive(first).isSuccess)
+    assertEquals(null, service.sessions.value.single().parentId)
+    assertTrue(service.unarchive(parent).isSuccess)
+    assertEquals(listOf(first, parent, second), service.sessions.value.map { it.id })
+  }
+
+  @Test
+  fun `closing an archived session lets it go for good, and its worktree is still found until then`() = runBlocking<Unit> {
+    val main = File(home, "storefront").apply { mkdirs() }
+    val folder = File(home, "storefront.worktrees/sub-1").apply { mkdirs() }
+    git.linkedWorktrees = mapOf(folder.path to GitWorktree(root = folder.path, branch = "feat/x", mainRoot = main.path, hasChanges = false))
+    val id = service.openTerminal(folder.path).getOrNull()!!
+    service.archive(id)
+    assertTrue(folder.isDirectory, "archiving never deletes a worktree")
+    assertEquals(LinkedWorktree(path = folder.path, branch = "feat/x", mainCheckout = main.path, hasChanges = false), service.worktreeOf(id))
+
+    service.close(id)
+    assertTrue(service.archived.value.isEmpty())
+    assertEquals(null, service.worktreeOf(id))
+    assertTrue(git.removeWorktreeCalls.isEmpty())
   }
 
   @Test

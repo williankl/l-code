@@ -121,7 +121,8 @@ touch the other.
 **Closing.** Before a session closes, Lemonade Code asks git about the folder of the session and of
 each sub-session closing with it. A folder is in a *linked* worktree when `git rev-parse --git-dir`
 and `--git-common-dir`, asked from its top-level folder, name different folders; in a repository's
-main checkout they're the same one. A worktree that a session staying open is still in is left out.
+main checkout they're the same one. A worktree that a session staying open, or an archived one, is
+still in is left out.
 If any are left, the dialog asks about them, with what `git status` says about uncommitted changes
 and untracked files.
 
@@ -148,6 +149,15 @@ had already quit isn't resumed.
 The file is also kept up to date while the app runs, so after a crash your sessions still come back,
 just without their latest output.
 
+**Archived sessions** are kept in the same file. Archiving a session saves it and its sub-sessions
+the same way, with what each terminal showed and the conversation to resume, plus its branch and
+the siblings it sat between, then ends their shells. Nothing starts for them at launch. Restoring
+one opens each again in a fresh shell, exactly as at launch, and puts it back before the sibling it
+sat before, or after the one it sat after; under its parent if that's open, else at the top. If a
+folder is gone, that session starts at home and isn't resumed, since a Claude Code conversation
+belongs to the folder it was in. A `sessions.json` from before archiving has none, and loads as it
+always did.
+
 ## Keep awake
 
 With **Keep awake while sessions work** turned on, Lemonade Code asks the operating system not to
@@ -171,7 +181,7 @@ With **Sounds** on, as they are from the start, Lemonade Code listens to every s
 - **→ needs input**, from anything else, plays a double ding, the second a little higher.
 
 A session that just opened, or came back at launch, plays nothing until its status changes. A plain
-shell, an agent quitting and a session that exited play nothing either. When several sessions change
+shell, an agent quitting, a session that exited and an archived one play nothing either. When several sessions change
 within a third of a second, they play one sound, the double ding if any of them needs you.
 
 The dings are drawn in code, a soft bell tone that fades away, and play through Java Sound on a

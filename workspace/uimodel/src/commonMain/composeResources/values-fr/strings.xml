@@ -359,6 +359,20 @@
   <string name="screen_failed_detail">Nouvelle tentative…</string>
   <string name="screenshot_attached">Capture jointe à %1$s</string>
   <string name="screenshot_failed">Impossible de faire la capture : %1$s</string>
+  <string name="mirror_record">Enregistrer l’écran</string>
+  <string name="mirror_record_stop">Arrêter l’enregistrement</string>
+  <string name="mirror_record_screenshots">L’enregistrement a besoin de l’écran en vidéo. Cet appareil envoie des captures pour l’instant.</string>
+  <string name="recording_saved">Vidéo de %1$s enregistrée</string>
+  <plurals name="recording_saved_videos">
+    <item quantity="one">%1$d vidéo enregistrée</item>
+    <item quantity="many">%1$d vidéos enregistrées</item>
+    <item quantity="other">%1$d vidéos enregistrées</item>
+  </plurals>
+  <string name="recording_show">Afficher dans le dossier</string>
+  <string name="recording_saved_toast">Vidéo de %1$s enregistrée dans %2$s</string>
+  <string name="recording_saved_device_gone">%1$s s’est déconnecté pendant l’enregistrement. Ce qui a été enregistré est dans %2$s.</string>
+  <string name="recording_failed_no_video">Impossible d’enregistrer %1$s : aucune vidéo reçue.</string>
+  <string name="recording_failed_unwritable">Impossible de sauvegarder l’enregistrement : %1$s</string>
 
   <!-- Devices › logs -->
   <string name="logs_all">Tous</string>

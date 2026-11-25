@@ -13,7 +13,8 @@ import kotlin.test.assertTrue
 
 class TempDeviceFilesTest {
   private val root = Files.createTempDirectory("lemonade-code-files").toFile()
-  private val files = TempDeviceFiles(FakeLemonadeCodeCoroutineDispatchers(), root)
+  private val videos = File(root, "Movies/Lemonade Code")
+  private val files = TempDeviceFiles(FakeLemonadeCodeCoroutineDispatchers(), root, recordings = videos)
 
   @Test
   fun `screenshots are named after the device and the time, and never overwrite each other`() = runTest {
@@ -24,6 +25,17 @@ class TempDeviceFilesTest {
     assertTrue(Regex("""Willian-s-Pixel-\d{8}-\d{6}\.png""").matches(first.name), first.name)
     assertTrue(first.isAbsolute)
     assertContentEquals(byteArrayOf(1, 2, 3), first.readBytes())
+    assertTrue(first != second && second.exists())
+  }
+
+  @Test
+  fun `recordings are kept in a videos folder, named like screenshots, each in a file of its own`() = runTest {
+    val first = File(files.recordingPath("Willian's Pixel"))
+    val second = File(files.recordingPath("Willian's Pixel"))
+
+    assertEquals(videos, first.parentFile)
+    assertTrue(Regex("""Willian-s-Pixel-\d{8}-\d{6}\.mp4""").matches(first.name), first.name)
+    assertTrue(first.isAbsolute && first.exists(), "the name is taken at once")
     assertTrue(first != second && second.exists())
   }
 

@@ -359,6 +359,20 @@
   <string name="screen_failed_detail">Reintentando…</string>
   <string name="screenshot_attached">Captura adjuntada a %1$s</string>
   <string name="screenshot_failed">No se pudo hacer la captura: %1$s</string>
+  <string name="mirror_record">Grabar la pantalla</string>
+  <string name="mirror_record_stop">Detener la grabación</string>
+  <string name="mirror_record_screenshots">Para grabar hace falta la pantalla en vídeo. Este dispositivo envía capturas por ahora.</string>
+  <string name="recording_saved">Vídeo de %1$s guardado</string>
+  <plurals name="recording_saved_videos">
+    <item quantity="one">%1$d vídeo guardado</item>
+    <item quantity="many">%1$d vídeos guardados</item>
+    <item quantity="other">%1$d vídeos guardados</item>
+  </plurals>
+  <string name="recording_show">Mostrar en la carpeta</string>
+  <string name="recording_saved_toast">Grabación de %1$s guardada en %2$s</string>
+  <string name="recording_saved_device_gone">%1$s se desconectó durante la grabación. Lo grabado está guardado en %2$s.</string>
+  <string name="recording_failed_no_video">No se pudo grabar %1$s: no envió vídeo.</string>
+  <string name="recording_failed_unwritable">No se pudo guardar la grabación: %1$s</string>
 
   <!-- Devices › logs -->
   <string name="logs_all">Todos</string>

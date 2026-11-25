@@ -21,6 +21,7 @@ import dev.lemonadecode.domain.mobile.NearbyDevice
 import dev.lemonadecode.domain.mobile.NearbyKind
 import dev.lemonadecode.domain.mobile.QrPairing
 import dev.lemonadecode.domain.mobile.ScreenPicture
+import dev.lemonadecode.domain.mobile.ScreenRecording
 import dev.lemonadecode.domain.mobile.ScreenUnavailable
 import dev.lemonadecode.domain.settings.AppSettings
 import dev.lemonadecode.platform.architecture.testing.FakeLemonadeCodeCoroutineDispatchers
@@ -40,6 +41,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
@@ -49,6 +51,7 @@ class MobileServiceImplTest {
   private val finder = FakeToolFinder()
   private val files = FakeDeviceFiles()
   private val decoders = FakeScreenDecoders()
+  private val videos = FakeVideoFiles()
 
   private val pixel = DeviceId("38021FDH2000AB")
   private val logcat = "adb -s 38021FDH2000AB logcat -v threadtime -T 300"
@@ -63,8 +66,10 @@ class MobileServiceImplTest {
     files = files,
     qr = FakeQrEncoder,
     decoders = decoders,
+    videos = videos,
     dispatchers = FakeLemonadeCodeCoroutineDispatchers(StandardTestDispatcher(testScheduler)),
     scope = backgroundScope,
+    clock = { 1_793_600_000_000 + testScheduler.currentTime },
     timeSource = testScheduler.timeSource,
     random = Random(7),
   )
@@ -151,7 +156,16 @@ class MobileServiceImplTest {
     val service = service()
     runCurrent()
 
-    val android = setOf(DeviceCapability.Mirror, DeviceCapability.Touch, DeviceCapability.Keys, DeviceCapability.Rotate, DeviceCapability.Screenshot, DeviceCapability.Logs, DeviceCapability.LogsByApp)
+    val android = setOf(
+      DeviceCapability.Mirror,
+      DeviceCapability.Touch,
+      DeviceCapability.Keys,
+      DeviceCapability.Rotate,
+      DeviceCapability.Screenshot,
+      DeviceCapability.Record,
+      DeviceCapability.Logs,
+      DeviceCapability.LogsByApp,
+    )
     assertEquals(
       listOf(
         MobileDevice(pixel, MobilePlatform.Android, "Willian's Pixel", "15", DeviceConnection.Usb, "38021FDH2000AB", DeviceAvailability.Ready, 1080, 2400, android),
@@ -314,6 +328,48 @@ class MobileServiceImplTest {
   }
 
   @Test
+  fun `recording an Android screen starts its video over, and keeps what was recorded when the device goes`() = runTest {
+    answerPixel()
+    commands.answer("adb -s 38021FDH2000AB shell dumpsys window displays", "cur=1080x2400\n")
+    val video = commands.byteStream("adb -s 38021FDH2000AB exec-out screenrecord --output-format=h264 --size 576x1280 --bit-rate 8000000 -")
+    val streamStart = nal(7, 0x42) + nal(8, 0xCE) + picture(idr = true)
+    val service = service()
+    runCurrent()
+
+    service.screen(pixel).test {
+      assertEquals(DeviceScreen.Loading, awaitItem())
+      video.send(streamStart)
+      assertIs<DeviceScreen.Frame>(awaitItem())
+      assertEquals(1, commands.count("adb -s 38021FDH2000AB exec-out screenrecord"))
+
+      assertEquals(LemonadeCodeResult.success(Unit), service.startRecording(pixel))
+      assertEquals(ScreenRecording.Recording(1_793_600_000_000 + testScheduler.currentTime), service.recordings.value[pixel])
+      // The video in hand started earlier, so it starts over for the file to open on a whole picture.
+      advanceTimeBy(500.milliseconds)
+      runCurrent()
+      assertEquals(2, commands.count("adb -s 38021FDH2000AB exec-out screenrecord"))
+      video.send(streamStart)
+      assertIs<DeviceScreen.Frame>(awaitItem())
+      video.send(picture())
+      assertIs<DeviceScreen.Frame>(awaitItem())
+
+      // Unplugged: the recording stops by itself and keeps what it has.
+      commands.answer("adb devices -l", "List of devices attached\n")
+      advanceTimeBy(3.seconds)
+      runCurrent()
+      cancelAndIgnoreRemainingEvents()
+    }
+    val saved = assertIs<ScreenRecording.Saved>(service.recordings.value[pixel])
+    assertEquals(listOf("/home/me/Videos/Lemonade Code/Willian's Pixel-1.mp4"), saved.files)
+    assertTrue(saved.deviceGone)
+    val file = videos.opened.single()
+    assertEquals(576 to 1280, file.width to file.height)
+    assertEquals(listOf(7, 1), file.pictures.map { it.first })
+    assertTrue(file.finishedAt != null)
+    assertEquals(null, service.stopRecording(pixel))
+  }
+
+  @Test
   fun `screenshots are saved under the device's name`() = runTest {
     answerPixel()
     commands.picture("adb -s 38021FDH2000AB exec-out screencap -p", png(1080, 2400))
@@ -367,6 +423,8 @@ class MobileServiceImplTest {
       cancelAndIgnoreRemainingEvents()
     }
     assertEquals(LemonadeCodeResult.failure(MobileError.CommandFailed("libimobiledevice can't do this on an iPhone or iPad")), service.tap(DeviceId(udid), 1, 1))
+    assertEquals(LemonadeCodeResult.failure(MobileError.CommandFailed("libimobiledevice can't do this on an iPhone or iPad")), service.startRecording(DeviceId(udid)))
+    assertEquals(emptyMap(), service.recordings.value)
   }
 
   @Test

@@ -19,9 +19,11 @@ import dev.lemonadecode.domain.mobile.MobileTools
 import dev.lemonadecode.domain.mobile.NearbyDevice
 import dev.lemonadecode.domain.mobile.QrPairing
 import dev.lemonadecode.domain.mobile.ScreenPicture
+import dev.lemonadecode.domain.mobile.ScreenRecording
 import dev.lemonadecode.domain.mobile.ScreenUnavailable
 import dev.lemonadecode.mobile.api.MobileService
 import dev.lemonadecode.platform.architecture.LemonadeCodeCoroutineDispatchers
+import dev.lemonadecode.platform.architecture.WallClock
 import dev.lemonadecode.platform.core.LemonadeCodeResult
 import dev.lemonadecode.platform.core.getOrElse
 import dev.lemonadecode.platform.core.onSuccess
@@ -79,8 +81,10 @@ internal class MobileServiceImpl(
   files: DeviceFiles,
   qr: QrEncoder,
   private val decoders: ScreenDecoders,
+  videos: VideoFiles,
   private val dispatchers: LemonadeCodeCoroutineDispatchers,
   scope: CoroutineScope,
+  clock: WallClock,
   private val timeSource: TimeSource.WithComparableMarks = TimeSource.Monotonic,
   random: Random = Random.Default,
 ) : MobileService {
@@ -100,6 +104,11 @@ internal class MobileServiceImpl(
   /** The latest frame's size per device, to know which way to turn it. */
   private val frameSizes = MutableStateFlow<Map<DeviceId, Pair<Int, Int>>>(emptyMap())
 
+  private val recorder = ScreenRecorder(scope, files, videos, dispatchers.io, timeSource, clock::nowMillis)
+
+  /** Devices whose mirrored screen should start its video over, for a recording to begin on a whole picture. */
+  private val restarts = MutableSharedFlow<DeviceId>(extraBufferCapacity = 8)
+
   private val isOn: Boolean get() = settings.settings.value.mobilePlugin
 
   init {
@@ -107,6 +116,13 @@ internal class MobileServiceImpl(
       settings.settings.map { it.mobilePlugin }.distinctUntilChanged().collectLatest { on -> if (on) follow() }
     }
     scope.launch { mutableDevices.collect { logBook.retain() } }
+    // A device that goes away while recorded keeps what was recorded until then.
+    scope.launch {
+      mutableDevices.collect { devices ->
+        val gone = recorder.recording.filter { id -> devices.none { it.id == id && it.availability == DeviceAvailability.Ready } }
+        gone.forEach { id -> launch { val _ = recorder.stop(id, deviceGone = true) } }
+      }
+    }
   }
 
   /** Looks for the tools, again every so often while one is missing, and follows each platform whose tool is there. */
@@ -191,6 +207,7 @@ internal class MobileServiceImpl(
     stream = { width, height -> recording(id, width, height) },
     capture = { capture(id) },
     turned = turns.filter { it == id }.map { },
+    restart = restarts.filter { it == id }.map { },
   ).buffer(Channel.RENDEZVOUS)
 
   /** The screen's size now when [id] is an Android device ready to be recorded; null otherwise. */
@@ -208,7 +225,8 @@ internal class MobileServiceImpl(
     val adb = currentTools()?.adb ?: return@flow
     val (recordedWidth, recordedHeight) = recordingSize(width, height)
     val quiet = if (device.connection == DeviceConnection.Wifi) WifiQuietFlush else QuietFlush
-    emitAll(decodeVideo(android.recordScreen(adb, device, recordedWidth, recordedHeight), decoders, quiet))
+    val pictures = android.recordScreen(adb, device, recordedWidth, recordedHeight)
+    emitAll(decodeVideo(pictures, decoders, quiet, onUnit = { recorder.onPicture(id, recordedWidth, recordedHeight, it) }))
   }
     .flowOn(dispatchers.default)
     // Each picture is a few megabytes; when they come faster than they're shown, only the newest waits.
@@ -247,6 +265,28 @@ internal class MobileServiceImpl(
     .onSuccess { val _ = turns.tryEmit(id) }
 
   override suspend fun screenshot(id: DeviceId): LemonadeCodeResult<String, MobileError> = onDevice(id, android::screenshot, ios::screenshot)
+
+  override val recordings: StateFlow<Map<DeviceId, ScreenRecording>> get() = recorder.recordings
+
+  override suspend fun startRecording(id: DeviceId): LemonadeCodeResult<Unit, MobileError> = onDevice(
+    id,
+    android = { _, device ->
+      when {
+        device.availability != DeviceAvailability.Ready || DeviceCapability.Record !in device.capabilities -> LemonadeCodeResult.failure(MobileError.DeviceGone)
+        else -> {
+          // The video the mirror streams now started earlier; a new one starts with a picture of its own.
+          if (recorder.start(id, device.name)) {
+            val _ = restarts.tryEmit(id)
+          }
+          LemonadeCodeResult.success(Unit)
+        }
+      }
+    },
+  )
+
+  override suspend fun stopRecording(id: DeviceId): ScreenRecording? = recorder.stop(id)
+
+  override fun dismissRecording(id: DeviceId) = recorder.dismiss(id)
 
   @OptIn(ExperimentalCoroutinesApi::class)
   override fun nearby(platform: MobilePlatform): Flow<List<NearbyDevice>> = combine(settings.settings, mutableTools) { prefs, tools ->

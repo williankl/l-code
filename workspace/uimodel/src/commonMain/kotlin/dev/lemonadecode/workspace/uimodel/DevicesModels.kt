@@ -71,6 +71,8 @@ public sealed interface DevicesContentModel {
     /** e.g. "1080 × 2400 · 4 fps · clicks go to the device". */
     val screenDetail: LemonadeCodeString?,
     val logs: DeviceLogsModel,
+    /** Recording the screen to a video; null where the device can't, e.g. iOS, and no button shows. */
+    val recording: ScreenRecordingModel? = null,
   ) : DevicesContentModel
 
   /** Pairing, step 1: Android or iOS. */
@@ -154,6 +156,8 @@ public data class DeviceRowModel(
   val canOpenWindow: Boolean = false,
   /** A window of its own mirrors the device now; the ↗ closes it and the row brings it forward. */
   val windowOpen: Boolean = false,
+  /** Its screen is being recorded, for so long, e.g. "0:42"; null while it isn't. */
+  val recordingElapsed: String? = null,
 )
 
 /** A device mirrored in a window of its own: its page, the same as in the Devices panel. */
@@ -250,6 +254,30 @@ public data class MirrorControlsModel(
   val keyboardOn: Boolean = false,
   /** Clicks and drags on the screen reach the device. */
   val touch: Boolean = false,
+)
+
+/** The record button under a mirrored screen, and the video it saved last. */
+@Immutable
+public data class ScreenRecordingModel(
+  /** Recording now: the button stops it and shows for how long, as [elapsed]. */
+  val recording: Boolean = false,
+  /** e.g. "0:42" or "1:02:05"; null while not recording. */
+  val elapsed: String? = null,
+  /** Why a recording can't start now, e.g. the screen comes as screenshots; the button is off and its tooltip says this. */
+  val unavailable: LemonadeCodeString? = null,
+  /** The last recording saved, shown until it's dismissed or another starts. */
+  val saved: SavedRecordingModel? = null,
+)
+
+/** A recording saved to disk, and where to find it. */
+@Immutable
+public data class SavedRecordingModel(
+  /** e.g. "Saved Pixel-8-20261125-101403.mp4", or "Saved 2 videos" when the screen turned while recording. */
+  val label: LemonadeCodeString,
+  /** The files' absolute paths, one a line. */
+  val paths: String,
+  /** A `file://` URI of the first file; opening it shows the file in its folder. */
+  val revealUri: String,
 )
 
 /** Which lines a device's log shows: every line, only warnings, or only errors (fatal ones included). */

@@ -1,13 +1,18 @@
 package dev.lemonadecode.mobile.fake
 
 import dev.lemonadecode.domain.mobile.DeviceApp
+import dev.lemonadecode.domain.mobile.DeviceConnection
 import dev.lemonadecode.domain.mobile.DeviceId
 import dev.lemonadecode.domain.mobile.DeviceLogs
 import dev.lemonadecode.domain.mobile.LogPackages
+import dev.lemonadecode.domain.mobile.MobileDevice
+import dev.lemonadecode.domain.mobile.MobilePlatform
+import dev.lemonadecode.domain.mobile.ScreenRecording
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 
 class FakeMobileServiceTest {
   private val pixel = DeviceId("38021FDH2000AB")
@@ -44,5 +49,22 @@ class FakeMobileServiceTest {
     mobile.clearLogs(pixel)
     assertEquals(emptyList(), mobile.logs(pixel).first().lines)
     assertEquals(listOf("clear 38021FDH2000AB"), mobile.actions)
+  }
+
+  @Test
+  fun `a recording runs from start to stop, then is saved until dismissed`() = runTest {
+    val mobile = FakeMobileService(listOf(MobileDevice(pixel, MobilePlatform.Android, "Pixel 8", "15", DeviceConnection.Usb, pixel.value)))
+    mobile.recordingStartsAt = 1_000
+    assertNull(mobile.stopRecording(pixel), "nothing to stop yet")
+
+    val _ = mobile.startRecording(pixel)
+    assertEquals(ScreenRecording.Recording(1_000), mobile.recordings.value[pixel])
+    val saved = ScreenRecording.Saved(listOf("/home/me/Movies/Lemonade Code/38021FDH2000AB.mp4"), durationMillis = 42_000)
+    assertEquals(saved, mobile.stopRecording(pixel))
+    assertEquals(saved, mobile.recordings.value[pixel])
+
+    mobile.dismissRecording(pixel)
+    assertEquals(emptyMap(), mobile.recordings.value)
+    assertEquals(listOf("stop recording 38021FDH2000AB", "record 38021FDH2000AB", "stop recording 38021FDH2000AB", "dismiss recording 38021FDH2000AB"), mobile.actions)
   }
 }

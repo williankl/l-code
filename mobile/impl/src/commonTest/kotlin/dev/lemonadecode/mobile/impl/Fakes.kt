@@ -109,6 +109,41 @@ internal class FakeDeviceFiles : DeviceFiles {
     saved += deviceName to png
     return "/tmp/lemonade-code/screenshots/$deviceName.png"
   }
+
+  private var recordings = 0
+
+  override suspend fun recordingPath(deviceName: String): String = "/home/me/Videos/Lemonade Code/$deviceName-${++recordings}.mp4"
+}
+
+/** Video files the recorder writes, kept in memory: what each was given, and whether it was finished. */
+internal class FakeVideoFiles : VideoFiles {
+  val opened = mutableListOf<FakeVideoFile>()
+
+  /** Set to make opening a file fail with this message. */
+  var failure: String? = null
+
+  override fun mp4(path: String, width: Int, height: Int, parameterSets: ByteArray): VideoFile {
+    failure?.let { error(it) }
+    return FakeVideoFile(path, width, height, parameterSets).also { opened += it }
+  }
+}
+
+internal class FakeVideoFile(val path: String, val width: Int, val height: Int, val parameterSets: ByteArray) : VideoFile {
+  /** Each picture written: its first NAL unit's type, when it shows from in milliseconds, and whether it's a key frame. */
+  val pictures = mutableListOf<Triple<Int, Long, Boolean>>()
+
+  /** When the file ended, in milliseconds; null until it did. */
+  var finishedAt: Long? = null
+
+  override fun write(accessUnit: ByteArray, atMicros: Long, keyFrame: Boolean) {
+    check(finishedAt == null) { "written after it was finished" }
+    pictures += Triple(nalTypes(accessUnit).first(), atMicros / 1_000, keyFrame)
+  }
+
+  override fun finish(atMicros: Long) {
+    check(finishedAt == null) { "finished twice" }
+    finishedAt = atMicros / 1_000
+  }
 }
 
 internal val FakeQrEncoder = QrEncoder { QrMatrix(1, booleanArrayOf(true)) }

@@ -6,7 +6,10 @@ import dev.lemonadecode.domain.mobile.DeviceLogs
 import dev.lemonadecode.domain.mobile.DeviceScreen
 import dev.lemonadecode.domain.mobile.LogLevel
 import dev.lemonadecode.domain.mobile.LogPackages
+import dev.lemonadecode.domain.mobile.MobileDevice
+import dev.lemonadecode.domain.mobile.RecordingFailure
 import dev.lemonadecode.domain.mobile.ScreenPicture
+import dev.lemonadecode.domain.mobile.ScreenRecording
 import dev.lemonadecode.domain.settings.DevicesLayout
 import dev.lemonadecode.domain.update.AppInstallation
 import dev.lemonadecode.domain.update.AppVersion
@@ -29,6 +32,17 @@ import dev.lemonadecode.workspace.strings.logs_apps_running
 import dev.lemonadecode.workspace.strings.logs_cleared
 import dev.lemonadecode.workspace.strings.logs_no_match
 import dev.lemonadecode.workspace.strings.logs_waiting
+import dev.lemonadecode.workspace.strings.mirror_clicks
+import dev.lemonadecode.workspace.strings.mirror_fps
+import dev.lemonadecode.workspace.strings.mirror_loading
+import dev.lemonadecode.workspace.strings.mirror_record_screenshots
+import dev.lemonadecode.workspace.strings.mirror_size
+import dev.lemonadecode.workspace.strings.recording_failed_no_video
+import dev.lemonadecode.workspace.strings.recording_failed_unwritable
+import dev.lemonadecode.workspace.strings.recording_saved
+import dev.lemonadecode.workspace.strings.recording_saved_device_gone
+import dev.lemonadecode.workspace.strings.recording_saved_toast
+import dev.lemonadecode.workspace.strings.recording_saved_videos
 import dev.lemonadecode.workspace.strings.time_days_ago
 import dev.lemonadecode.workspace.strings.time_hours_ago
 import dev.lemonadecode.workspace.strings.time_just_now
@@ -41,6 +55,8 @@ import dev.lemonadecode.workspace.uimodel.DevicesContentModel
 import dev.lemonadecode.workspace.uimodel.LanguageOption
 import dev.lemonadecode.workspace.uimodel.LogFilter
 import dev.lemonadecode.workspace.uimodel.LogLevelModel
+import dev.lemonadecode.workspace.uimodel.SavedRecordingModel
+import dev.lemonadecode.workspace.uimodel.ScreenRecordingModel
 import dev.lemonadecode.workspace.uimodel.UpdatePhase
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -133,6 +149,104 @@ class DevicesMapperTest {
     assertEquals(picture(input), picture(input))
     val next = input.copy(screens = mapOf(ShowcaseDevices.pixel.id to DeviceScreen.Frame(ScreenPicture.Encoded(byteArrayOf(1, 2, 3)), 1080, 2400, 60f)))
     assertNotEquals(picture(input), picture(next))
+  }
+
+  @Test
+  fun `an Android device records its screen while it comes as video, not as screenshots, and an iPhone can't`() {
+    val video = DevicesMapper.recording(recording = null, frame = ShowcaseDevices.screen(), nowMillis = now)
+    assertEquals(ScreenRecordingModel(), video)
+
+    val screenshots = DevicesMapper.recording(recording = null, frame = ShowcaseDevices.screen(video = false), nowMillis = now)
+    assertEquals(Res.string.mirror_record_screenshots.asLemonadeCodeString(), screenshots.unavailable)
+    val loading = DevicesMapper.recording(recording = null, frame = null, nowMillis = now)
+    assertEquals(Res.string.mirror_loading.asLemonadeCodeString(), loading.unavailable)
+
+    // Under way, it can always be stopped, even if the screen fell back on screenshots meanwhile.
+    val running = DevicesMapper.recording(ScreenRecording.Recording(startedAtMillis = now - 83_000), ShowcaseDevices.screen(video = false), now)
+    assertEquals(ScreenRecordingModel(recording = true, elapsed = "1:23"), running)
+
+    fun device(recording: ScreenRecording?, device: MobileDevice = ShowcaseDevices.pixel): DevicesContentModel.Device {
+      val view = WorkspaceViewState(deviceWindows = mapOf(device.id to DeviceWindowState(DevicePageState(device.id))))
+      val input = MobileInput(
+        enabled = true,
+        devices = ShowcaseDevices.connected,
+        screens = mapOf(device.id to ShowcaseDevices.screen()),
+        recordings = listOfNotNull(recording?.let { device.id to it }).toMap(),
+        nowMillis = now,
+      )
+      return DevicesMapper.windows(input, view, DevicesLayout.SideBySide, "claude").single().panel.content as DevicesContentModel.Device
+    }
+    assertNull(device(recording = null, device = ShowcaseDevices.iphone).recording, "an iPhone has no record button")
+    val fps = Res.string.mirror_fps.asLemonadeCodeString(60)
+    val size = Res.string.mirror_size.asLemonadeCodeString(1080, 2400)
+    val clicks = Res.string.mirror_clicks.asLemonadeCodeString()
+    assertEquals(Res.string.detail_three.asLemonadeCodeString(size, fps, clicks), device(recording = null).screenDetail)
+    // While it records, how long for takes the frame rate's place.
+    val recording = device(ScreenRecording.Recording(startedAtMillis = now - 42_000))
+    assertEquals("0:42", recording.recording?.elapsed)
+    assertEquals(Res.string.detail_two.asLemonadeCodeString(size, clicks), recording.screenDetail)
+  }
+
+  @Test
+  fun `a saved recording says how long it is and where it went, and opens in its folder`() {
+    val saved = DevicesMapper.recording(ShowcaseDevices.savedRecording, ShowcaseDevices.screen(), now).saved
+    assertEquals(
+      SavedRecordingModel(
+        label = Res.string.recording_saved.asLemonadeCodeString("0:42"),
+        paths = "/Users/me/Movies/Lemonade Code/Pixel-8-20261125-101403.mp4",
+        revealUri = "file:///Users/me/Movies/Lemonade%20Code/Pixel-8-20261125-101403.mp4",
+      ),
+      saved,
+    )
+    // The screen turned while recording: one video each way.
+    val turned = ScreenRecording.Saved(listOf("/home/me/Videos/Lemonade Code/a.mp4", "/home/me/Videos/Lemonade Code/b.mp4"), durationMillis = 61_000)
+    val both = assertNotNull(DevicesMapper.recording(turned, ShowcaseDevices.screen(), now).saved)
+    assertEquals(Res.plurals.recording_saved_videos.asLemonadeCodeString(2, 2), both.label)
+    assertEquals("/home/me/Videos/Lemonade Code/a.mp4\n/home/me/Videos/Lemonade Code/b.mp4", both.paths)
+    assertEquals("file:///home/me/Videos/Lemonade%20Code/a.mp4", both.revealUri)
+  }
+
+  @Test
+  fun `file URIs are percent-encoded, and Windows paths get their drive`() {
+    assertEquals("file:///Users/Jos%C3%A9/Movies/a%23b.mp4", DevicesMapper.fileUri("/Users/José/Movies/a#b.mp4"))
+    assertEquals("file:///C:/Users/me/Videos/Lemonade%20Code/a.mp4", DevicesMapper.fileUri("C:\\Users\\me\\Videos\\Lemonade Code\\a.mp4"))
+  }
+
+  @Test
+  fun `how long a recording runs reads as minutes and seconds, then hours`() {
+    assertEquals("0:00", DevicesMapper.elapsed(-5))
+    assertEquals("0:42", DevicesMapper.elapsed(42_999))
+    assertEquals("12:05", DevicesMapper.elapsed(725_000))
+    assertEquals("1:02:05", DevicesMapper.elapsed(3_725_000))
+  }
+
+  @Test
+  fun `a device being recorded says so in the list, with how long`() {
+    assertNull(DevicesMapper.row(ShowcaseDevices.pixel).recordingElapsed)
+    assertEquals("0:07", DevicesMapper.row(ShowcaseDevices.pixel, recording = ScreenRecording.Recording(now - 7_000), nowMillis = now).recordingElapsed)
+    assertNull(DevicesMapper.row(ShowcaseDevices.pixel, recording = ShowcaseDevices.savedRecording, nowMillis = now).recordingElapsed)
+  }
+
+  @Test
+  fun `a recording that ends says where it went, or why nothing was saved`() {
+    val home = "/Users/me"
+    assertEquals(
+      Res.string.recording_saved_toast.asLemonadeCodeString("Pixel 8", "~/Movies/Lemonade Code") to false,
+      DevicesMapper.recordingEnded(ShowcaseDevices.savedRecording, "Pixel 8", home),
+    )
+    assertEquals(
+      Res.string.recording_saved_device_gone.asLemonadeCodeString("Pixel 8", "~/Movies/Lemonade Code") to false,
+      DevicesMapper.recordingEnded(ShowcaseDevices.savedRecording.copy(deviceGone = true), "Pixel 8", home),
+    )
+    assertEquals(
+      Res.string.recording_failed_no_video.asLemonadeCodeString("Pixel 8") to true,
+      DevicesMapper.recordingEnded(ScreenRecording.Failed(RecordingFailure.NoVideo), "Pixel 8", home),
+    )
+    assertEquals(
+      Res.string.recording_failed_unwritable.asLemonadeCodeString("No space left on device") to true,
+      DevicesMapper.recordingEnded(ScreenRecording.Failed(RecordingFailure.Unwritable("No space left on device")), "Pixel 8", home),
+    )
+    assertNull(DevicesMapper.recordingEnded(ScreenRecording.Recording(now), "Pixel 8", home))
   }
 
   @Test

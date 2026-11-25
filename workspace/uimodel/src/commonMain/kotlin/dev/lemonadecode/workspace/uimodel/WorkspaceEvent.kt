@@ -124,6 +124,12 @@ public sealed interface WorkspaceEvent {
   /** Saves the device's screen and hands the picture to the selected session. */
   public data object ScreenshotToSession : DevicePageEvent
 
+  /** Starts recording the device's screen to a video, or stops and saves it. */
+  public data object ToggleScreenRecording : DevicePageEvent
+
+  /** Hides the line saying where the last recording was saved. */
+  public data object DismissSavedRecording : DevicePageEvent
+
   /** Typing goes to the device, or stops going there. */
   public data object ToggleDeviceKeyboard : DevicePageEvent
   public data class TypeOnDevice(val text: String) : DevicePageEvent

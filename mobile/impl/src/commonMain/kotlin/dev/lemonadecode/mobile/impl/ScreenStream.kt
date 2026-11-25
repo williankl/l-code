@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.produceIn
+import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.selects.onTimeout
 import kotlinx.coroutines.selects.select
@@ -44,6 +45,7 @@ internal fun interface ScreenDecoders {
  * only squeeze into its old size; [turned] says it was just turned from here, so its size is
  * looked at again straight away. Until the size is known, and once recording has failed a few
  * times running, it falls back on [capture]'s [Screenshots], trying to record again now and then.
+ * [restart] starts the recording over at once, for a video file to begin on a whole picture.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 internal fun mirrorScreens(
@@ -52,6 +54,7 @@ internal fun mirrorScreens(
   stream: (width: Int, height: Int) -> Flow<ScreenPicture.Bgra>,
   capture: suspend () -> Capture,
   turned: Flow<Unit> = emptyFlow(),
+  restart: Flow<Unit> = emptyFlow(),
 ): Flow<DeviceScreen> = channelFlow {
   send(DeviceScreen.Loading)
   val rate = FrameRate(timeSource)
@@ -77,6 +80,7 @@ internal fun mirrorScreens(
     val (width, height) = screen
     var frames = 0
     var turnedAway = false
+    var restarted = false
     coroutineScope {
       val shown = CompletableDeferred<Unit>()
       val recording = launch {
@@ -108,13 +112,20 @@ internal fun mirrorScreens(
         turnedAway = true
         recording.cancel()
       }
+      val restarting = launch {
+        restart.take(1).collect {
+          restarted = true
+          recording.cancel()
+        }
+      }
       recording.join()
       waiting.cancel()
       turning.cancel()
+      restarting.cancel()
       nudges.cancel()
     }
     when {
-      turnedAway -> delay(RecordingRestart)
+      turnedAway || restarted -> delay(RecordingRestart)
       frames == 0 -> {
         failures++
         delay(RecordingRetry)
@@ -133,9 +144,15 @@ internal fun mirrorScreens(
  * yet is decoded once nothing more has come for [quiet], so the screen's last change shows. When
  * that turns out to have been a pause in the middle of the picture, the decoder has a damaged one
  * that the pictures after it build on, so the flow ends there, for a new recording to start whole.
+ * [onUnit] gets each access unit as it's decoded, e.g. to record it.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
-internal fun decodeVideo(chunks: Flow<ByteArray>, decoders: ScreenDecoders, quiet: Duration = QuietFlush): Flow<ScreenPicture.Bgra> = channelFlow {
+internal fun decodeVideo(
+  chunks: Flow<ByteArray>,
+  decoders: ScreenDecoders,
+  quiet: Duration = QuietFlush,
+  onUnit: (ByteArray) -> Unit = {},
+): Flow<ScreenPicture.Bgra> = channelFlow {
   val decoder = decoders.h264()
   try {
     val splitter = AccessUnitSplitter()
@@ -158,7 +175,10 @@ internal fun decodeVideo(chunks: Flow<ByteArray>, decoders: ScreenDecoders, quie
         incoming.cancel()
         break
       }
-      for (unit in units) decoder.decode(unit).forEach { send(it) }
+      for (unit in units) {
+        onUnit(unit)
+        decoder.decode(unit).forEach { send(it) }
+      }
       if (chunk?.isClosed == true) break
     }
   } finally {

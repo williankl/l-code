@@ -178,6 +178,45 @@ class ScreenStreamTest {
   }
 
   @Test
+  fun `asked to, the video starts over at once, and that isn't a failure`() = runTest {
+    val restart = Channel<Unit>(Channel.UNLIMITED)
+    var recordings = 0
+    mirrorScreens(
+      timeSource = testScheduler.timeSource,
+      size = { 1080 to 2400 },
+      stream = { _, _ ->
+        recordings++
+        // The first never shows a picture: only the restart ends it.
+        if (recordings == 1) Channel<ScreenPicture.Bgra>().receiveAsFlow() else Channel<ScreenPicture.Bgra>(1).apply { trySend(bgra()) }.receiveAsFlow()
+      },
+      capture = { error("no screenshots while recording works") },
+      restart = restart.receiveAsFlow(),
+    ).test {
+      assertEquals(DeviceScreen.Loading, awaitItem())
+      testScheduler.advanceTimeBy(300)
+      restart.send(Unit)
+      testScheduler.advanceTimeBy(150)
+      assertEquals(2, recordings)
+      assertIs<ScreenPicture.Bgra>(assertIs<DeviceScreen.Frame>(awaitItem()).picture)
+      cancelAndIgnoreRemainingEvents()
+    }
+  }
+
+  @Test
+  fun `each access unit is handed over as it's decoded, to be recorded`() = runTest {
+    val chunks = Channel<ByteArray>(Channel.UNLIMITED)
+    val units = mutableListOf<ByteArray>()
+    decodeVideo(chunks.receiveAsFlow(), FakeScreenDecoders(), onUnit = { units += it }).test {
+      chunks.send(nal(7, 0x42) + nal(8, 0xCE) + picture(idr = true) + picture())
+      assertEquals(1, awaitItem().pixels[0].toInt())
+      assertEquals(2, awaitItem().pixels[0].toInt())
+      chunks.close()
+      awaitComplete()
+    }
+    assertEquals(listOf(listOf(7, 8, 5), listOf(1)), units.map(::nalTypes))
+  }
+
+  @Test
   fun `a recording that shows nothing for five seconds fails, and after three, recording is tried again later`() = runTest {
     var recordings = 0
     mirrorScreens(

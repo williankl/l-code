@@ -84,6 +84,10 @@ private fun DeviceSideBySidePreview() = ShowcasePreview(WorkspaceShowcase.Device
 
 @Preview
 @Composable
+private fun DeviceRecordingPreview() = ShowcasePreview(WorkspaceShowcase.DeviceRecording)
+
+@Preview
+@Composable
 private fun DeviceTabsPreview() = ShowcasePreview(WorkspaceShowcase.DeviceTabs)
 
 @Preview

@@ -34,6 +34,9 @@ public enum class DeviceCapability {
   /** Its screen can be saved as a picture. */
   Screenshot,
 
+  /** Its screen can be recorded to a video file while it streams as video: Android. */
+  Record,
+
   Logs,
 
   /** Its logs can be narrowed to the apps picked, or to the app in front: Android. */
@@ -108,6 +111,34 @@ public enum class ScreenUnavailable {
 
   /** Capturing failed, e.g. the device went away. */
   Failed,
+}
+
+/** A recording of a device's screen to a video file: under way, or how it ended. */
+public sealed interface ScreenRecording {
+  /** Under way since [startedAtMillis], in milliseconds since the epoch. */
+  public data class Recording(val startedAtMillis: Long) : ScreenRecording
+
+  /**
+   * Saved as [files], absolute paths in the order they were recorded: one, and one more each time
+   * the screen turned meanwhile. [durationMillis] is how long it ran; [deviceGone] says it stopped
+   * because the device went away, keeping what was recorded until then.
+   */
+  public data class Saved(
+    val files: List<String>,
+    val durationMillis: Long,
+    val deviceGone: Boolean = false,
+  ) : ScreenRecording
+
+  /** Nothing was saved. */
+  public data class Failed(val reason: RecordingFailure) : ScreenRecording
+}
+
+public sealed interface RecordingFailure {
+  /** The device sent no video to record, e.g. its screen comes as screenshots. */
+  public data object NoVideo : RecordingFailure
+
+  /** The video file couldn't be written; [message] says why. */
+  public data class Unwritable(val message: String) : RecordingFailure
 }
 
 public enum class LogLevel { Verbose, Debug, Info, Warning, Error, Fatal }

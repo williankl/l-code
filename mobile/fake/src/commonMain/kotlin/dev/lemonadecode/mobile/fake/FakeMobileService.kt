@@ -15,13 +15,16 @@ import dev.lemonadecode.domain.mobile.MobilePlatform
 import dev.lemonadecode.domain.mobile.MobileTools
 import dev.lemonadecode.domain.mobile.NearbyDevice
 import dev.lemonadecode.domain.mobile.QrPairing
+import dev.lemonadecode.domain.mobile.ScreenRecording
 import dev.lemonadecode.mobile.api.MobileService
 import dev.lemonadecode.platform.core.LemonadeCodeResult
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.onStart
+import kotlinx.coroutines.flow.update
 
 /** A [MobileService] whose devices, logs and screens are set by the test; it records what it was asked to do. */
 public class FakeMobileService(
@@ -43,6 +46,9 @@ public class FakeMobileService(
   /** The apps each device lists for narrowing its log; a device left out has none. */
   public val apps: MutableStateFlow<Map<DeviceId, List<DeviceApp>>> = MutableStateFlow(emptyMap())
   public val screens: MutableStateFlow<Map<DeviceId, DeviceScreen>> = MutableStateFlow(emptyMap())
+
+  /** How many collect each device's screen now; a device nobody collects is left out. */
+  public val screenCollectors: MutableStateFlow<Map<DeviceId, Int>> = MutableStateFlow(emptyMap())
   public val nearby: MutableStateFlow<Map<MobilePlatform, List<NearbyDevice>>> = MutableStateFlow(emptyMap())
   public val qrPairing: MutableStateFlow<QrPairing?> = MutableStateFlow(null)
   public val cablePairing: MutableStateFlow<CablePairing?> = MutableStateFlow(null)
@@ -54,6 +60,15 @@ public class FakeMobileService(
   public val actions: MutableList<String> = mutableListOf()
 
   public var screenshotPath: String = "/tmp/lemonade-code/screenshot.png"
+
+  /** Recordings by device; set them to show one under way or ended. */
+  override val recordings: MutableStateFlow<Map<DeviceId, ScreenRecording>> = MutableStateFlow(emptyMap())
+
+  /** What the next recording stopped ends as; null saves one file named after the device. */
+  public var nextRecordingEnd: ScreenRecording? = null
+
+  /** The time the next recording starts at, in milliseconds since the epoch. */
+  public var recordingStartsAt: Long = 0L
 
   public fun setDevices(devices: List<MobileDevice>) {
     mutableDevices.value = devices
@@ -74,7 +89,10 @@ public class FakeMobileService(
     logs.value = logs.value + (id to (logs.value[id]?.copy(lines = emptyList()) ?: DeviceLogs("", emptyList())))
   }
 
-  override fun screen(id: DeviceId): Flow<DeviceScreen> = screens.map { it[id] ?: DeviceScreen.Loading }
+  override fun screen(id: DeviceId): Flow<DeviceScreen> = screens
+    .map { it[id] ?: DeviceScreen.Loading }
+    .onStart { screenCollectors.update { it + (id to (it[id] ?: 0) + 1) } }
+    .onCompletion { screenCollectors.update { all -> (all[id] ?: 1).minus(1).let { if (it == 0) all - id else all + (id to it) } } }
 
   override suspend fun press(id: DeviceId, button: DeviceButton): LemonadeCodeResult<Unit, MobileError> = record("press ${id.value} $button")
 
@@ -98,6 +116,26 @@ public class FakeMobileService(
   override suspend fun screenshot(id: DeviceId): LemonadeCodeResult<String, MobileError> {
     actions += "screenshot ${id.value}"
     return LemonadeCodeResult.Success(screenshotPath)
+  }
+
+  override suspend fun startRecording(id: DeviceId): LemonadeCodeResult<Unit, MobileError> {
+    actions += "record ${id.value}"
+    if (mutableDevices.value.none { it.id == id }) return LemonadeCodeResult.Failure(MobileError.DeviceGone)
+    recordings.value += id to ScreenRecording.Recording(recordingStartsAt)
+    return LemonadeCodeResult.Success(Unit)
+  }
+
+  override suspend fun stopRecording(id: DeviceId): ScreenRecording? {
+    actions += "stop recording ${id.value}"
+    if (recordings.value[id] !is ScreenRecording.Recording) return null
+    val end = nextRecordingEnd ?: ScreenRecording.Saved(listOf("/home/me/Movies/Lemonade Code/${id.value}.mp4"), durationMillis = 42_000)
+    recordings.value += id to end
+    return end
+  }
+
+  override fun dismissRecording(id: DeviceId) {
+    actions += "dismiss recording ${id.value}"
+    if (recordings.value[id] !is ScreenRecording.Recording) recordings.value -= id
   }
 
   override fun nearby(platform: MobilePlatform): Flow<List<NearbyDevice>> = nearby.map { it[platform].orEmpty() }

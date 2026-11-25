@@ -340,6 +340,19 @@
   <string name="screen_failed_detail">Neuer Versuch…</string>
   <string name="screenshot_attached">Screenshot an %1$s angehängt</string>
   <string name="screenshot_failed">Screenshot fehlgeschlagen: %1$s</string>
+  <string name="mirror_record">Bildschirm aufnehmen</string>
+  <string name="mirror_record_stop">Aufnahme beenden</string>
+  <string name="mirror_record_screenshots">Aufnehmen geht nur mit dem Bildschirm als Video. Dieses Gerät sendet gerade Screenshots.</string>
+  <string name="recording_saved">Video (%1$s) gespeichert</string>
+  <plurals name="recording_saved_videos">
+    <item quantity="one">%1$d Video gespeichert</item>
+    <item quantity="other">%1$d Videos gespeichert</item>
+  </plurals>
+  <string name="recording_show">Im Ordner zeigen</string>
+  <string name="recording_saved_toast">Aufnahme von %1$s in %2$s gespeichert</string>
+  <string name="recording_saved_device_gone">%1$s wurde während der Aufnahme getrennt. Das Aufgenommene ist in %2$s gespeichert.</string>
+  <string name="recording_failed_no_video">%1$s konnte nicht aufgenommen werden: Es kam kein Video.</string>
+  <string name="recording_failed_unwritable">Aufnahme konnte nicht gespeichert werden: %1$s</string>
 
   <!-- Devices › logs -->
   <string name="logs_all">Alle</string>

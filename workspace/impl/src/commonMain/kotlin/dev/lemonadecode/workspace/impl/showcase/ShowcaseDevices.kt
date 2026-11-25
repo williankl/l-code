@@ -15,11 +15,17 @@ import dev.lemonadecode.domain.mobile.MobileTools
 import dev.lemonadecode.domain.mobile.NearbyDevice
 import dev.lemonadecode.domain.mobile.NearbyKind
 import dev.lemonadecode.domain.mobile.ScreenPicture
+import dev.lemonadecode.domain.mobile.ScreenRecording
+import org.jetbrains.skia.Bitmap
 import org.jetbrains.skia.Color
+import org.jetbrains.skia.ColorAlphaType
+import org.jetbrains.skia.ColorType
 import org.jetbrains.skia.EncodedImageFormat
 import org.jetbrains.skia.Font
 import org.jetbrains.skia.FontMgr
 import org.jetbrains.skia.FontStyle
+import org.jetbrains.skia.Image
+import org.jetbrains.skia.ImageInfo
 import org.jetbrains.skia.Paint
 import org.jetbrains.skia.RRect
 import org.jetbrains.skia.Rect
@@ -33,6 +39,7 @@ internal object ShowcaseDevices {
     DeviceCapability.Keys,
     DeviceCapability.Rotate,
     DeviceCapability.Screenshot,
+    DeviceCapability.Record,
     DeviceCapability.Logs,
     DeviceCapability.LogsByApp,
   )
@@ -110,8 +117,26 @@ internal object ShowcaseDevices {
     ),
   )
 
-  /** The store's cart with its rate-limit error, as the design's phone shows it. */
-  fun screen(width: Int = 1080, height: Int = 2400, framesPerSecond: Float = 60f): DeviceScreen.Frame = DeviceScreen.Frame(ScreenPicture.Encoded(cartScreen(width, height)), width, height, framesPerSecond)
+  /** A recording of the Pixel stopped a moment ago, saved where recordings go on a Mac. */
+  val savedRecording = ScreenRecording.Saved(listOf("/Users/me/Movies/Lemonade Code/Pixel-8-20261125-101403.mp4"), durationMillis = 42_000)
+
+  /**
+   * The store's cart with its rate-limit error, as the design's phone shows it: decoded, as a
+   * [video] streams it from Android, or as a screenshot, as iOS sends it.
+   */
+  fun screen(width: Int = 1080, height: Int = 2400, framesPerSecond: Float = 60f, video: Boolean = true): DeviceScreen.Frame {
+    val picture = if (video) decoded.getOrPut(width to height) { bgra(cartScreen(width, height), width, height) } else ScreenPicture.Encoded(cartScreen(width, height))
+    return DeviceScreen.Frame(picture, width, height, framesPerSecond)
+  }
+
+  private val decoded = mutableMapOf<Pair<Int, Int>, ScreenPicture.Bgra>()
+
+  private fun bgra(png: ByteArray, width: Int, height: Int): ScreenPicture.Bgra {
+    val bitmap = Bitmap()
+    bitmap.allocPixels(ImageInfo(width, height, ColorType.BGRA_8888, ColorAlphaType.OPAQUE))
+    check(Image.makeFromEncoded(png).readPixels(bitmap))
+    return ScreenPicture.Bgra(checkNotNull(bitmap.readPixels()), width, height, bitmap.rowBytes)
+  }
 
   private val cache = mutableMapOf<Pair<Int, Int>, ByteArray>()
 

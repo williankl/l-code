@@ -500,6 +500,7 @@ internal class AdbDevices(
       DeviceCapability.Keys,
       DeviceCapability.Rotate,
       DeviceCapability.Screenshot,
+      DeviceCapability.Record,
       DeviceCapability.Logs,
       DeviceCapability.LogsByApp,
     )

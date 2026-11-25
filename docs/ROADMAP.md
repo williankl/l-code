@@ -29,6 +29,10 @@ What Lemonade Code doesn't do yet. Want something that isn't here?
 - **iOS is view only.** iPhones and iPads can't be tapped or typed on from Lemonade Code, and their
   screen only shows over a cable. Newer iOS versions may need the developer disk image mounted
   before `idevicescreenshot` can capture them.
+- **Recording iOS screens.** iPhones and iPads send their screen as screenshots, a few a second, so
+  only Android screens can be recorded.
+- **One video per way the screen faces.** Turning the phone while recording goes on in a second
+  video, since players don't follow a video that changes size.
 - **Tested against recorded tool output.** The Android and iOS support is checked against what
   `adb` and libimobiledevice print, not yet against every device.
 

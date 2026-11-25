@@ -12,6 +12,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -48,11 +49,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.isSpecified
@@ -79,6 +82,7 @@ import androidx.compose.ui.layout.LocalPinnableContainer
 import androidx.compose.ui.layout.PinnableContainer
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -103,6 +107,7 @@ import com.teya.lemonade.Icon
 import com.teya.lemonade.IconButton
 import com.teya.lemonade.LemonadeTheme
 import com.teya.lemonade.LemonadeUi
+import com.teya.lemonade.Link
 import com.teya.lemonade.SearchField
 import com.teya.lemonade.SegmentedControl
 import com.teya.lemonade.Spinner
@@ -115,6 +120,7 @@ import com.teya.lemonade.core.LemonadeButtonSize
 import com.teya.lemonade.core.LemonadeButtonType
 import com.teya.lemonade.core.LemonadeButtonVariant
 import com.teya.lemonade.core.LemonadeIcons
+import com.teya.lemonade.core.LemonadeLinkSize
 import com.teya.lemonade.core.LemonadeSegmentedControlSize
 import com.teya.lemonade.core.SymbolContainerSize
 import com.teya.lemonade.core.SymbolContainerVoice
@@ -130,6 +136,7 @@ import dev.lemonadecode.platform.designsystem.rememberCharWidth
 import dev.lemonadecode.platform.designsystem.topHairline
 import dev.lemonadecode.platform.localization.resolve
 import dev.lemonadecode.workspace.strings.Res
+import dev.lemonadecode.workspace.strings.action_dismiss
 import dev.lemonadecode.workspace.strings.device_tab_logs
 import dev.lemonadecode.workspace.strings.device_tab_screen
 import dev.lemonadecode.workspace.strings.device_window_close
@@ -167,6 +174,8 @@ import dev.lemonadecode.workspace.strings.mirror_back
 import dev.lemonadecode.workspace.strings.mirror_home
 import dev.lemonadecode.workspace.strings.mirror_keyboard
 import dev.lemonadecode.workspace.strings.mirror_loading
+import dev.lemonadecode.workspace.strings.mirror_record
+import dev.lemonadecode.workspace.strings.mirror_record_stop
 import dev.lemonadecode.workspace.strings.mirror_rotate
 import dev.lemonadecode.workspace.strings.mirror_screenshot
 import dev.lemonadecode.workspace.strings.pair_action
@@ -207,6 +216,7 @@ import dev.lemonadecode.workspace.strings.pair_what
 import dev.lemonadecode.workspace.strings.paired_another
 import dev.lemonadecode.workspace.strings.paired_open
 import dev.lemonadecode.workspace.strings.paired_title
+import dev.lemonadecode.workspace.strings.recording_show
 import dev.lemonadecode.workspace.strings.settings_back
 import dev.lemonadecode.workspace.uimodel.DeviceConnectionModel
 import dev.lemonadecode.workspace.uimodel.DeviceGroupModel
@@ -228,10 +238,13 @@ import dev.lemonadecode.workspace.uimodel.MirrorControlsModel
 import dev.lemonadecode.workspace.uimodel.MobilePlatformModel
 import dev.lemonadecode.workspace.uimodel.PairingMethod
 import dev.lemonadecode.workspace.uimodel.QrCodeModel
+import dev.lemonadecode.workspace.uimodel.SavedRecordingModel
 import dev.lemonadecode.workspace.uimodel.ScreenPictureModel
+import dev.lemonadecode.workspace.uimodel.ScreenRecordingModel
 import dev.lemonadecode.workspace.uimodel.WorkspaceEvent
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.skia.Bitmap
@@ -250,6 +263,9 @@ private const val StackedScreenShare = 0.55f
 
 /** Room around the picture in its pane, for the controls under it and the line under them. */
 private val ScreenPaneChrome = 112.dp
+
+/** The record button's dot and its stop square. */
+private val RecordSignSize = 12.dp
 
 /**
  * The Devices panel: connected devices, one device's screen and logs, or a step of pairing. The
@@ -450,7 +466,19 @@ private fun DeviceRow(
           color = if (device.ready) colors.content.contentSecondary else colors.content.contentCaution,
           maxLines = 1,
           overflow = TextOverflow.Ellipsis,
+          modifier = Modifier.weight(1f, fill = false),
         )
+        device.recordingElapsed?.let { elapsed ->
+          val recording = stringResource(Res.string.mirror_record_stop)
+          Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(spaces.spacing100),
+            modifier = Modifier.semantics(mergeDescendants = true) { contentDescription = "$recording $elapsed" },
+          ) {
+            StatusDot(color = colors.content.contentCritical)
+            LemonadeUi.Text(text = elapsed, textStyle = LemonadeTheme.typography.bodyXSmallSemiBold, color = colors.content.contentCritical, maxLines = 1)
+          }
+        }
       }
     }
     if (device.canOpenWindow) {
@@ -579,15 +607,25 @@ private fun ScreenPane(
           modifier = (if (fits) Modifier.fillMaxHeight() else Modifier.fillMaxWidth()).aspectRatio(ratio, matchHeightConstraintsFirst = fits),
         )
       }
-      MirrorControls(controls = device.controls, onEvent = onEvent)
+      MirrorControls(controls = device.controls, recording = device.recording, onEvent = onEvent)
       device.screenDetail?.let { detail ->
+        // While it records, how long for comes first, in red.
+        val elapsed = device.recording?.elapsed
+        val caption = detail.resolve()
         LemonadeUi.Text(
-          text = detail.resolve(),
+          text = buildAnnotatedString {
+            if (elapsed != null) {
+              withStyle(SpanStyle(color = colors.content.contentCritical, fontWeight = FontWeight.SemiBold)) { append("● $elapsed") }
+              append(" · ")
+            }
+            append(caption)
+          },
           textStyle = LemonadeTheme.typography.bodyXSmallRegular,
           textAlign = TextAlign.Center,
           color = colors.content.contentSecondary,
         )
       }
+      device.recording?.saved?.let { SavedRecording(saved = it, onEvent = onEvent) }
     }
   }
 }
@@ -707,6 +745,7 @@ private fun decodePicture(picture: ScreenPictureModel): ImageBitmap? = runCatchi
 @Composable
 private fun MirrorControls(
   controls: MirrorControlsModel,
+  recording: ScreenRecordingModel?,
   onEvent: (WorkspaceEvent) -> Unit,
 ) {
   val buttons = buildList {
@@ -714,29 +753,122 @@ private fun MirrorControls(
     if (controls.home) add(Triple(LemonadeIcons.Home, Res.string.mirror_home, false) to WorkspaceEvent.PressDeviceHome)
     if (controls.rotate) add(Triple(LemonadeIcons.ArrowRotateCw, Res.string.mirror_rotate, controls.landscape) to WorkspaceEvent.RotateDevice)
     if (controls.screenshot) add(Triple(LemonadeIcons.Camera, Res.string.mirror_screenshot, false) to WorkspaceEvent.ScreenshotToSession)
-    if (controls.keyboard) add(Triple(LemonadeIcons.Keyboard, Res.string.mirror_keyboard, controls.keyboardOn) to WorkspaceEvent.ToggleDeviceKeyboard)
   }
-  if (buttons.isEmpty()) return
+  val keyboard = if (controls.keyboard) Triple(LemonadeIcons.Keyboard, Res.string.mirror_keyboard, controls.keyboardOn) to WorkspaceEvent.ToggleDeviceKeyboard else null
+  if (buttons.isEmpty() && recording == null && keyboard == null) return
   Row(
+    verticalAlignment = Alignment.CenterVertically,
     horizontalArrangement = Arrangement.spacedBy(LemonadeTheme.spaces.spacing100),
     modifier = Modifier
       .clip(LemonadeTheme.shapes.radiusFull)
       .background(LemonadeTheme.colors.background.bgSubtle)
       .padding(LemonadeTheme.spaces.spacing100),
   ) {
-    buttons.forEach { (button, event) ->
-      val (icon, label, on) = button
-      val text = stringResource(label)
-      HoverTooltip(text = text, placement = TooltipPlacement.BelowStart) {
-        LemonadeUi.IconButton(
-          icon = icon,
-          contentDescription = text,
-          onClick = { onEvent(event) },
-          variant = LemonadeButtonVariant.Neutral,
-          type = if (on) LemonadeButtonType.Solid else LemonadeButtonType.Ghost,
-          size = LemonadeButtonSize.Small,
-        )
+    buttons.forEach { (button, event) -> MirrorButton(button, onClick = { onEvent(event) }) }
+    recording?.let { RecordButton(recording = it, onClick = { onEvent(WorkspaceEvent.ToggleScreenRecording) }) }
+    keyboard?.let { (button, event) -> MirrorButton(button, onClick = { onEvent(event) }) }
+  }
+}
+
+/** One of the buttons under the screen: its icon, its label and whether it's on. */
+@Composable
+private fun MirrorButton(
+  button: Triple<LemonadeIcons, StringResource, Boolean>,
+  onClick: () -> Unit,
+) {
+  val (icon, label, on) = button
+  val text = stringResource(label)
+  HoverTooltip(text = text, placement = TooltipPlacement.BelowStart) {
+    LemonadeUi.IconButton(
+      icon = icon,
+      contentDescription = text,
+      onClick = onClick,
+      variant = LemonadeButtonVariant.Neutral,
+      type = if (on) LemonadeButtonType.Solid else LemonadeButtonType.Ghost,
+      size = LemonadeButtonSize.Small,
+    )
+  }
+}
+
+/**
+ * Records the screen, or stops recording it, shown in red while it records. It's off, saying why,
+ * while the screen can't be recorded. Lemonade has no record or stop icons, so their signs are
+ * drawn, in a button the size and shape of the others.
+ */
+@Composable
+private fun RecordButton(
+  recording: ScreenRecordingModel,
+  onClick: () -> Unit,
+) {
+  val colors = LemonadeTheme.colors
+  val label = stringResource(if (recording.recording) Res.string.mirror_record_stop else Res.string.mirror_record)
+  val enabled = recording.recording || recording.unavailable == null
+  val interactionSource = remember { MutableInteractionSource() }
+  val hovered by interactionSource.collectIsHoveredAsState()
+  val pressed by interactionSource.collectIsPressedAsState()
+  val background = when {
+    !enabled -> Color.Transparent
+    pressed -> if (recording.recording) colors.interaction.bgCriticalSubtlePressed else colors.interaction.bgNeutralSubtlePressed
+    hovered -> if (recording.recording) colors.interaction.bgCriticalSubtleInteractive else colors.interaction.bgSubtleInteractive
+    recording.recording -> colors.background.bgCriticalSubtle
+    else -> Color.Transparent
+  }
+  val sign = colors.content.contentCritical
+  HoverTooltip(text = recording.unavailable?.resolve() ?: label, placement = TooltipPlacement.BelowStart) {
+    Box(
+      contentAlignment = Alignment.Center,
+      modifier = Modifier
+        .size(LemonadeTheme.sizes.size1000)
+        .alpha(if (enabled) 1f else LemonadeTheme.opacities.state.opacityDisabled)
+        .clip(LemonadeTheme.shapes.radius300)
+        .background(background)
+        .hoverable(interactionSource, enabled = enabled)
+        .clickable(interactionSource = interactionSource, indication = null, enabled = enabled, role = Role.Button, onClick = onClick)
+        .semantics { contentDescription = label },
+    ) {
+      Canvas(modifier = Modifier.size(RecordSignSize)) {
+        if (recording.recording) {
+          drawRoundRect(sign, cornerRadius = CornerRadius(2.dp.toPx(), 2.dp.toPx()))
+        } else {
+          drawCircle(sign)
+        }
       }
+    }
+  }
+}
+
+/** Where the last recording went: its name, its full path on hover, a way to show it in its folder, and ×. */
+@Composable
+private fun SavedRecording(
+  saved: SavedRecordingModel,
+  onEvent: (WorkspaceEvent) -> Unit,
+) {
+  val uriHandler = LocalUriHandler.current
+  Row(
+    verticalAlignment = Alignment.CenterVertically,
+    horizontalArrangement = Arrangement.spacedBy(LemonadeTheme.spaces.spacing200, Alignment.CenterHorizontally),
+    modifier = Modifier.fillMaxWidth(),
+  ) {
+    HoverTooltip(text = saved.paths, placement = TooltipPlacement.AboveStart, modifier = Modifier.weight(1f, fill = false)) {
+      LemonadeUi.Text(
+        text = saved.label.resolve(),
+        textStyle = LemonadeTheme.typography.bodyXSmallRegular,
+        color = LemonadeTheme.colors.content.contentSecondary,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+      )
+    }
+    LemonadeUi.Link(text = stringResource(Res.string.recording_show), onClick = { uriHandler.openUri(saved.revealUri) }, size = LemonadeLinkSize.Small)
+    val dismiss = stringResource(Res.string.action_dismiss)
+    HoverTooltip(text = dismiss, placement = TooltipPlacement.BelowEnd) {
+      LemonadeUi.IconButton(
+        icon = LemonadeIcons.Times,
+        contentDescription = dismiss,
+        onClick = { onEvent(WorkspaceEvent.DismissSavedRecording) },
+        variant = LemonadeButtonVariant.Neutral,
+        type = LemonadeButtonType.Ghost,
+        size = LemonadeButtonSize.XSmall,
+      )
     }
   }
 }

@@ -46,7 +46,7 @@ internal interface MobileToolFinder {
   fun ideviceTool(folder: String, tool: String): String
 }
 
-/** The files the tools write pictures to, and the screenshots saved for the user. */
+/** The files the tools write pictures to, and the screenshots and screen recordings saved for the user. */
 internal interface DeviceFiles {
   /** A path in a temporary folder for a tool to write a picture to. */
   suspend fun capturePath(): String
@@ -59,6 +59,13 @@ internal interface DeviceFiles {
    * and returns its absolute path.
    */
   suspend fun saveScreenshot(deviceName: String, png: ByteArray): String
+
+  /**
+   * An absolute path for a new recording of [deviceName]'s screen, named like a screenshot but
+   * `.mp4`, in a folder that's kept: `~/Movies/Lemonade Code` on a Mac, `~/Videos/Lemonade Code`
+   * elsewhere. The folder is made when it isn't there.
+   */
+  suspend fun recordingPath(deviceName: String): String
 }
 
 /** Draws text as a QR code. */

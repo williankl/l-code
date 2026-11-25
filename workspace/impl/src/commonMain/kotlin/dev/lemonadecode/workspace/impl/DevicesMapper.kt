@@ -20,11 +20,14 @@ import dev.lemonadecode.domain.mobile.NearbyDevice
 import dev.lemonadecode.domain.mobile.NearbyKind
 import dev.lemonadecode.domain.mobile.QrMatrix
 import dev.lemonadecode.domain.mobile.QrPairing
+import dev.lemonadecode.domain.mobile.RecordingFailure
 import dev.lemonadecode.domain.mobile.ScreenPicture
+import dev.lemonadecode.domain.mobile.ScreenRecording
 import dev.lemonadecode.domain.mobile.ScreenUnavailable
 import dev.lemonadecode.domain.settings.DevicesLayout
 import dev.lemonadecode.platform.localization.LemonadeCodeString
 import dev.lemonadecode.platform.localization.asLemonadeCodeString
+import dev.lemonadecode.platform.process.abbreviateHome
 import dev.lemonadecode.workspace.strings.Res
 import dev.lemonadecode.workspace.strings.detail_three
 import dev.lemonadecode.workspace.strings.detail_two
@@ -53,6 +56,8 @@ import dev.lemonadecode.workspace.strings.logs_waiting
 import dev.lemonadecode.workspace.strings.mirror_clicks
 import dev.lemonadecode.workspace.strings.mirror_fps
 import dev.lemonadecode.workspace.strings.mirror_keys
+import dev.lemonadecode.workspace.strings.mirror_loading
+import dev.lemonadecode.workspace.strings.mirror_record_screenshots
 import dev.lemonadecode.workspace.strings.mirror_size
 import dev.lemonadecode.workspace.strings.mirror_view_only
 import dev.lemonadecode.workspace.strings.nearby_awaiting_code
@@ -70,6 +75,12 @@ import dev.lemonadecode.workspace.strings.pair_error_wrong_code
 import dev.lemonadecode.workspace.strings.pair_step
 import dev.lemonadecode.workspace.strings.pair_step_platform
 import dev.lemonadecode.workspace.strings.pair_title
+import dev.lemonadecode.workspace.strings.recording_failed_no_video
+import dev.lemonadecode.workspace.strings.recording_failed_unwritable
+import dev.lemonadecode.workspace.strings.recording_saved
+import dev.lemonadecode.workspace.strings.recording_saved_device_gone
+import dev.lemonadecode.workspace.strings.recording_saved_toast
+import dev.lemonadecode.workspace.strings.recording_saved_videos
 import dev.lemonadecode.workspace.strings.screen_cable_only_detail
 import dev.lemonadecode.workspace.strings.screen_cable_only_title
 import dev.lemonadecode.workspace.strings.screen_failed_detail
@@ -96,7 +107,9 @@ import dev.lemonadecode.workspace.uimodel.MirrorControlsModel
 import dev.lemonadecode.workspace.uimodel.MobilePlatformModel
 import dev.lemonadecode.workspace.uimodel.NearbyDeviceModel
 import dev.lemonadecode.workspace.uimodel.QrCodeModel
+import dev.lemonadecode.workspace.uimodel.SavedRecordingModel
 import dev.lemonadecode.workspace.uimodel.ScreenPictureModel
+import dev.lemonadecode.workspace.uimodel.ScreenRecordingModel
 import kotlin.math.roundToInt
 
 /** What the Mobile plugin knows right now, for the Devices panel. */
@@ -113,6 +126,10 @@ internal data class MobileInput(
   val nearby: List<NearbyDevice> = emptyList(),
   val qr: QrPairing? = null,
   val cable: CablePairing? = null,
+  /** Screen recordings under way, and how the last one of each device ended. */
+  val recordings: Map<DeviceId, ScreenRecording> = emptyMap(),
+  /** Now, in milliseconds since the epoch, for how long a recording has run. */
+  val nowMillis: Long = 0,
 )
 
 /** The docked Devices panel's widths in dp: for the list, pairing and tabs, and for a device's screen and logs together. */
@@ -279,7 +296,9 @@ internal object DevicesMapper {
       }
       DeviceGroupModel(
         platform = platform.toModel(),
-        devices = input.devices.filter { it.platform == platform }.map { row(it, windowOpen = it.id in view.deviceWindows) },
+        devices = input.devices.filter { it.platform == platform }.map { device ->
+          row(device, windowOpen = device.id in view.deviceWindows, recording = input.recordings[device.id], nowMillis = input.nowMillis)
+        },
         missingTool = missing?.asLemonadeCodeString(),
       )
     }
@@ -291,8 +310,13 @@ internal object DevicesMapper {
     )
   }
 
-  /** [windowOpen]: a window of its own mirrors [device] now. */
-  fun row(device: MobileDevice, windowOpen: Boolean = false): DeviceRowModel {
+  /** [windowOpen]: a window of its own mirrors [device] now; [recording] is how its screen recording goes. */
+  fun row(
+    device: MobileDevice,
+    windowOpen: Boolean = false,
+    recording: ScreenRecording? = null,
+    nowMillis: Long = 0,
+  ): DeviceRowModel {
     val detail = when (device.availability) {
       DeviceAvailability.Ready -> joined(
         listOfNotNull(
@@ -313,6 +337,7 @@ internal object DevicesMapper {
       ready = device.availability == DeviceAvailability.Ready,
       canOpenWindow = device.availability == DeviceAvailability.Ready || windowOpen,
       windowOpen = windowOpen,
+      recordingElapsed = (recording as? ScreenRecording.Recording)?.let { elapsed(nowMillis - it.startedAtMillis) },
     )
   }
 
@@ -344,7 +369,8 @@ internal object DevicesMapper {
       joined(
         listOfNotNull(
           if (width != null && height != null) Res.string.mirror_size.asLemonadeCodeString(width, height) else null,
-          frame?.framesPerSecond?.let { Res.string.mirror_fps.asLemonadeCodeString(it.roundToInt().coerceAtLeast(1)) },
+          // While it records, how long for shows in the frame rate's place.
+          frame?.framesPerSecond?.takeIf { input.recordings[device.id] !is ScreenRecording.Recording }?.let { Res.string.mirror_fps.asLemonadeCodeString(it.roundToInt().coerceAtLeast(1)) },
           when {
             DeviceCapability.Touch !in caps -> Res.string.mirror_view_only.asLemonadeCodeString()
             state.keyboard && keys -> Res.string.mirror_keys.asLemonadeCodeString()
@@ -373,7 +399,85 @@ internal object DevicesMapper {
       ),
       screenDetail = screenDetail,
       logs = logs(input.logs[device.id], state, agent, apps = logApps(device, state, input.apps[device.id])),
+      recording = if (DeviceCapability.Record in caps) recording(input.recordings[device.id], frame, input.nowMillis) else null,
     )
+  }
+
+  /**
+   * The record button of a device that can record its screen, from how its [recording] goes and
+   * the [frame] it shows: a recording needs the screen as video, which comes decoded, not as
+   * screenshots, which come as encoded pictures.
+   */
+  fun recording(recording: ScreenRecording?, frame: DeviceScreen.Frame?, nowMillis: Long): ScreenRecordingModel {
+    val running = recording as? ScreenRecording.Recording
+    return ScreenRecordingModel(
+      recording = running != null,
+      elapsed = running?.let { elapsed(nowMillis - it.startedAtMillis) },
+      unavailable = when {
+        running != null -> null
+        frame == null -> Res.string.mirror_loading
+        frame.picture !is ScreenPicture.Bgra -> Res.string.mirror_record_screenshots
+        else -> null
+      }?.asLemonadeCodeString(),
+      saved = (recording as? ScreenRecording.Saved)?.let { saved ->
+        SavedRecordingModel(
+          label = if (saved.files.size == 1) {
+            Res.string.recording_saved.asLemonadeCodeString(elapsed(saved.durationMillis))
+          } else {
+            Res.plurals.recording_saved_videos.asLemonadeCodeString(saved.files.size, saved.files.size)
+          },
+          paths = saved.files.joinToString("\n"),
+          revealUri = fileUri(saved.files.first()),
+        )
+      },
+    )
+  }
+
+  /** How long something has run: `0:42`, `12:05`, or `1:02:05` past an hour. */
+  fun elapsed(millis: Long): String {
+    val seconds = (millis / 1_000).coerceAtLeast(0)
+    fun two(value: Long) = value.toString().padStart(2, '0')
+    val hours = seconds / 3_600
+    val minutes = seconds / 60 % 60
+    return if (hours > 0) "$hours:${two(minutes)}:${two(seconds % 60)}" else "$minutes:${two(seconds % 60)}"
+  }
+
+  /**
+   * What a recording's ending says: a toast saying which folder one saved is in, the home folder
+   * [home] written `~`, or an error for one that failed; null while it records. [name] is the device's.
+   */
+  fun recordingEnded(ending: ScreenRecording, name: String, home: String): Pair<LemonadeCodeString, Boolean>? = when (ending) {
+    is ScreenRecording.Recording -> null
+    is ScreenRecording.Saved -> {
+      val path = ending.files.first()
+      val folder = abbreviateHome(path.substring(0, maxOf(path.lastIndexOf('/'), path.lastIndexOf('\\'), 0)), home)
+      (if (ending.deviceGone) Res.string.recording_saved_device_gone else Res.string.recording_saved_toast).asLemonadeCodeString(name, folder) to false
+    }
+    is ScreenRecording.Failed -> when (val reason = ending.reason) {
+      RecordingFailure.NoVideo -> Res.string.recording_failed_no_video.asLemonadeCodeString(name)
+      is RecordingFailure.Unwritable -> Res.string.recording_failed_unwritable.asLemonadeCodeString(reason.message)
+    } to true
+  }
+
+  /**
+   * `file:///Users/me/Movies/Lemonade%20Code/Pixel-8.mp4` for that path, or `file:///C:/Users/…`
+   * for a Windows one: what the system opens, showing the file in its folder.
+   */
+  fun fileUri(path: String): String {
+    val slashed = path.replace('\\', '/')
+    val absolute = if (slashed.startsWith("/")) slashed else "/$slashed"
+    val encoded = buildString {
+      for (byte in absolute.encodeToByteArray()) {
+        val code = byte.toInt() and 0xFF
+        val char = code.toChar()
+        if (code < 0x80 && (char.isLetterOrDigit() || char in UriPathCharacters)) {
+          append(char)
+        } else {
+          append('%').append(code.toString(16).uppercase().padStart(2, '0'))
+        }
+      }
+    }
+    return "file://$encoded"
   }
 
   /** [apps] is the choice of whose lines are shown, where the device has one. */
@@ -538,6 +642,9 @@ internal object DevicesMapper {
   }
 
   private fun QrMatrix.toModel(): QrCodeModel = QrCodeModel(size, List(size * size) { isDark(it % size, it / size) })
+
+  /** What a file URI's path keeps as it is; the rest is percent-encoded. */
+  private const val UriPathCharacters = "/-._~:"
 
   /** `192.168.1.57:37099`, as Wireless debugging shows it. */
   private val AddressPattern = Regex("^\\d{1,3}(\\.\\d{1,3}){3}:\\d{2,5}$")

@@ -8,6 +8,7 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -26,6 +27,7 @@ import dev.lemonadecode.domain.mobile.MobileDevice
 import dev.lemonadecode.domain.mobile.MobileError
 import dev.lemonadecode.domain.mobile.NearbyKind
 import dev.lemonadecode.domain.mobile.QrPairing
+import dev.lemonadecode.domain.mobile.ScreenRecording
 import dev.lemonadecode.domain.review.CommentId
 import dev.lemonadecode.domain.review.DiffState
 import dev.lemonadecode.domain.review.FileContent
@@ -114,6 +116,7 @@ public class WorkspacePresenter internal constructor(
     val updateChecks by updateService.checks.collectAsState()
     val mobileTools by mobileService.tools.collectAsState()
     val mobileDevices by mobileService.devices.collectAsState()
+    val mobileRecordings by mobileService.recordings.collectAsState()
     var view by remember { mutableStateOf(WorkspaceViewState()) }
     val scope = rememberCoroutineScope()
     val toastTimer = remember { ToastTimer() }
@@ -146,10 +149,42 @@ public class WorkspacePresenter internal constructor(
     val deviceScreens = remember { mutableStateMapOf<DeviceId, DeviceScreen>() }
     CollectEach(pages.associate { it.deviceId to it.logPackages }, deviceLogs) { id, packages -> mobileService.logs(id, packages) }
     CollectEach(pages.filter { it.logAppsOpen }.associate { it.deviceId to Unit }, deviceApps) { id, _ -> mobileService.apps(id) }
+    // A recording is made of the video the screen streams, so a device being recorded streams on while nothing shows it.
+    val recorded = if (settings.mobilePlugin) mobileRecordings.filterValues { it is ScreenRecording.Recording }.keys else emptySet()
     CollectEach(
-      pages.filter { settings.devicesLayout == DevicesLayout.SideBySide || it.tab == DeviceTab.Screen }.associate { it.deviceId to Unit },
+      pages.filter { settings.devicesLayout == DevicesLayout.SideBySide || it.tab == DeviceTab.Screen }.associate { it.deviceId to Unit } + recorded.associateWith { },
       deviceScreens,
     ) { id, _ -> mobileService.screen(id) }
+    // While a recording runs, its time counts up: the model is made again as each second passes.
+    val recordingSince = mobileRecordings.values.filterIsInstance<ScreenRecording.Recording>().minOfOrNull { it.startedAtMillis }
+    val recordingNow by produceState(clock.nowMillis(), recordingSince) {
+      value = clock.nowMillis()
+      val since = recordingSince ?: return@produceState
+      while (true) {
+        delay(1_000 - (clock.nowMillis() - since).mod(1_000L))
+        value = clock.nowMillis()
+      }
+    }
+    // A recording that ends, stopped or by itself, says how: saved, or why not. The device may be gone by then.
+    val recordingNames = remember { mutableMapOf<DeviceId, String>() }
+    val seenRecordings = remember { mutableMapOf<DeviceId, ScreenRecording>() }
+    LaunchedEffect(mobileRecordings) {
+      for ((id, recording) in mobileRecordings) {
+        if (recording is ScreenRecording.Recording) {
+          mobileService.devices.value.firstOrNull { it.id == id }?.let { recordingNames[id] = it.name }
+        } else if (seenRecordings[id] is ScreenRecording.Recording) {
+          val (message, failed) = DevicesMapper.recordingEnded(recording, recordingNames[id] ?: id.value, homeDirectory.path) ?: continue
+          if (failed) {
+            view = view.copy(error = message)
+          } else {
+            view = view.copy(toast = message)
+            toastTimer.restart(scope) { if (view.toast === message) view = view.copy(toast = null) }
+          }
+        }
+      }
+      seenRecordings.clear()
+      seenRecordings.putAll(mobileRecordings)
+    }
     // A device's window closes when the device goes: unplugged, its emulator closed, or disconnected.
     LaunchedEffect(mobileDevices) {
       val gone = view.deviceWindows.keys.filter { id -> mobileDevices.none { it.id == id } }
@@ -224,6 +259,18 @@ public class WorkspacePresenter internal constructor(
                 }
               }
             }
+            WorkspaceEvent.ToggleScreenRecording -> scope.launch {
+              if (mobileService.recordings.value[device] is ScreenRecording.Recording) {
+                // How it ended shows once it has.
+                val _ = mobileService.stopRecording(device)
+              } else {
+                when (val started = mobileService.startRecording(device)) {
+                  is LemonadeCodeResult.Success -> Unit
+                  is LemonadeCodeResult.Failure -> fail(DevicesMapper.errorText(started.error))
+                }
+              }
+            }
+            WorkspaceEvent.DismissSavedRecording -> mobileService.dismissRecording(device)
             is WorkspaceEvent.SetLogFilter -> updatePage(window) { it.copy(logFilter = event.filter) }
             WorkspaceEvent.ToggleLogSearch -> updatePage(window) { it.copy(logSearch = !it.logSearch, logQuery = if (it.logSearch) "" else it.logQuery) }
             is WorkspaceEvent.SetLogQuery -> updatePage(window) { it.copy(logQuery = event.query) }
@@ -733,6 +780,8 @@ public class WorkspacePresenter internal constructor(
         nearby = nearby,
         qr = qrPairing,
         cable = cablePairing,
+        recordings = mobileRecordings,
+        nowMillis = recordingNow,
       ),
       nowMillis = clock.nowMillis(),
       systemLanguage = SettingsMapper.languageFor(systemLanguageTag()),

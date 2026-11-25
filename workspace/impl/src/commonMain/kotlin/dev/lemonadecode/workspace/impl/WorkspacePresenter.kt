@@ -60,6 +60,7 @@ import dev.lemonadecode.workspace.impl.SettingsMapper.toDomain
 import dev.lemonadecode.workspace.impl.WorkspaceModelMapper.toDomain
 import dev.lemonadecode.workspace.impl.WorkspaceModelMapper.toPreference
 import dev.lemonadecode.workspace.strings.Res
+import dev.lemonadecode.workspace.strings.archived_parent_archived
 import dev.lemonadecode.workspace.strings.archived_restored_at_home
 import dev.lemonadecode.workspace.strings.archived_restored_at_home_many
 import dev.lemonadecode.workspace.strings.archived_some_stayed
@@ -124,8 +125,6 @@ public class WorkspacePresenter internal constructor(
     val toastTimer = remember { ToastTimer() }
     // Sessions whose worktrees are being looked up before they close: a second ⌘W meanwhile asks nothing twice.
     val lookingUp = remember { mutableSetOf<SessionId>() }
-    // Archived sessions on their way back: a second click meanwhile restores nothing twice.
-    val restoring = remember { mutableSetOf<SessionId>() }
 
     val selected = WorkspaceModelMapper.selectedSession(sessions, view)
     val selectedId = selected?.id
@@ -335,16 +334,22 @@ public class WorkspacePresenter internal constructor(
          * or a folder had gone.
          */
         fun restore(id: SessionId) {
-          if (sessionService.archived.value.none { it.id == id } || !restoring.add(id)) return
+          val archive = sessionService.archived.value.firstOrNull { it.id == id } ?: return
+          if (id in view.restoring) return
+          // Its rows hide until it's done, so what's left of it part way can't be restored, or deleted, twice.
+          val ids = archive.sessions.map { it.id }.toSet()
+          update { it.copy(restoring = it.restoring + ids) }
           scope.launch {
             val back = try {
               sessionService.unarchive(id)
             } finally {
-              restoring.remove(id)
+              update { it.copy(restoring = it.restoring - ids) }
             }
             when (back) {
               is LemonadeCodeResult.Success -> {
-                update { it.selecting(back.value.id).copy(view = WorkspaceView.Terminal) }
+                if (sessionService.sessions.value.any { it.id == back.value.id }) {
+                  update { it.selecting(back.value.id).copy(view = WorkspaceView.Terminal) }
+                }
                 val stayed = back.value.stillArchived.size
                 val missing = back.value.missingFolders
                 val single = missing.entries.singleOrNull()
@@ -358,7 +363,13 @@ public class WorkspacePresenter internal constructor(
                   missing.size > 1 -> fail(Res.plurals.archived_restored_at_home_many.asLemonadeCodeString(missing.size, missing.size))
                 }
               }
-              is LemonadeCodeResult.Failure -> fail(ErrorMessages.of(back.error, homeDirectory.path))
+              is LemonadeCodeResult.Failure -> fail(
+                if (back.error == SessionError.ParentArchived) {
+                  Res.string.archived_parent_archived.asLemonadeCodeString(archive.session.displayName)
+                } else {
+                  ErrorMessages.of(back.error, homeDirectory.path)
+                },
+              )
             }
           }
         }
@@ -400,10 +411,8 @@ public class WorkspacePresenter internal constructor(
             val started = sessionService.startSubSession(parentId, location, branch = branch)
             update { it.copy(startingSubSession = false) }
             when (started) {
-              // Its parent may have been archived while it started, taking it along: then it isn't selected.
-              is LemonadeCodeResult.Success -> update { state ->
-                val open = sessionService.sessions.value.any { it.id == started.value }
-                (if (open) state.selecting(started.value) else state).copy(subSessionMenu = null, worktreeBranch = null, namingWorktree = null, view = WorkspaceView.Terminal)
+              is LemonadeCodeResult.Success -> update {
+                it.selecting(started.value).copy(subSessionMenu = null, worktreeBranch = null, namingWorktree = null, view = WorkspaceView.Terminal)
               }
               is LemonadeCodeResult.Failure -> when (val error = started.error) {
                 // Said under the field, which stays open for another name.
@@ -486,7 +495,7 @@ public class WorkspacePresenter internal constructor(
           is WorkspaceEvent.RestoreArchivedSession -> restore(SessionId(event.sessionId))
           is WorkspaceEvent.DeleteArchivedSession -> {
             val id = SessionId(event.sessionId)
-            if (sessionService.archived.value.any { it.id == id }) requestClose(id)
+            if (id !in view.restoring && sessionService.archived.value.any { it.id == id }) requestClose(id)
           }
 
           WorkspaceEvent.NewSession -> scope.launch {

@@ -25,6 +25,7 @@ import dev.lemonadecode.platform.core.mapError
 import dev.lemonadecode.platform.di.AppScope
 import dev.lemonadecode.review.api.ReviewError
 import dev.lemonadecode.review.api.ReviewService
+import dev.lemonadecode.sessions.api.SessionError
 import dev.lemonadecode.sessions.api.SessionService
 import dev.zacsweers.metro.ContributesBinding
 import dev.zacsweers.metro.Inject
@@ -157,7 +158,12 @@ internal class ReviewServiceImpl(
       namePrefix = SessionService.ReviewPrefix,
     )
     return when (started) {
-      is LemonadeCodeResult.Failure -> LemonadeCodeResult.failure(ReviewError.DeliveryFailed(started.error.toString()))
+      // The comments stay unsent either way, to send again.
+      is LemonadeCodeResult.Failure -> when (started.error) {
+        // Archived as the sub-session started, which then wasn't created.
+        SessionError.ParentArchived -> LemonadeCodeResult.failure(ReviewError.UnknownSession)
+        else -> LemonadeCodeResult.failure(ReviewError.DeliveryFailed(started.error.toString()))
+      }
       is LemonadeCodeResult.Success -> {
         val name = sessions.sessions.value.firstOrNull { it.id == started.value }?.displayName ?: SessionService.ReviewPrefix
         markDelivered(key, unsent.map { it.id }.toSet(), CommentStatus.InSubSession(started.value, name))

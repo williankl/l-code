@@ -13,6 +13,7 @@ import dev.lemonadecode.platform.core.LemonadeCodeResult
 import dev.lemonadecode.sessions.api.SessionError
 import dev.lemonadecode.sessions.api.SessionService
 import dev.lemonadecode.sessions.api.Unarchived
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
@@ -30,6 +31,9 @@ public class FakeSessionService(initial: List<Session> = emptyList()) : SessionS
   /** Every rename, with the name kept: trimmed, or null for back to the automatic one. */
   public val renamed: MutableList<Pair<SessionId, String?>> = mutableListOf()
   public var openResult: LemonadeCodeResult<SessionId, SessionError>? = null
+
+  /** What [startSubSession] answers, once recorded; null starts it. */
+  public var startResult: LemonadeCodeResult<SessionId, SessionError>? = null
 
   /** Sessions [restore] brings back; recorded as restored once it runs. */
   public var saved: List<Session> = emptyList()
@@ -121,6 +125,7 @@ public class FakeSessionService(initial: List<Session> = emptyList()) : SessionS
     branch: String?,
   ): LemonadeCodeResult<SessionId, SessionError> {
     started += StartCall(parentId, location, initialInput, origin, namePrefix, branch)
+    startResult?.let { return it }
     val parent = state.value.firstOrNull { it.id == parentId } ?: return LemonadeCodeResult.failure(SessionError.UnknownSession)
     val plan = planSubSession(parentId, location, namePrefix, branch) ?: return LemonadeCodeResult.failure(SessionError.NotARepository)
     if (plan.createsBranch && plan.branch in existingBranches) return LemonadeCodeResult.failure(SessionError.BranchExists(plan.branch.orEmpty()))
@@ -178,6 +183,9 @@ public class FakeSessionService(initial: List<Session> = emptyList()) : SessionS
   /** What [unarchive] answers; null brings the session back. */
   public var unarchiveResult: LemonadeCodeResult<Unarchived, SessionError>? = null
 
+  /** While set, [unarchive] waits for it before doing anything, as a slow restore would. */
+  public var unarchiveGate: CompletableDeferred<Unit>? = null
+
   /** Takes the session and its sub-sessions out of the list, the most recently archived first, with no status. */
   override fun archive(id: SessionId) {
     archivedIds += id
@@ -195,6 +203,7 @@ public class FakeSessionService(initial: List<Session> = emptyList()) : SessionS
   /** Puts the sessions back last, under the parent if it's there; a folder in [missingFolders] comes back at home. */
   override suspend fun unarchive(id: SessionId): LemonadeCodeResult<Unarchived, SessionError> {
     unarchivedIds += id
+    unarchiveGate?.await()
     unarchiveResult?.let { return it }
     val archive = archivedState.value.firstOrNull { it.id == id } ?: return LemonadeCodeResult.failure(SessionError.UnknownSession)
     val stayed = mutableSetOf<SessionId>()

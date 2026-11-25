@@ -176,17 +176,20 @@ internal class SessionServiceImpl(
     state.update { sessions -> sessions.filterNot { it.id in doomed } }
   }
 
-  /** Ends the terminals of [ids] and whatever runs in them; [removeWorktree] waits a moment for them. */
+  /** Ends the terminals of [ids] and whatever runs in them. */
   private fun end(ids: Set<SessionId>) {
     val _ = forgetEnded()
-    val until = TimeSource.Monotonic.markNow() + EndingWait
     ids.forEach { sessionId ->
       watchers.remove(sessionId)?.cancel()
-      registry.remove(sessionId)?.let { terminal ->
-        processTree(terminal.pid).forEach { ending[it] = until }
-        terminal.close()
-      }
+      registry.remove(sessionId)?.let(::endShell)
     }
+  }
+
+  /** Closes [terminal] and notes its processes, so [removeWorktree] waits a moment for them to end. */
+  private fun endShell(terminal: TerminalSession) {
+    val until = TimeSource.Monotonic.markNow() + EndingWait
+    processTree(terminal.pid).forEach { ending[it] = until }
+    terminal.close()
   }
 
   override fun archive(id: SessionId) {
@@ -221,18 +224,13 @@ internal class SessionServiceImpl(
     val archive = archives.value.firstOrNull { it.id == id.value } ?: return LemonadeCodeResult.failure(SessionError.UnknownSession)
     val group = archive.sessions.mapTo(HashSet()) { it.id }
     val missing = mutableMapOf<SessionId, String>()
-    // A shell that couldn't start, and those under it: they stay archived, and are said to.
-    val failed = mutableListOf<String>()
-    // Under one archived again meanwhile: they stay archived with what's left.
-    val left = mutableSetOf<String>()
+    // Those that couldn't come back, and those under them: they stay archived, and are said to.
+    val kept = mutableListOf<String>()
     for ((index, entry) in archive.sessions.withIndex()) {
       val parentId = entry.parentId
-      if (parentId in failed) {
-        failed += entry.id
-        continue
-      }
-      if (index > 0 && parentId in group && (parentId in left || state.value.none { it.id.value == parentId })) {
-        left += entry.id
+      // Under one that stayed, or that was archived again meanwhile: it stays too.
+      if (index > 0 && parentId in group && (parentId in kept || state.value.none { it.id.value == parentId })) {
+        kept += entry.id
         continue
       }
       val gone = !File(entry.workingDirectory).isDirectory
@@ -243,53 +241,56 @@ internal class SessionServiceImpl(
         before = archive.before.takeIf { index == 0 },
         claim = { takeFromArchive(entry.id) },
       )
+      if (relaunched is LemonadeCodeResult.Success) {
+        if (gone) missing[relaunched.value] = entry.workingDirectory
+        continue
+      }
+      val error = (relaunched as LemonadeCodeResult.Failure).error
+      // Out of the archive without this call: back already, through another restore of it, which sees
+      // to the rest; or deleted for good, with the rest.
+      val backAlready = error == SessionError.UnknownSession && state.value.any { it.id.value == entry.id }
       when {
-        relaunched is LemonadeCodeResult.Success -> if (gone) missing[relaunched.value] = entry.workingDirectory
-        // Without its first shell nothing came back: it all stays archived, where it was.
-        index == 0 -> return LemonadeCodeResult.failure((relaunched as LemonadeCodeResult.Failure).error)
-        // Deleted for good meanwhile: the rest went with it.
-        (relaunched as LemonadeCodeResult.Failure).error == SessionError.UnknownSession -> break
-        else -> failed += entry.id
+        index == 0 && backAlready -> return LemonadeCodeResult.success(Unarchived(id))
+        // Without its first session nothing came back: it all stays archived, where it was.
+        index == 0 -> return LemonadeCodeResult.failure(error)
+        error == SessionError.UnknownSession -> break
+        else -> kept += entry.id
       }
     }
-    return LemonadeCodeResult.success(Unarchived(id, missing, failed.map(::SessionId)))
+    return LemonadeCodeResult.success(Unarchived(id, missing, kept.map(::SessionId)))
   }
 
   /**
    * Takes the session [id] out of the archive it's in, as it joins the open sessions; false when it
-   * isn't there any more. What's left of an archive that lost its first session keeps its place in
-   * the list, but not that session's place among its siblings.
+   * isn't there any more. What's left of an archive whose first session went keeps its place in the
+   * list, split so each session left at the top heads its own, as the list shows them.
    */
   private fun takeFromArchive(id: String): Boolean = updateArchives { archived ->
-    archived.mapNotNull { archive ->
+    archived.flatMap { archive ->
       when {
-        archive.sessions.none { it.id == id } -> archive
-        archive.sessions.size == 1 -> null
-        archive.id == id -> SavedArchive(archive.sessions.drop(1))
-        else -> archive.copy(sessions = archive.sessions.filterNot { it.id == id })
+        archive.sessions.none { it.id == id } -> listOf(archive)
+        archive.id == id -> separate(archive.sessions.drop(1))
+        else -> listOf(archive.copy(sessions = archive.sessions.filterNot { it.id == id }))
       }
     }
   }
 
-  /**
-   * Puts [session] in its parent's archive, after the sub-sessions already there, when the parent
-   * was archived while the session's shell started. [restored] is how it was saved, if it was.
-   * Called with the archive locked, so nothing is archived in between.
-   */
-  private fun joinArchivedParent(session: Session, restored: SavedSession?): Boolean {
-    val parentId = session.parentId?.value ?: return false
-    if (state.value.any { it.id.value == parentId }) return false
-    val family = archives.value.firstOrNull { archive -> archive.sessions.any { it.id == parentId } } ?: return false
-    val entry = restored ?: saved(session, resume = null, withOutput = false, archived = true)
-    return updateArchives { archived ->
-      archived.map { archive ->
-        if (archive !== family) return@map archive
-        val under = mutableSetOf(parentId)
-        var at = archive.sessions.indexOfFirst { it.id == parentId } + 1
-        while (at < archive.sessions.size && archive.sessions[at].parentId in under) under += archive.sessions[at++].id
-        archive.copy(sessions = archive.sessions.toMutableList().apply { add(at, entry) })
-      }
+  /** [sessions] as archives: each whose parent isn't among them heads one, with those under it. */
+  private fun separate(sessions: List<SavedSession>): List<SavedArchive> {
+    val groups = mutableListOf<MutableList<SavedSession>>()
+    val groupOf = HashMap<String, MutableList<SavedSession>>()
+    sessions.forEach { session ->
+      val group = session.parentId?.let(groupOf::get) ?: mutableListOf<SavedSession>().also(groups::add)
+      group += session
+      groupOf[session.id] = group
     }
+    return groups.map { SavedArchive(it) }
+  }
+
+  /** The session it goes under has been archived, so it can't join the open sessions. Call with the archive locked. */
+  private fun parentArchived(session: Session): Boolean {
+    val parentId = session.parentId ?: return false
+    return state.value.none { it.id == parentId } && archives.value.any { archive -> archive.sessions.any { it.id == parentId.value } }
   }
 
   /** Changes the archived sessions as kept, and as shown; false when nothing changed. */
@@ -355,13 +356,9 @@ internal class SessionServiceImpl(
     // when it's open too, so a file saved twice over, or caught between the two lists, brings back no copies.
     val _ = updateArchives { current ->
       val seen = (current.flatMap { archive -> archive.sessions.map { it.id } } + loaded?.sessions.orEmpty().map { it.id } + state.value.map { it.id.value }).toMutableSet()
-      current + loaded?.archived.orEmpty().mapNotNull { archive ->
+      current + loaded?.archived.orEmpty().flatMap { archive ->
         val kept = archive.sessions.filter { seen.add(it.id) }
-        when {
-          kept.isEmpty() -> null
-          kept.first().id == archive.id -> archive.copy(sessions = kept)
-          else -> SavedArchive(kept)
-        }
+        if (kept.isNotEmpty() && kept.first().id == archive.id) listOf(archive.copy(sessions = kept)) else separate(kept)
       }
     }
     var count = 0
@@ -478,12 +475,12 @@ internal class SessionServiceImpl(
       is LemonadeCodeResult.Failure -> return@withLock LemonadeCodeResult.failure(SessionError.LaunchFailed(started.error.message ?: "Couldn't start the shell"))
     }
     val session = build(id)
-    // In one step with archiving: a session whose parent was archived while its shell started goes
-    // into that archive, rather than running on its own outside it.
+    // In one step with archiving. A session whose parent was archived while its shell started
+    // doesn't run on its own outside it: a new one isn't created, a restored one stays archived.
     val placement = synchronized(archiveLock) {
       when {
+        parentArchived(session) -> Placement.ParentArchived
         !claim() -> Placement.Dropped
-        joinArchivedParent(session, restored) -> Placement.Archived
         else -> {
           registry.register(id, terminal)
           state.update { sessions -> SubSessionPlanner.insertBack(sessions, session, after, before) }
@@ -492,8 +489,8 @@ internal class SessionServiceImpl(
       }
     }
     if (placement != Placement.Listed) {
-      terminal.close()
-      return@withLock if (placement == Placement.Archived) LemonadeCodeResult.success(id) else LemonadeCodeResult.failure(SessionError.UnknownSession)
+      endShell(terminal)
+      return@withLock LemonadeCodeResult.failure(if (placement == Placement.ParentArchived) SessionError.ParentArchived else SessionError.UnknownSession)
     }
     val resume = restored?.resume
     if (resume != null) resumes.update { it + (id to resume) }
@@ -620,8 +617,8 @@ internal class SessionServiceImpl(
   // Windows paths ignore case: `cd c:\users\me` is home too.
   private fun rootName(folder: String): String = if (folder.equals(home.path, ignoreCase = IsWindows)) "~" else folderName(folder, IsWindows).ifEmpty { folder }
 
-  /** Where a launched session went: into the open sessions, into its parent's archive, or nowhere. */
-  private enum class Placement { Listed, Archived, Dropped }
+  /** Where a launched session went: into the open sessions, or nowhere, as its parent was archived or it was already out of the archive. */
+  private enum class Placement { Listed, ParentArchived, Dropped }
 
   private companion object {
     val StaleReportCheck = 1.seconds

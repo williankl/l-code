@@ -207,10 +207,12 @@
     <item quantity="other">%1$d carpetas ya no existen, así que sus sesiones se reabrieron en tu carpeta personal</item>
   </plurals>
   <plurals name="archived_some_stayed">
-    <item quantity="one">%1$d subsesión sigue en Archivadas porque su shell no pudo arrancar</item>
-    <item quantity="many">%1$d subsesiones siguen en Archivadas porque una shell no pudo arrancar</item>
-    <item quantity="other">%1$d subsesiones siguen en Archivadas porque una shell no pudo arrancar</item>
+    <item quantity="one">%1$d subsesión no pudo volver y sigue en Archivadas</item>
+    <item quantity="many">%1$d subsesiones no pudieron volver y siguen en Archivadas</item>
+    <item quantity="other">%1$d subsesiones no pudieron volver y siguen en Archivadas</item>
   </plurals>
+  <string name="archived_parent_archived">%1$s sigue en Archivadas porque la sesión de la que depende se archivó mientras tanto</string>
+  <string name="error_parent_archived">La sesión se archivó mientras arrancaba su subsesión, así que la subsesión no se creó.</string>
   <string name="no_open_sessions_title">No hay sesiones abiertas</string>
   <string name="no_open_sessions_detail">Abre un nuevo terminal o restaura una sesión archivada desde la barra lateral.</string>
 

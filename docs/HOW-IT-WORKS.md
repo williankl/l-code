@@ -159,10 +159,15 @@ Code conversation belongs to the folder it was in.
 
 Each session leaves the archive only as it joins the open ones, in the same step, so whatever is
 saved meanwhile, or when the app quits part way, still has every session in one list or the other.
-A sub-session whose shell can't start stays archived, with those under it, and the error banner
-says so; if the first one can't, the whole archive stays where it was. A sub-session that's still
-starting when its parent is archived goes into that archive too. A `sessions.json` from before
-archiving has none, and loads as it always did; one that lists a session twice brings it back once.
+A sub-session that can't come back stays archived, with those under it, and the error banner says
+so; if the first one can't, the whole archive stays where it was. What's left of an archive that
+stopped part way shows each session left at the top as an archive of its own. While a restore
+runs, its archive's rows are hidden, so it can't be restored or deleted twice.
+
+A session never runs on its own under an archived parent. A new sub-session whose parent is archived
+while its shell starts isn't created, and a review handed to it keeps its comments unsent; one
+coming back from the archive stays archived. A `sessions.json` from before archiving has none, and
+loads as it always did; one that lists a session twice brings it back once.
 
 ## Keep awake
 

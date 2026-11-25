@@ -115,7 +115,7 @@ internal object WorkspaceModelMapper {
             },
           )
         },
-        archived = SessionsMapper.archived(input.archived, open = view.archivedOpen, home = input.homeDirectory),
+        archived = SessionsMapper.archived(input.archived.filterNot { it.id in view.restoring }, open = view.archivedOpen, home = input.homeDirectory),
       ),
       header = selected?.let { SessionsMapper.header(it, parent, view.navigationStyle) },
       viewSwitcher = selected?.let {

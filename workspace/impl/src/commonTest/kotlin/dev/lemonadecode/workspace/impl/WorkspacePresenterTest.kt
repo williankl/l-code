@@ -34,10 +34,12 @@ import dev.lemonadecode.updates.fake.FakeUpdateService
 import dev.lemonadecode.workspace.impl.showcase.ShowcaseDevices
 import dev.lemonadecode.workspace.impl.showcase.ShowcaseFixtures
 import dev.lemonadecode.workspace.strings.Res
+import dev.lemonadecode.workspace.strings.archived_parent_archived
 import dev.lemonadecode.workspace.strings.archived_restored_at_home
 import dev.lemonadecode.workspace.strings.archived_restored_at_home_many
 import dev.lemonadecode.workspace.strings.archived_some_stayed
 import dev.lemonadecode.workspace.strings.error_launch
+import dev.lemonadecode.workspace.strings.error_parent_archived
 import dev.lemonadecode.workspace.strings.error_worktree_delete
 import dev.lemonadecode.workspace.strings.file_path_copied
 import dev.lemonadecode.workspace.strings.session_archived
@@ -78,6 +80,7 @@ import dev.lemonadecode.workspace.uimodel.WorkspaceEvent
 import dev.lemonadecode.workspace.uimodel.WorkspaceModel
 import dev.lemonadecode.workspace.uimodel.WorkspaceView
 import dev.lemonadecode.workspace.uimodel.WorktreeBranchModel
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -1117,6 +1120,57 @@ class WorkspacePresenterTest {
       assertEquals("api-ratelimit", partly.header?.name)
       assertEquals(listOf("r1"), partly.sessions.archived?.rows?.map { it.id })
       assertEquals(1, partly.sessions.archived?.rows?.single()?.subSessionCount)
+    }
+  }
+
+  @Test
+  fun `while a restore runs, its rows hide, and neither Restore nor Delete reaches it twice`() = runTest {
+    withFamily()
+    val gate = CompletableDeferred<Unit>()
+    sessions.unarchiveGate = gate
+    presenter.test {
+      awaitItem().eventSink(WorkspaceEvent.ArchiveSession("ar"))
+      awaitItemWhere { it.sessions.archived != null }.eventSink(WorkspaceEvent.ArchiveSession("cf"))
+      awaitItemWhere { it.sessions.archived?.rows?.size == 2 }.eventSink(WorkspaceEvent.RestoreArchivedSession("ar"))
+      val restoring = awaitItemWhere { it.sessions.archived?.rows?.size == 1 }
+      assertEquals(listOf("cf"), restoring.sessions.archived?.rows?.map { it.id }, "only the other archive shows")
+      yieldUntil { sessions.unarchivedIds.isNotEmpty() }
+      restoring.eventSink(WorkspaceEvent.RestoreArchivedSession("ar"))
+      restoring.eventSink(WorkspaceEvent.DeleteArchivedSession("ar"))
+      assertEquals(listOf(ar), sessions.unarchivedIds)
+      assertEquals(emptyList(), sessions.closed)
+
+      gate.complete(Unit)
+      val back = awaitItemWhere { it.header?.name == "api-ratelimit" && it.sessions.tiles.any { tile -> tile.id == "ar" } }
+      assertEquals(listOf("cf"), back.sessions.archived?.rows?.map { it.id })
+      assertEquals(null, back.error)
+    }
+  }
+
+  @Test
+  fun `a restore that stayed archived, its parent archived meanwhile, says so and selects nothing new`() = runTest {
+    withFamily()
+    presenter.test {
+      awaitItem().eventSink(WorkspaceEvent.SelectSession("cf"))
+      awaitItemWhere { it.header?.name == "checkout-flake" }.eventSink(WorkspaceEvent.ArchiveSession("r1"))
+      sessions.unarchiveResult = LemonadeCodeResult.failure(SessionError.ParentArchived)
+      awaitItemWhere { it.sessions.archived != null }.eventSink(WorkspaceEvent.RestoreArchivedSession("r1"))
+      val stayed = awaitItemWhere { it.error != null }
+      assertEquals(Res.string.archived_parent_archived.asLemonadeCodeString("review-1"), stayed.error)
+      assertEquals("checkout-flake", stayed.header?.name)
+      assertEquals(listOf("r1"), stayed.sessions.archived?.rows?.map { it.id })
+    }
+  }
+
+  @Test
+  fun `a sub-session not created because its session was archived as it started says so`() = runTest {
+    withFamily()
+    sessions.startResult = LemonadeCodeResult.failure(SessionError.ParentArchived)
+    presenter.test {
+      awaitItem().eventSink(WorkspaceEvent.CreateSubSessionFrom("ar", LocationModel.SameFolder))
+      val failed = awaitItemWhere { it.error != null }
+      assertEquals(Res.string.error_parent_archived.asLemonadeCodeString(), failed.error)
+      assertEquals("api-ratelimit", failed.header?.name)
     }
   }
 

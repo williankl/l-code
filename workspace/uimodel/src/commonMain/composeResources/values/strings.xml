@@ -195,9 +195,11 @@
     <item quantity="other">%1$d folders are gone, so their sessions came back in your home folder</item>
   </plurals>
   <plurals name="archived_some_stayed">
-    <item quantity="one">%1$d sub-session stayed under Archived, as its shell couldn’t start</item>
-    <item quantity="other">%1$d sub-sessions stayed under Archived, as a shell couldn’t start</item>
+    <item quantity="one">%1$d sub-session couldn’t come back and stayed under Archived</item>
+    <item quantity="other">%1$d sub-sessions couldn’t come back and stayed under Archived</item>
   </plurals>
+  <string name="archived_parent_archived">%1$s stayed under Archived, as the session it goes under was archived meanwhile</string>
+  <string name="error_parent_archived">The session was archived while its sub-session started, so the sub-session wasn’t created.</string>
   <string name="no_open_sessions_title">No open sessions</string>
   <string name="no_open_sessions_detail">Open a new terminal, or restore an archived session from the sidebar.</string>
 

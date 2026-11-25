@@ -84,6 +84,8 @@ internal data class WorkspaceViewState(
   val closing: ClosingSession? = null,
   /** The Archived section at the bottom of the sidebar is open; it starts folded. */
   val archivedOpen: Boolean = false,
+  /** Archived sessions on their way back, with those archived with them: their rows hide meanwhile. */
+  val restoring: Set<SessionId> = emptySet(),
   val error: LemonadeCodeString? = null,
   val toast: LemonadeCodeString? = null,
 )

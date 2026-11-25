@@ -88,6 +88,15 @@ public sealed interface WorkspaceEvent {
   /** Quits so the downloaded version takes its place; the sessions come back after. */
   public data object RestartToUpdate : WorkspaceEvent
 
+  /** Settings › Import sessions: ticks or unticks the session with [key]. */
+  public data class ToggleImportSession(val key: String) : WorkspaceEvent
+
+  /** Ticks every session of the tool [sourceId] that can come over, or unticks them all. */
+  public data class TickAllImports(val sourceId: String, val ticked: Boolean) : WorkspaceEvent
+
+  /** Opens the ticked sessions here; the other tool keeps its own. */
+  public data object ImportSessions : WorkspaceEvent
+
   /** The phone button: opens or closes the Devices panel, or brings its own window forward. */
   public data object ToggleDevices : WorkspaceEvent
 

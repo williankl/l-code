@@ -50,6 +50,38 @@
   <string name="plugins_value_none">Keine aktiv</string>
   <string name="plugins_mobile_status">%1$d Android · %2$d iOS verbunden</string>
   <string name="plugins_open_devices">Geräte öffnen</string>
+  <string name="settings_import">Sitzungen importieren</string>
+  <string name="import_intro">Hol Sitzungen aus einem anderen Tool herüber, mit ihren Ordnern, Namen und Worktrees. Claude Code macht da weiter, wo es aufgehört hat. Das andere Tool behält seine eigenen.</string>
+  <string name="import_looking">Suche nach Sitzungen…</string>
+  <plurals name="import_found">
+    <item quantity="one">%1$d Sitzung gefunden</item>
+    <item quantity="other">%1$d Sitzungen gefunden</item>
+  </plurals>
+  <string name="import_none">Keine Sitzungen zum Übernehmen</string>
+  <string name="import_not_installed">Auf diesem Computer nicht installiert</string>
+  <string name="import_unknown_format">Seine Sitzungen sind auf eine Art gespeichert, die Lemonade Code noch nicht kennt (%1$s)</string>
+  <string name="import_read_failed">Seine Sitzungen konnten nicht gelesen werden: %1$s</string>
+  <string name="import_running">%1$s läuft noch. Beende es zuerst, damit kein Gespräch in beiden offen ist.</string>
+  <string name="import_select_all">Alle auswählen</string>
+  <string name="import_select_none">Keine auswählen</string>
+  <string name="import_note_worktree">Worktree</string>
+  <string name="import_note_conversation">Claude-Code-Gespräch</string>
+  <string name="import_note_worktree_conversation">Worktree · Claude-Code-Gespräch</string>
+  <string name="import_already_imported">Bereits importiert</string>
+  <string name="import_folder_missing">Ordner existiert nicht mehr</string>
+  <plurals name="import_button">
+    <item quantity="one">%1$d Sitzung importieren</item>
+    <item quantity="other">%1$d Sitzungen importieren</item>
+  </plurals>
+  <string name="import_busy">Wird importiert…</string>
+  <plurals name="import_done">
+    <item quantity="one">%1$d Sitzung importiert</item>
+    <item quantity="other">%1$d Sitzungen importiert</item>
+  </plurals>
+  <plurals name="import_some_failed">
+    <item quantity="one">%1$d Sitzung konnte nicht importiert werden: Ihr Ordner fehlt oder ihre Shell ist nicht gestartet</item>
+    <item quantity="other">%1$d Sitzungen konnten nicht importiert werden: Ihre Ordner fehlen oder ihre Shells sind nicht gestartet</item>
+  </plurals>
 
   <!-- Settings › Updates -->
   <string name="updates_version">Lemonade Code %1$s</string>

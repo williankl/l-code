@@ -22,6 +22,7 @@ flowchart TB
         settings["settings"]
         updates["updates"]
         mobile["mobile"]
+        imports["imports"]
     end
     git["data/git"]
     domain["domainEntities"]
@@ -36,6 +37,7 @@ flowchart TB
     review --> sessions
     settings --> sessions
     mobile --> settings
+    imports --> sessions
     sessions --> git
     features --> domain
     features --> platform
@@ -81,6 +83,7 @@ An `impl` never depends on another `impl`. Bindings are contributed with
 | `settings/{api,impl,fake}` | `SettingsService` (persisted), the keep-awake coordinator, and the status sounds coordinator that dings when an agent finishes or needs input. |
 | `updates/{api,impl,fake}` | `UpdateService`: finds a newer GitHub release for this install, downloads and checks it, and, on Restart now, hands over to a helper that swaps it in after the app quits. See [RELEASING.md](../RELEASING.md). |
 | `mobile/{api,impl,fake}` | `MobileService`, the Mobile plugin: Android devices through `adb` (list, the screen as video from `screenrecord` decoded with FFmpeg, screenshots, input, `logcat`, pairing by QR code or code, mDNS discovery) and iOS devices through libimobiledevice (list, screenshots, `idevicesyslog`, trusting over a cable). Idle while the plugin is off. |
+| `imports/{api,impl,fake}` | `SessionImportService`: brings sessions over from other tools. Each tool is a `SessionSource` contributed into a set; herdr is the first, read through `herdr session list --json` and each session's saved `session.json`, never written. Remembers what was imported, so nothing comes over twice, and opens the sessions through `SessionService.openImported`. |
 | `workspace/uimodel` | `WorkspaceModel`, `WorkspaceEvent` and the localized strings (`composeResources`: English, German, Spanish, French, Portuguese and Slovak). |
 | `workspace/ui` | The composables: `WorkspaceContent(model, terminal)` and its parts, including the file previews. Pure rendering. |
 | `workspace/impl` | `WorkspacePresenter`, the Model mapper, `WorkspaceScreen` (presenter plus live terminals), and the showcase built from fixtures through the same mapper. |

@@ -23,6 +23,7 @@ import androidx.compose.ui.test.runDesktopComposeUiTest
 import dev.lemonadecode.domain.review.DiffState
 import dev.lemonadecode.domain.review.Review
 import dev.lemonadecode.domain.session.SessionId
+import dev.lemonadecode.imports.fake.FakeSessionImportService
 import dev.lemonadecode.mobile.fake.FakeMobileService
 import dev.lemonadecode.platform.designsystem.LemonadeCodeTheme
 import dev.lemonadecode.platform.process.HomeDirectory
@@ -52,6 +53,7 @@ class CommentTypingUiTest {
     updateService = FakeUpdateService(),
     mobileService = FakeMobileService(),
     soundPlayer = FakeSoundPlayer(),
+    sessionImports = FakeSessionImportService(),
     clock = { 0L },
   )
   private val ar = SessionId("ar")

@@ -6,6 +6,7 @@ import dev.lemonadecode.data.git.GitWorktree
 import dev.lemonadecode.data.git.fake.FakeGitDataSource
 import dev.lemonadecode.domain.session.LinkedWorktree
 import dev.lemonadecode.domain.session.SessionOrigin
+import dev.lemonadecode.domain.session.SessionPlacement
 import dev.lemonadecode.domain.session.SessionStatus
 import dev.lemonadecode.domain.session.SubSessionLocation
 import dev.lemonadecode.platform.architecture.testing.FakeLemonadeCodeCoroutineDispatchers
@@ -14,6 +15,7 @@ import dev.lemonadecode.platform.core.getOrNull
 import dev.lemonadecode.platform.process.HomeDirectory
 import dev.lemonadecode.platform.terminal.TerminalLaunch
 import dev.lemonadecode.platform.terminal.TerminalSession
+import dev.lemonadecode.sessions.api.ImportedSession
 import dev.lemonadecode.sessions.api.SessionError
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
@@ -253,6 +255,32 @@ class SessionServiceImplTest {
     service.shutdown()
     assertEquals("sleep 60", store.saved!!.sessions.first { it.id == "waiting" }.resume)
     assertEquals(null, store.saved!!.sessions.first { it.id == "failed" }.resume)
+  }
+
+  @Test
+  fun `an imported session opens under its parent and resumes its Claude Code conversation`() = runBlocking<Unit> {
+    val parent = service.openTerminal().getOrNull()!!
+    val folder = File(home, "rate-limit").apply { mkdirs() }
+    val id = service.openImported(
+      ImportedSession(folder.path, "rate limit", customName = "rate limit", parentId = parent, placement = SessionPlacement.Worktree, claudeConversation = "0b6f3c2e-4a51"),
+    ).getOrNull()!!
+    val session = service.sessions.value.single { it.id == id }
+    assertEquals(parent, session.parentId)
+    assertEquals(SessionPlacement.Worktree, session.placement)
+    assertEquals("rate limit", session.displayName)
+    assertEquals(folder.path, session.workingDirectory)
+    withTimeout(10_000) {
+      while (registry.terminal(id)!!.screen().lines().none { "claude --resume 0b6f3c2e-4a51" in it }) delay(50)
+    }
+
+    // An id the shell would read as code never reaches it, and a folder that's gone opens nothing.
+    val unsafe = service.openImported(ImportedSession(home.path, "~", claudeConversation = "x; echo pwned")).getOrNull()!!
+    delay(1_500)
+    assertTrue(registry.terminal(unsafe)!!.screen().lines().none { "pwned" in it })
+    assertEquals(
+      LemonadeCodeResult.failure(SessionError.FolderNotFound("/no/such/folder")),
+      service.openImported(ImportedSession("/no/such/folder", "gone")),
+    )
   }
 
   @Test

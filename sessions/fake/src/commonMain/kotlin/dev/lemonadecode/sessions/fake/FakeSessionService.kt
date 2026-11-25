@@ -9,6 +9,7 @@ import dev.lemonadecode.domain.session.SessionStatus
 import dev.lemonadecode.domain.session.SubSessionLocation
 import dev.lemonadecode.domain.session.SubSessionPlan
 import dev.lemonadecode.platform.core.LemonadeCodeResult
+import dev.lemonadecode.sessions.api.ImportedSession
 import dev.lemonadecode.sessions.api.SessionError
 import dev.lemonadecode.sessions.api.SessionService
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -142,6 +143,44 @@ public class FakeSessionService(initial: List<Session> = emptyList()) : SessionS
   }
 
   override fun suggestWorktreeBranch(): String = worktreeBranchSuggestion
+
+  /** Every session [openImported] was asked to open. */
+  public val imported: MutableList<ImportedSession> = mutableListOf()
+
+  /** Folders [openImported] treats as gone. */
+  public var missingFolders: Set<String> = emptySet()
+
+  override suspend fun openImported(session: ImportedSession): LemonadeCodeResult<SessionId, SessionError> {
+    imported += session
+    if (session.directory in missingFolders) return LemonadeCodeResult.failure(SessionError.FolderNotFound(session.directory))
+    val id = SessionId("imported-${nextId++}")
+    val parent = session.parentId?.takeIf { parentId -> state.value.any { it.id == parentId } }
+    val opened = Session(
+      id = id,
+      name = if (parent == null) session.directory.substringAfterLast('/') else session.name,
+      shell = "zsh",
+      workingDirectory = session.directory,
+      repositoryRoot = null,
+      branch = null,
+      parentId = parent,
+      placement = if (parent == null) SessionPlacement.Root else session.placement,
+      origin = SessionOrigin.Opened,
+      status = SessionStatus.Shell,
+      customName = session.customName,
+    )
+    state.update { sessions ->
+      if (parent == null) {
+        sessions + opened
+      } else {
+        // Right after the parent's last descendant, as the real service places sub-sessions.
+        val family = mutableSetOf(parent)
+        sessions.forEach { if (it.parentId in family) family += it.id }
+        val at = sessions.indexOfLast { it.id in family } + 1
+        sessions.take(at) + opened + sessions.drop(at)
+      }
+    }
+    return LemonadeCodeResult.success(id)
+  }
 
   override fun paste(id: SessionId, text: String): LemonadeCodeResult<Unit, SessionError> {
     pasted += id to text

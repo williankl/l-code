@@ -15,12 +15,16 @@ import dev.lemonadecode.domain.review.FileContent
 import dev.lemonadecode.domain.review.FileDiff
 import dev.lemonadecode.domain.review.Review
 import dev.lemonadecode.domain.review.ReviewComment
+import dev.lemonadecode.domain.session.ImportBlock
+import dev.lemonadecode.domain.session.ImportSource
+import dev.lemonadecode.domain.session.ImportableSession
 import dev.lemonadecode.domain.session.LinkedWorktree
 import dev.lemonadecode.domain.session.Session
 import dev.lemonadecode.domain.session.SessionId
 import dev.lemonadecode.domain.session.SessionOrigin
 import dev.lemonadecode.domain.session.SessionPlacement
 import dev.lemonadecode.domain.session.SessionStatus
+import dev.lemonadecode.domain.session.SourceScan
 import dev.lemonadecode.domain.session.SubSessionLocation
 import dev.lemonadecode.domain.session.SubSessionPlan
 import dev.lemonadecode.domain.settings.AppLanguage
@@ -40,6 +44,7 @@ import dev.lemonadecode.workspace.impl.DevicePageState
 import dev.lemonadecode.workspace.impl.DeviceWindowState
 import dev.lemonadecode.workspace.impl.DevicesStep
 import dev.lemonadecode.workspace.impl.DevicesViewState
+import dev.lemonadecode.workspace.impl.ImportViewState
 import dev.lemonadecode.workspace.impl.LineRange
 import dev.lemonadecode.workspace.impl.MobileInput
 import dev.lemonadecode.workspace.impl.NavigationStyle
@@ -100,7 +105,7 @@ public enum class WorkspaceShowcase(
     "Closing a session in a worktree",
     "No other session uses sub-2’s worktree, so closing it asks whether to delete that too. It has uncommitted changes; its branch stays either way.",
   ),
-  SettingsList("8a", "Settings list", "Six rows show their current value; the gear's dot says an update is out. Open one to change it."),
+  SettingsList("8a", "Settings list", "Seven rows show their current value; the gear's dot says an update is out. Open one to change it."),
   SettingsLanguage("8b", "Language, Deutsch chosen", "Each language in its own name, with its flag. The whole app follows at once."),
   SettingsPlugins("8c", "Plugins › Mobile", "The Mobile plugin mirrors Android and iOS screens, pairs devices and reads their logs."),
   SettingsUpdates("8d", "Updates, 1.9.0 available", "What's new, then Update now. It downloads, then a restart finishes it."),
@@ -132,6 +137,11 @@ public enum class WorkspaceShowcase(
   ),
   SettingsSounds("8q", "Settings › Sounds", "A ding when an agent finishes, two when it needs input, from any session. Play lets you hear each one."),
   DeviceWindow("8r", "Device · a window of its own", "A device's ↗ in the list mirrors it in its own window, screen and logs, beside others. Its frame closes it.", widthDp = 760, heightDp = 880, part = ShowcasePart.DeviceWindow),
+  SettingsImport(
+    "8s",
+    "Settings › Import sessions",
+    "What herdr has, to tick and bring over: a worktree sits under its repository, Claude Code conversations come along, and one imported before or whose folder is gone can't be ticked.",
+  ),
   ;
 
   public fun model(eventSink: (WorkspaceEvent) -> Unit = {}): WorkspaceModel = WorkspaceModelMapper.map(scene.input, eventSink)
@@ -232,6 +242,7 @@ private fun scene(
       updateChecks = UpdateChecks(lastCheckedMillis = Now - 2 * Hour),
       mobile = mobile.copy(enabled = settings.mobilePlugin),
       nowMillis = Now,
+      importSources = listOf("herdr"),
     ),
     transcripts = transcripts,
   )
@@ -437,6 +448,31 @@ private fun sceneFor(showcase: WorkspaceShowcase): Scene = when (showcase) {
   )
   WorkspaceShowcase.DiffSounds -> soundsScene()
   WorkspaceShowcase.SettingsSounds -> settingsScene(SettingsPage.Sounds, update = UpdateState.None)
+  WorkspaceShowcase.SettingsImport -> settingsScene(SettingsPage.ImportSessions, update = UpdateState.None).let { scene ->
+    val imports = ImportViewState(scans = listOf(ShowcaseImports.herdr), ticked = ShowcaseImports.ticked)
+    scene.copy(input = scene.input.copy(view = scene.input.view.copy(imports = imports)))
+  }
+}
+
+/** Made-up sessions herdr has, for Settings › Import sessions. */
+private object ShowcaseImports {
+  private val herdrSource = ImportSource(id = "herdr", name = "herdr")
+  private val storefront = ImportableSession("herdr:default:w1", "storefront", null, Repo, conversation = "0b6f3c2e-4a51")
+  private val rateLimit = ImportableSession(
+    "herdr:default:w2",
+    "rate-limit",
+    null,
+    "$Repo.worktrees/rate-limit",
+    parentKey = storefront.key,
+    worktree = true,
+    conversation = "7e9d8c7b-6a5f",
+  )
+  private val payments = ImportableSession("herdr:default:w3", "payments-api", null, "${ShowcaseFixtures.Home}/code/payments-api", blocked = ImportBlock.AlreadyImported)
+  private val notes = ImportableSession("herdr:default:w4", "design notes", "design notes", "${ShowcaseFixtures.Home}/notes")
+  private val spike = ImportableSession("herdr:default:w5", "grpc-spike", null, "${ShowcaseFixtures.Home}/code/grpc-spike", blocked = ImportBlock.FolderMissing)
+
+  val herdr: SourceScan = SourceScan.Found(herdrSource, listOf(storefront, rateLimit, payments, notes, spike))
+  val ticked: Set<String> = setOf(storefront.key, rateLimit.key)
 }
 
 /** A notification sound that changed and an error sound that's new, both previewing. */

@@ -72,6 +72,8 @@ internal data class WorkspaceInput(
   val nowMillis: Long = 0,
   /** The computer's own language, which Match system follows. */
   val systemLanguage: LanguageOption = LanguageOption.English,
+  /** The tools sessions can be imported from, e.g. `herdr`. */
+  val importSources: List<String> = emptyList(),
 )
 
 /** Turns domain state and the workspace's UI state into the immutable Model the UI draws. */
@@ -143,6 +145,7 @@ internal object WorkspaceModelMapper {
         mobile = SettingsMapper.mobile(input.settings.mobilePlugin, input.mobile.devices),
         updates = updates,
         animations = input.settings.animations,
+        imports = ImportMapper.model(input.importSources, view.imports, input.homeDirectory),
       ),
       newSubSession = newSubSession(selected, view.subSessionMenu ?: input.settings.subSessionLocation, view.subSessionMenu != null, input),
       closeSession = view.closing?.let { ClosingSessions.dialog(it, input.homeDirectory) },

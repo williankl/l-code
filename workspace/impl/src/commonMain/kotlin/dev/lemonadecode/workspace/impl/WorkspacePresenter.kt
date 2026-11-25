@@ -37,8 +37,10 @@ import dev.lemonadecode.domain.session.LinkedWorktree
 import dev.lemonadecode.domain.session.Session
 import dev.lemonadecode.domain.session.SessionId
 import dev.lemonadecode.domain.session.SessionStatus
+import dev.lemonadecode.domain.session.SourceScan
 import dev.lemonadecode.domain.session.SubSessionLocation
 import dev.lemonadecode.domain.settings.DevicesLayout
+import dev.lemonadecode.imports.api.SessionImportService
 import dev.lemonadecode.mobile.api.MobileService
 import dev.lemonadecode.platform.architecture.WallClock
 import dev.lemonadecode.platform.core.LemonadeCodeResult
@@ -62,6 +64,8 @@ import dev.lemonadecode.workspace.impl.WorkspaceModelMapper.toPreference
 import dev.lemonadecode.workspace.strings.Res
 import dev.lemonadecode.workspace.strings.devices_disconnected
 import dev.lemonadecode.workspace.strings.file_path_copied
+import dev.lemonadecode.workspace.strings.import_done
+import dev.lemonadecode.workspace.strings.import_some_failed
 import dev.lemonadecode.workspace.strings.logs_errors_sent
 import dev.lemonadecode.workspace.strings.screenshot_attached
 import dev.lemonadecode.workspace.strings.screenshot_failed
@@ -104,6 +108,7 @@ public class WorkspacePresenter internal constructor(
   private val updateService: UpdateService,
   private val mobileService: MobileService,
   private val soundPlayer: SoundPlayer,
+  private val sessionImports: SessionImportService,
   private val clock: WallClock,
 ) : LemonadeCodePresenter<WorkspaceModel>() {
   @Composable
@@ -349,6 +354,41 @@ public class WorkspacePresenter internal constructor(
           }
         }
 
+        /** Looks again at what the tools have, keeping what's ticked that can still come over. */
+        fun scanImports() {
+          val attempt = (view.imports?.attempt ?: 0) + 1
+          update { it.copy(imports = ImportViewState(ticked = it.imports?.ticked.orEmpty(), attempt = attempt)) }
+          scope.launch {
+            val scans = sessionImports.scan()
+            update { state ->
+              val imports = state.imports?.takeIf { it.attempt == attempt } ?: return@update state
+              val found = imports.copy(scans = scans)
+              state.copy(imports = found.copy(ticked = found.ticked.intersect(found.importable.map { it.key }.toSet())))
+            }
+          }
+        }
+
+        /** Opens the ticked sessions, then closes settings on the first of them. */
+        fun importTicked() {
+          val imports = view.imports ?: return
+          val picked = imports.picked
+          if (imports.importing || picked.isEmpty()) return
+          update { it.copy(imports = imports.copy(importing = true)) }
+          scope.launch {
+            val result = sessionImports.import(picked)
+            val first = result.opened.firstOrNull()
+            if (first != null) {
+              update { it.closingPopovers().copy(imports = null).selecting(first).copy(view = WorkspaceView.Terminal) }
+              showToast(Res.plurals.import_done.asLemonadeCodeString(result.opened.size))
+            }
+            if (result.failed.isNotEmpty()) {
+              fail(Res.plurals.import_some_failed.asLemonadeCodeString(result.failed.size))
+              // Nothing opened: the page stays, showing what changed since.
+              if (first == null) scanImports()
+            }
+          }
+        }
+
         when (event) {
           is WorkspaceEvent.ToggleSessionsPanel -> if (event.narrowLayout) {
             update { it.copy(drawerOpen = !it.drawerOpen) }
@@ -428,7 +468,10 @@ public class WorkspacePresenter internal constructor(
             if (it.settingsOpen) it.copy(settingsOpen = false) else it.closingPopovers().copy(settingsOpen = true, settingsPage = SettingsPage.List)
           }
           WorkspaceEvent.DismissSettings -> update { it.copy(settingsOpen = false) }
-          is WorkspaceEvent.OpenSettingsPage -> update { it.copy(settingsOpen = true, settingsPage = event.page) }
+          is WorkspaceEvent.OpenSettingsPage -> {
+            update { it.copy(settingsOpen = true, settingsPage = event.page) }
+            if (event.page == SettingsPage.ImportSessions) scanImports()
+          }
           WorkspaceEvent.SettingsBack -> update { if (it.settingsPage != SettingsPage.List) it.copy(settingsPage = SettingsPage.List) else it.copy(settingsOpen = false) }
           is WorkspaceEvent.SetTheme -> scope.launch { settingsService.update { it.copy(theme = event.theme.toPreference()) } }
           is WorkspaceEvent.SetLanguage -> scope.launch { settingsService.update { it.copy(language = event.language.toDomain()) } }
@@ -450,6 +493,28 @@ public class WorkspacePresenter internal constructor(
           // The Updates page stays open to show the download's progress.
           WorkspaceEvent.InstallUpdate -> updateService.install()
           WorkspaceEvent.RestartToUpdate -> updateService.restart()
+
+          is WorkspaceEvent.ToggleImportSession -> update { state ->
+            val imports = state.imports
+            when {
+              imports == null || imports.importing -> state
+              event.key in imports.ticked -> state.copy(imports = imports.copy(ticked = imports.ticked - event.key))
+              imports.importable.any { it.key == event.key } -> state.copy(imports = imports.copy(ticked = imports.ticked + event.key))
+              else -> state
+            }
+          }
+          is WorkspaceEvent.TickAllImports -> update { state ->
+            val imports = state.imports?.takeUnless { it.importing } ?: return@update state
+            val keys = imports.scans.orEmpty()
+              .filter { it.source.id == event.sourceId }
+              .filterIsInstance<SourceScan.Found>()
+              .flatMap { it.sessions }
+              .filter { it.blocked == null }
+              .map { it.key }
+              .toSet()
+            state.copy(imports = imports.copy(ticked = if (event.ticked) imports.ticked + keys else imports.ticked - keys))
+          }
+          WorkspaceEvent.ImportSessions -> importTicked()
 
           WorkspaceEvent.ToggleDevices -> update { state ->
             when {
@@ -736,6 +801,7 @@ public class WorkspacePresenter internal constructor(
       ),
       nowMillis = clock.nowMillis(),
       systemLanguage = SettingsMapper.languageFor(systemLanguageTag()),
+      importSources = sessionImports.sources.map { it.name },
     )
     return WorkspaceModelMapper.map(input, eventSink)
   }

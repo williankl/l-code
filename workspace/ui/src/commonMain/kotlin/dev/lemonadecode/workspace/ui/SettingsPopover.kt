@@ -97,6 +97,7 @@ import dev.lemonadecode.workspace.strings.plugins_value_none
 import dev.lemonadecode.workspace.strings.preview_play
 import dev.lemonadecode.workspace.strings.settings_appearance
 import dev.lemonadecode.workspace.strings.settings_back
+import dev.lemonadecode.workspace.strings.settings_import
 import dev.lemonadecode.workspace.strings.settings_language
 import dev.lemonadecode.workspace.strings.settings_plugins
 import dev.lemonadecode.workspace.strings.settings_sounds
@@ -182,6 +183,7 @@ internal fun SettingsPopover(
               SettingsPage.Sounds -> SoundsPage(settings = settings, onEvent = onEvent)
               SettingsPage.Plugins -> PluginsPage(settings = settings, onEvent = onEvent)
               SettingsPage.Updates -> UpdatesPage(updates = settings.updates, onEvent = onEvent)
+              SettingsPage.ImportSessions -> ImportSessionsPage(imports = settings.imports, onEvent = onEvent)
             }
           }
         }
@@ -256,6 +258,12 @@ private fun ColumnScope.SettingsList(
       attention = settings.updates.needsAttention,
       onClick = { onEvent(WorkspaceEvent.OpenSettingsPage(SettingsPage.Updates)) },
     )
+    SettingsRow(
+      icon = LemonadeIcons.LogIn,
+      label = stringResource(Res.string.settings_import),
+      value = settings.imports.sourceNames,
+      onClick = { onEvent(WorkspaceEvent.OpenSettingsPage(SettingsPage.ImportSessions)) },
+    )
   }
 }
 
@@ -307,6 +315,7 @@ private fun SettingsPageHeader(
     SettingsPage.Sounds -> Res.string.settings_sounds
     SettingsPage.Plugins -> Res.string.settings_plugins
     SettingsPage.Updates -> Res.string.settings_updates
+    SettingsPage.ImportSessions -> Res.string.settings_import
   }
   Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(LemonadeTheme.spaces.spacing200)) {
     LemonadeUi.IconButton(

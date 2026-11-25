@@ -51,6 +51,42 @@
   <string name="plugins_value_none">Ninguno activo</string>
   <string name="plugins_mobile_status">%1$d Android · %2$d iOS conectados</string>
   <string name="plugins_open_devices">Abrir dispositivos</string>
+  <string name="settings_import">Importar sesiones</string>
+  <string name="import_intro">Trae sesiones de otra herramienta, con sus carpetas, nombres y worktrees. Claude Code sigue donde lo dejó. La otra herramienta conserva las suyas.</string>
+  <string name="import_looking">Buscando sesiones…</string>
+  <plurals name="import_found">
+    <item quantity="one">%1$d sesión encontrada</item>
+    <item quantity="many">%1$d sesiones encontradas</item>
+    <item quantity="other">%1$d sesiones encontradas</item>
+  </plurals>
+  <string name="import_none">No hay sesiones que traer</string>
+  <string name="import_not_installed">No está instalado en este ordenador</string>
+  <string name="import_unknown_format">Guarda sus sesiones de una forma que Lemonade Code aún no conoce (%1$s)</string>
+  <string name="import_read_failed">No se pudieron leer sus sesiones: %1$s</string>
+  <string name="import_running">%1$s sigue abierto. Ciérralo primero, para que ninguna conversación quede abierta en los dos.</string>
+  <string name="import_select_all">Seleccionar todo</string>
+  <string name="import_select_none">No seleccionar nada</string>
+  <string name="import_note_worktree">Worktree</string>
+  <string name="import_note_conversation">Conversación de Claude Code</string>
+  <string name="import_note_worktree_conversation">Worktree · Conversación de Claude Code</string>
+  <string name="import_already_imported">Ya importada</string>
+  <string name="import_folder_missing">La carpeta ya no existe</string>
+  <plurals name="import_button">
+    <item quantity="one">Importar %1$d sesión</item>
+    <item quantity="many">Importar %1$d sesiones</item>
+    <item quantity="other">Importar %1$d sesiones</item>
+  </plurals>
+  <string name="import_busy">Importando…</string>
+  <plurals name="import_done">
+    <item quantity="one">%1$d sesión importada</item>
+    <item quantity="many">%1$d sesiones importadas</item>
+    <item quantity="other">%1$d sesiones importadas</item>
+  </plurals>
+  <plurals name="import_some_failed">
+    <item quantity="one">No se pudo importar %1$d sesión: su carpeta ya no existe o su shell no arrancó</item>
+    <item quantity="many">No se pudieron importar %1$d sesiones: sus carpetas ya no existen o sus shells no arrancaron</item>
+    <item quantity="other">No se pudieron importar %1$d sesiones: sus carpetas ya no existen o sus shells no arrancaron</item>
+  </plurals>
 
   <!-- Settings › Updates -->
   <string name="updates_version">Lemonade Code %1$s</string>

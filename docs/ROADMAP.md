@@ -11,6 +11,14 @@ What Lemonade Code doesn't do yet. Want something that isn't here?
 - **Programs don't survive quitting.** Shells start fresh in the same folder. Claude Code
   conversations are resumed; other programs are not.
 
+## Importing sessions
+
+- **herdr only, so far.** Settings › Import sessions reads herdr. Each other tool is a new source.
+- **One conversation per herdr workspace.** A workspace with Claude Code in several panes brings the
+  one in its focused pane; the others aren't resumed. Agents other than Claude Code start fresh.
+- **herdr's saved layout.** While herdr runs, its layout is read as it last saved it, a few seconds
+  behind at most.
+
 ## Status
 
 - **Agents have to report it.** Claude Code does. Other agents show no status until they report one

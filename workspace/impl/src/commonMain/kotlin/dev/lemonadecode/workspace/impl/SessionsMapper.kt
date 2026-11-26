@@ -4,13 +4,13 @@ import dev.lemonadecode.domain.session.ArchivedSession
 import dev.lemonadecode.domain.session.Session
 import dev.lemonadecode.domain.session.SessionId
 import dev.lemonadecode.domain.session.SessionOrder
-import dev.lemonadecode.domain.session.SessionPlacement
 import dev.lemonadecode.domain.session.SessionStatus
 import dev.lemonadecode.platform.localization.LemonadeCodeString
 import dev.lemonadecode.platform.localization.asLemonadeCodeString
 import dev.lemonadecode.platform.process.abbreviateHome
 import dev.lemonadecode.workspace.strings.Res
 import dev.lemonadecode.workspace.strings.session_meta
+import dev.lemonadecode.workspace.strings.tag_sub_session_folder
 import dev.lemonadecode.workspace.strings.tag_sub_session_same_folder
 import dev.lemonadecode.workspace.strings.tag_sub_session_worktree
 import dev.lemonadecode.workspace.uimodel.ArchivedSessionRowModel
@@ -95,25 +95,35 @@ internal object SessionsMapper {
     )
   }
 
+  /**
+   * The header of [session]. A sub-session says where it works next to [parent] now, wherever it
+   * started: in another git checkout, a worktree on its own branch (git calls any checkout one, so a
+   * repository other than the parent's counts too); in the parent's checkout, the same folder.
+   * Outside git, the same folder only if it is the parent's; else it names its own.
+   */
   fun header(session: Session, parent: Session?, style: NavigationStyle): SessionHeaderModel {
     val shellAndBranch = listOfNotNull(
       HeaderTagModel(session.shell.asLemonadeCodeString()),
       session.branch?.let { HeaderTagModel(it.asLemonadeCodeString()) },
     )
     if (parent == null) return SessionHeaderModel(session.displayName, null, shellAndBranch, canStartSubSession = style == NavigationStyle.Tree)
-    val kind = if (session.placement == SessionPlacement.Worktree) {
-      HeaderTagModel(Res.string.tag_sub_session_worktree.asLemonadeCodeString(), HeaderTagIcon.SubSession)
-    } else {
-      HeaderTagModel(Res.string.tag_sub_session_same_folder.asLemonadeCodeString(), HeaderTagIcon.SubSession)
-    }
+    val worktree = session.worksInOtherCheckoutThan(parent)
+    val kind = when {
+      worktree -> Res.string.tag_sub_session_worktree.asLemonadeCodeString()
+      session.repositoryRoot != null || session.workingDirectory == parent.workingDirectory -> Res.string.tag_sub_session_same_folder.asLemonadeCodeString()
+      else -> Res.string.tag_sub_session_folder.asLemonadeCodeString(folderName(session.workingDirectory))
+    }.let { HeaderTagModel(it, HeaderTagIcon.SubSession) }
     return when (style) {
       NavigationStyle.Flat -> SessionHeaderModel(session.displayName, parent.displayName, listOf(kind), canStartSubSession = false)
       NavigationStyle.Tree -> {
-        val branch = session.branch?.takeIf { session.placement == SessionPlacement.Worktree }?.let { HeaderTagModel(it.asLemonadeCodeString()) }
+        val branch = session.branch?.takeIf { worktree }?.let { HeaderTagModel(it.asLemonadeCodeString()) }
         SessionHeaderModel(session.displayName, null, listOfNotNull(kind, branch), canStartSubSession = true)
       }
     }
   }
+
+  /** The last part of [path], `/` and `\` alike; the whole path when that's empty, as for `/`. */
+  private fun folderName(path: String): String = path.trimEnd('/', '\\').substringAfterLast('/').substringAfterLast('\\').ifEmpty { path }
 
   /**
    * The right-click menu of [session]. Sub-sessions can be started from it where the list nests

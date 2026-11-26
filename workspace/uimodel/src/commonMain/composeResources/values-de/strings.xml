@@ -254,6 +254,7 @@
   <string name="view_diff">Diff</string>
   <string name="tag_sub_session_same_folder">Untersitzung · gleicher Ordner</string>
   <string name="tag_sub_session_worktree">Untersitzung · Worktree</string>
+  <string name="tag_sub_session_folder">Untersitzung · %1$s</string>
 
   <!-- New sub-session -->
   <string name="sub_session_title">Neue Untersitzung</string>

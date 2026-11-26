@@ -272,6 +272,7 @@
   <string name="view_diff">Diff</string>
   <string name="tag_sub_session_same_folder">sous-session · même dossier</string>
   <string name="tag_sub_session_worktree">sous-session · worktree</string>
+  <string name="tag_sub_session_folder">sous-session · %1$s</string>
 
   <!-- New sub-session -->
   <string name="sub_session_title">Nouvelle sous-session</string>

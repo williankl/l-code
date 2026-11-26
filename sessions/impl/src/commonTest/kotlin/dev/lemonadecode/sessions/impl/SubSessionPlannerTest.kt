@@ -105,9 +105,21 @@ class SubSessionPlannerTest {
 
   @Test
   fun `a worktree of a worktree stays in the same worktrees folder`() {
-    val parent = session("w", "sub-1", placement = SessionPlacement.Worktree, dir = "/code/storefront.worktrees/sub-1")
-    val plan = SubSessionPlanner.plan(parent, listOf(parent), SubSessionLocation.NewWorktree, "sub")
+    val root = session("ar", "api-ratelimit")
+    val parent = session("w", "sub-1", parent = "ar", placement = SessionPlacement.Worktree, dir = "/code/storefront.worktrees/sub-1")
+    val plan = SubSessionPlanner.plan(parent, listOf(root, parent), SubSessionLocation.NewWorktree, "sub")
     assertEquals("/code/storefront.worktrees/sub-2", plan?.workingDirectory)
+  }
+
+  @Test
+  fun `where a sub-session works now places its worktrees, not how it started`() {
+    val root = session("ar", "api-ratelimit")
+    // Started in a worktree, its agent back in the repository: in the repository's worktrees folder, not beside the repository.
+    val back = session("w", "sub-1", parent = "ar", placement = SessionPlacement.Worktree)
+    assertEquals("/code/storefront.worktrees/sub-2", SubSessionPlanner.plan(back, listOf(root, back), SubSessionLocation.NewWorktree, "sub")?.workingDirectory)
+    // Started in the same folder, its agent now in a worktree of its own: beside that one.
+    val moved = session("s", "sub-1", parent = "ar", placement = SessionPlacement.SameFolder, dir = "/code/storefront/.claude/worktrees/rate-limit")
+    assertEquals("/code/storefront/.claude/worktrees/sub-2", SubSessionPlanner.plan(moved, listOf(root, moved), SubSessionLocation.NewWorktree, "sub")?.workingDirectory)
   }
 
   @Test

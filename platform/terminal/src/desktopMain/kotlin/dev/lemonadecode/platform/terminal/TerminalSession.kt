@@ -147,17 +147,12 @@ public class TerminalSession(launch: TerminalLaunch) : AutoCloseable {
   public val pid: Long get() = process.pid()
 
   /**
-   * The current folder of the program the shell started that holds the terminal, else the shell's
-   * own, read from the OS. A program that moves without the shell, like Claude Code entering a
-   * worktree, is followed too. Where the OS can't be asked (Windows), the folder the shell last
-   * reported, if it exists here. Null when it can't be told. Blocks while it asks the OS.
-   */
-  public fun currentDirectory(): String? = foreground().directory
-
-  /**
-   * The process group holding the terminal (the shell's own while it's at its prompt) and that
-   * program's current folder, as [currentDirectory] reads it, asking the OS for the group once.
-   * The group is null where it can't be told, as on Windows. Blocks while it asks the OS.
+   * The process group holding the terminal (the shell's own while it's at its prompt), and the
+   * current folder of the program the shell started that holds it, else the shell's own, read from
+   * the OS, asking it for the group once. A program that moves without the shell, like Claude Code
+   * entering a worktree, is followed too. Where the OS can't be asked (Windows), the group is null
+   * and the folder is the one the shell last reported, if it exists here. Either is null when it
+   * can't be told. Blocks while it asks the OS.
    */
   public fun foreground(): TerminalForeground {
     if (!process.isAlive) return TerminalForeground(group = null, directory = null)

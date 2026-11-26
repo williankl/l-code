@@ -53,11 +53,11 @@ class TerminalSessionTest {
     val next = java.io.File(start, "inner").apply { mkdirs() }
     TerminalSession(TerminalLaunch(command = listOf("/bin/sh"), workingDirectory = start.path)).use { session ->
       withTimeout(5_000) {
-        while (session.currentDirectory()?.let { java.io.File(it).canonicalPath } != start.path) kotlinx.coroutines.delay(50)
+        while (session.foreground().directory?.let { java.io.File(it).canonicalPath } != start.path) kotlinx.coroutines.delay(50)
       }
       session.send("cd inner\r")
       withTimeout(5_000) {
-        while (session.currentDirectory()?.let { java.io.File(it).canonicalPath } != next.canonicalPath) kotlinx.coroutines.delay(50)
+        while (session.foreground().directory?.let { java.io.File(it).canonicalPath } != next.canonicalPath) kotlinx.coroutines.delay(50)
       }
     }
   }
@@ -68,16 +68,16 @@ class TerminalSessionTest {
     val inner = java.io.File(start, "inner").apply { mkdirs() }
     TerminalSession(TerminalLaunch(command = listOf("/bin/sh"), workingDirectory = start.path)).use { session ->
       withTimeout(5_000) {
-        while (session.currentDirectory()?.let { java.io.File(it).canonicalPath } != start.path) delay(50)
+        while (session.foreground().directory?.let { java.io.File(it).canonicalPath } != start.path) delay(50)
       }
       // The shell stays where it is; only the program it starts moves, like an agent entering a worktree.
       session.send("(cd inner && exec sleep 30)\r")
       withTimeout(5_000) {
-        while (session.currentDirectory()?.let { java.io.File(it).canonicalPath } != inner.canonicalPath) delay(50)
+        while (session.foreground().directory?.let { java.io.File(it).canonicalPath } != inner.canonicalPath) delay(50)
       }
       session.send("\u0003")
       withTimeout(5_000) {
-        while (session.currentDirectory()?.let { java.io.File(it).canonicalPath } != start.path) delay(50)
+        while (session.foreground().directory?.let { java.io.File(it).canonicalPath } != start.path) delay(50)
       }
     }
   }

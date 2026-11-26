@@ -140,6 +140,12 @@ class WorkspaceModelMapperTest {
     // Started in a worktree, back in the parent's checkout, if in a folder further in: the same folder, no branch.
     val back = ShowcaseFixtures.session("s3", "fix-tax", parent = "ar", placement = SessionPlacement.Worktree).copy(workingDirectory = "$repo/docs")
     assertEquals(listOf(sameFolder), tags(back))
+    // Under a session opened in a worktree: in that worktree it's with its parent, the same folder; in a worktree of its own, that one.
+    val feat = "$repo.worktrees/feat"
+    val openedInWorktree = parent.copy(workingDirectory = feat, repositoryRoot = feat, branch = "feat/x", mainCheckout = repo)
+    val review = ShowcaseFixtures.session("s6", "review-1", parent = "ar", branch = "feat/x", folder = feat, mainCheckout = repo)
+    assertEquals(listOf(sameFolder), tags(review, of = openedInWorktree))
+    assertEquals(listOf(worktree, "feat/sub-1".asLemonadeCodeString()), tags(inWorktree, of = openedInWorktree))
     // In another repository's main checkout: neither, so it names its folder.
     val docsSite = ShowcaseFixtures.session("s4", "sub-4", parent = "ar", branch = "main", folder = "${ShowcaseFixtures.Home}/code/docs-site")
     assertEquals(listOf(Res.string.tag_sub_session_folder.asLemonadeCodeString("docs-site")), tags(docsSite))

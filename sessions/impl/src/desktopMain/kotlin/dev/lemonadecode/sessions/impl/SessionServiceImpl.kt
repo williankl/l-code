@@ -659,21 +659,42 @@ internal class SessionServiceImpl(
       val process = foreground.directory ?: continue
       val agents = runningAgents[id].orEmpty()
       val _ = groups.keys.retainAll(agents.map { it.pid }.toSet())
-      // Only the agent in the group holding the terminal: not one that's suspended, or another under it.
-      // Where that can't be told, as on Windows, the most recently started counts.
+      // Only the agent in the group holding the terminal: not one that's suspended, or another under it,
+      // nor one whose group can't be read, like one that just quit. Where the terminal's own can't be
+      // told, as on Windows, the most recently started counts.
       val holding = agents.firstOrNull { agent ->
+        val front = foreground.group ?: return@firstOrNull true
         val group = groups[agent.pid] ?: withContext(dispatchers.io) { terminal.processGroupOf(agent.pid) }?.also { groups[agent.pid] = it }
-        group == null || foreground.group == null || group == foreground.group
+        group == front
       }
       val elsewhere = holding?.workingDirectory?.takeIf { it != process }
-      val shared = elsewhere?.let { processRoot(process) }
-      val folder = if (elsewhere == null || shared != null && shared == agentRoot(elsewhere)) process else elsewhere
+      val folder = if (elsewhere == null) {
+        process
+      } else {
+        // Until git can tell where both are, the session stays as it is, and asks again next time.
+        val processAt = processRoot(process)
+        if (processAt !is LemonadeCodeResult.Success) continue
+        val shared = processAt.value
+        if (shared == null) {
+          elsewhere
+        } else {
+          val agentAt = agentRoot(elsewhere)
+          if (agentAt !is LemonadeCodeResult.Success) continue
+          if (agentAt.value == shared) process else elsewhere
+        }
+      }
       val moved = (folder to process) != last
       if (!moved && tick++ % BranchCheckEvery != 0) continue
       last = folder to process
       val checkout = git.checkout(folder).getOrNull()
-      if (checkout?.root != main.first) main = checkout?.root to mainCheckoutOf(checkout)
-      val processRepository = if (folder == process) null else processRoot(process)
+      if (checkout?.root != main.first) {
+        when (val found = checkout?.let { git.mainCheckout(it.root) } ?: LemonadeCodeResult.success(null)) {
+          is LemonadeCodeResult.Success -> main = checkout?.root to found.value
+          // Not known yet: asked again on the next tick.
+          is LemonadeCodeResult.Failure -> last = null
+        }
+      }
+      val processRepository = if (folder == process) null else processRoot(process).getOrNull()
       update(id) { session ->
         session.copy(
           workingDirectory = folder,
@@ -681,24 +702,31 @@ internal class SessionServiceImpl(
           processRepositoryRoot = processRepository,
           repositoryRoot = checkout?.root,
           branch = checkout?.branch,
-          mainCheckout = main.second,
+          mainCheckout = main.second.takeIf { main.first == checkout?.root },
           name = if (session.parentId == null) rootName(folder) else session.name,
         )
       }
     }
   }
 
-  /** The top-level folder of the checkout a folder is in, as git said when last asked: once each time the folder changes. */
+  /**
+   * The top-level folder of the checkout a folder is in, null outside git, as git said when last
+   * asked: once each time the folder changes. When git can't tell, as when it times out, that's a
+   * failure, and git is asked again next time.
+   */
   private inner class RootOf {
     private var folder: String? = null
     private var root: String? = null
 
-    suspend operator fun invoke(folder: String): String? {
-      if (folder != this.folder) {
-        this.folder = folder
-        root = git.checkout(folder).getOrNull()?.root
+    suspend operator fun invoke(folder: String): LemonadeCodeResult<String?, GitError> {
+      if (folder == this.folder) return LemonadeCodeResult.success(root)
+      val found = when (val checkout = git.checkout(folder)) {
+        is LemonadeCodeResult.Success -> checkout.value.root
+        is LemonadeCodeResult.Failure -> if (checkout.error == GitError.NotARepository) null else return LemonadeCodeResult.failure(checkout.error)
       }
-      return root
+      this.folder = folder
+      root = found
+      return LemonadeCodeResult.success(found)
     }
   }
 

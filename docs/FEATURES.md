@@ -190,9 +190,10 @@ A sub-session can start in one of two places:
 | **Name in the list** | `sub-1`, `sub-2`… | The worktree's, like `generating-bugs` |
 | **Good for** | Reviews and quick follow-ups | Parallel work that must never collide |
 
-The header says where a sub-session works now, not only where it started: **worktree** with its
-branch while it's in a linked worktree, like one its Claude Code went into, and **same folder** while
-it's in the checkout its parent runs in, wherever the parent's Claude has gone.
+The header says where a sub-session works now, not only where it started: **same folder** while
+it's in the checkout its parent runs in, even when that's a worktree and wherever the parent's Claude
+has gone, and **worktree** with its branch while it's in a linked worktree of its own, like one its
+Claude Code went into.
 
 A new worktree asks for its branch first, filled in with a playful suggestion like
 `worktree/generating-bugs`. Press **Enter** to keep it, or type over it: everything is yours to

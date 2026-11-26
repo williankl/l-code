@@ -153,11 +153,11 @@ A session that isn't a sub-session is named after its folder anyway, so one whos
 into a worktree of its own, like Claude Code's `.claude/worktrees/<name>`, already shows that
 worktree's name. A sub-session keeps the name it started with wherever its agent goes.
 
-A sub-session's header says where it works now, however it got there: **worktree**, with its
-branch, while its checkout is a linked worktree, which git tells apart by its main checkout. Otherwise
-**same folder** while it's in the checkout its parent's programs run in, even from a folder further
-in, wherever the parent's Claude has gone; outside git, only in that very folder. Anywhere else, like
-another repository's main checkout, it names its own folder. A new worktree always goes in the
+A sub-session's header says where it works now, however it got there. **Same folder** while it's in
+the checkout its parent's programs run in, even from a folder further in, even when that checkout is a
+worktree, and wherever the parent's Claude has gone; outside git, only in that very folder. Otherwise
+**worktree**, with its branch, while its checkout is a linked worktree, which git tells apart by its
+main checkout. Anywhere else, like another repository's main checkout, it names its own folder. A new worktree always goes in the
 `.worktrees` folder beside the repository's main checkout, whichever of its worktrees the session
 starting it is in.
 

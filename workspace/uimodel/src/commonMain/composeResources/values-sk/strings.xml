@@ -291,6 +291,7 @@
   <string name="view_diff">Diff</string>
   <string name="tag_sub_session_same_folder">podrelácia · rovnaký priečinok</string>
   <string name="tag_sub_session_worktree">podrelácia · worktree</string>
+  <string name="tag_sub_session_folder">podrelácia · %1$s</string>
 
   <!-- New sub-session -->
   <string name="sub_session_title">Nová podrelácia</string>

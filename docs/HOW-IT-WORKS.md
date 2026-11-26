@@ -52,6 +52,27 @@ While a program the shell started holds the terminal, Lemonade Code asks for tha
 instead. A program can move without the shell: Claude Code entering a worktree changes its own folder
 and leaves the shell's where it was. Once the program quits, the shell's folder counts again.
 
+Claude Code also works in folders its process never enters: a `cd` in its shell tool carries over to
+its next commands, but the operating system still says Claude is where it started. So Lemonade Code
+reads where it says it works from the end of its conversation's transcript,
+`~/.claude/projects/<folder>/<id>.jsonl`, where each line carries the folder it was written in. Only
+lines this run of Claude wrote count, by their time against when it started, so the history of a
+resumed conversation doesn't move the session; neither do its sub-agents' lines, nor a folder that's
+gone. The transcript is read only when it grows, and only what was added since the last look, from
+its end.
+
+That folder counts only while that Claude holds the terminal: while its process is in the process
+group the terminal's foreground belongs to, which also holds when it was started through a wrapper
+like `npx`. A suspended Claude, or the pager or editor you run meanwhile, doesn't move the session;
+with two Claudes under one shell, the one in the foreground counts. And it counts only once it's in
+another checkout than the one Claude's process is in: within that one, the branch and the diff are
+the same, so the session stays where the process is rather than following every `cd apps/web`. Then
+the session shows that folder, its repository and branch. On Windows, where the foreground can't be
+asked, a running Claude always counts.
+
+Claude keeps the conversation by the folder it was started in, so that's the one a session starts
+again in after a restart or from the archive, wherever Claude was working by then.
+
 On Windows, the PowerShell prompt reports its folder to the terminal itself (with the OSC 9;9
 escape sequence).
 
@@ -132,11 +153,20 @@ A session that isn't a sub-session is named after its folder anyway, so one whos
 into a worktree of its own, like Claude Code's `.claude/worktrees/<name>`, already shows that
 worktree's name. A sub-session keeps the name it started with wherever its agent goes.
 
-**Closing.** Before a session closes, Lemonade Code asks git about the folder of the session and of
-each sub-session closing with it. A folder is in a *linked* worktree when `git rev-parse --git-dir`
+A sub-session's header says where it works now, however it got there. **Same folder** while it's in
+the checkout its parent's programs run in, even from a folder further in, even when that checkout is a
+worktree, and wherever the parent's Claude has gone; outside git, only in that very folder. Otherwise
+**worktree**, with its branch, while its checkout is a linked worktree, which git tells apart by its
+main checkout. Anywhere else, like another repository's main checkout, it names its own folder. A new worktree always goes in the
+`.worktrees` folder beside the repository's main checkout, whichever of its worktrees the session
+starting it is in.
+
+**Closing.** Before a session closes, Lemonade Code asks git about the folder the session's programs
+run in, and each sub-session's closing with it; not a folder its Claude Code only `cd`'d into, which
+may be a worktree someone else made. A folder is in a *linked* worktree when `git rev-parse --git-dir`
 and `--git-common-dir`, asked from its top-level folder, name different folders; in a repository's
 main checkout they're the same one. A worktree that a session staying open, or an archived one, is
-still in is left out.
+still in, by where it runs or where its Claude Code works, is left out.
 If any are left, the dialog asks about them, with what `git status` says about uncommitted changes
 and untracked files.
 
@@ -150,7 +180,8 @@ session stays closed, the worktree stays where it was, and the error banner says
 ## Saving and restoring sessions
 
 When you quit, Lemonade Code saves every session to `sessions.json`, next to your settings: its name,
-its place in the tree, the folder it was in, and the last 1,000 lines it showed. They're saved in the
+its place in the tree, the folder it was in (for Claude Code, the one it was started in), and the last
+1,000 lines it showed. They're saved in the
 order the sidebar shows them, each followed by its sub-sessions, so sessions dragged into a new order
 come back in it. Then it ends the sessions and whatever was running in them.
 
@@ -165,8 +196,8 @@ The file is also kept up to date while the app runs, so after a crash your sessi
 just without their latest output.
 
 **Archived sessions** are kept in the same file. Archiving a session saves it and its sub-sessions
-the same way, with what each terminal showed and the conversation to resume, plus its branch and
-the siblings it sat between, then ends their shells. Nothing starts for them at launch. Restoring
+the same way, with what each terminal showed and the conversation to resume, plus its branch, the
+folder its agent was working in, and the siblings it sat between, then ends their shells. Nothing starts for them at launch. Restoring
 one opens each again in a fresh shell, the way launch does, and puts it back before the sibling it
 sat before, or after the one it sat after; under its parent if that's open, else at the top. Unlike
 launch, a session whose folder has gone starts at home without resuming its agent, since a Claude

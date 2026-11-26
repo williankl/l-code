@@ -12,12 +12,19 @@ public data class Session(
   val name: String,
   /** Short name of the shell, e.g. `zsh`. */
   val shell: String,
-  /** The current folder of the program holding the terminal, else of the shell; absolute. */
+  /**
+   * Where it works, absolute: the current folder of the program holding the terminal, else of the
+   * shell; or, while the agent holding it says it works in another checkout, that folder.
+   */
   val workingDirectory: String,
   /** Top-level folder of the git checkout, or null outside a repository. */
   val repositoryRoot: String?,
   val branch: String?,
   val parentId: SessionId?,
+  /**
+   * Where it was started relative to its parent. Nothing reads it any more: the header tells from
+   * [mainCheckout] and where the parent runs. It's still saved, for older builds' headers.
+   */
   val placement: SessionPlacement,
   val origin: SessionOrigin,
   val status: SessionStatus,
@@ -25,12 +32,29 @@ public data class Session(
   val customName: String? = null,
   /** The agent running in it, e.g. `claude`; null while no agent reports from it. */
   val agent: String? = null,
+  /**
+   * The current folder of the program holding the terminal, as the system sees it, while the agent
+   * in it works in another checkout ([workingDirectory]); null otherwise. Claude Code carries a `cd`
+   * forward without moving, and keeps its conversation by the folder it started in, so the session
+   * starts again here.
+   */
+  val processDirectory: String? = null,
+  /** Top-level folder of the git checkout [processDirectory] is in, while there is one. */
+  val processRepositoryRoot: String? = null,
+  /** The main checkout of the repository, while [repositoryRoot] is a linked worktree of it; null otherwise. */
+  val mainCheckout: String? = null,
 ) {
   /** What the session is called on screen. */
   public val displayName: String get() = customName ?: name
+
+  /** The folder its programs run in: [processDirectory], else [workingDirectory]. */
+  public val runsIn: String get() = processDirectory ?: workingDirectory
+
+  /** Top-level folder of the checkout its programs run in, or null outside git. */
+  public val runsInRepository: String? get() = if (processDirectory != null) processRepositoryRoot else repositoryRoot
 }
 
-/** Where a session runs relative to its parent. */
+/** Where a session was started relative to its parent. */
 public enum class SessionPlacement { Root, SameFolder, Worktree }
 
 public sealed interface SessionOrigin {

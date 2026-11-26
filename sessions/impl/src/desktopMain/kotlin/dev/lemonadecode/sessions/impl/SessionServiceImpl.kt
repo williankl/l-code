@@ -1,5 +1,6 @@
 package dev.lemonadecode.sessions.impl
 
+import dev.lemonadecode.data.git.GitCheckout
 import dev.lemonadecode.data.git.GitDataSource
 import dev.lemonadecode.data.git.GitError
 import dev.lemonadecode.domain.session.ArchivedSession
@@ -80,6 +81,9 @@ internal class SessionServiceImpl(
   /** For each session with an agent running, the command that resumes it. */
   private val resumes = MutableStateFlow<Map<SessionId, String>>(emptyMap())
 
+  /** For each session, the agents running in it, the most recently started first. */
+  private val runningAgents = ConcurrentHashMap<SessionId, List<RunningAgent>>()
+
   /** The archived sessions as kept, the most recently archived first; [archivedSessions] shows them. */
   private val archives = MutableStateFlow<List<SavedArchive>>(emptyList())
   private val archivedSessions = MutableStateFlow<List<ArchivedSession>>(emptyList())
@@ -104,6 +108,7 @@ internal class SessionServiceImpl(
     val folder = File(directory ?: home.path)
     if (!folder.isDirectory) return LemonadeCodeResult.failure(SessionError.FolderNotFound(folder.path))
     val checkout = git.checkout(folder.absolutePath).getOrNull()
+    val main = mainCheckoutOf(checkout)
     return launch(folder.absolutePath, initialInput = null) { id ->
       Session(
         id = id,
@@ -116,6 +121,7 @@ internal class SessionServiceImpl(
         placement = SessionPlacement.Root,
         origin = SessionOrigin.Opened,
         status = SessionStatus.Shell,
+        mainCheckout = main,
       )
     }
   }
@@ -136,6 +142,7 @@ internal class SessionServiceImpl(
     if (!folder.isDirectory) return LemonadeCodeResult.failure(SessionError.FolderNotFound(folder.path))
     val parent = session.parentId?.takeIf { parentId -> state.value.any { it.id == parentId } }
     val checkout = git.checkout(folder.absolutePath).getOrNull()
+    val main = mainCheckoutOf(checkout)
     // Brought in as if saved at the last quit, so its agent is picked up the same way.
     val entry = SavedSession(
       id = UUID.randomUUID().toString(),
@@ -157,6 +164,7 @@ internal class SessionServiceImpl(
         origin = SessionOrigin.Opened,
         status = SessionStatus.Shell,
         customName = entry.customName,
+        mainCheckout = main,
       )
     }
   }
@@ -189,6 +197,8 @@ internal class SessionServiceImpl(
         workingDirectory = plan.workingDirectory,
         repositoryRoot = if (plan.createsBranch) plan.workingDirectory else parent.repositoryRoot,
         branch = plan.branch,
+        // A new worktree is one of the repository the parent works in.
+        mainCheckout = if (plan.createsBranch) parent.mainCheckout ?: parent.repositoryRoot else parent.mainCheckout,
         parentId = parent.id,
         placement = if (plan.createsBranch) SessionPlacement.Worktree else SessionPlacement.SameFolder,
         origin = origin,
@@ -218,6 +228,7 @@ internal class SessionServiceImpl(
     ids.forEach { sessionId ->
       watchers.remove(sessionId)?.cancel()
       registry.remove(sessionId)?.let(::endShell)
+      val _ = runningAgents.remove(sessionId)
     }
   }
 
@@ -347,7 +358,8 @@ internal class SessionServiceImpl(
     id = SessionId(id),
     name = name,
     shell = launcher.shellName,
-    workingDirectory = workingDirectory,
+    workingDirectory = agentDirectory ?: workingDirectory,
+    processDirectory = workingDirectory.takeIf { agentDirectory != null },
     repositoryRoot = repositoryRoot,
     branch = branch,
     parentId = parentId?.let(::SessionId),
@@ -362,9 +374,13 @@ internal class SessionServiceImpl(
     val session = state.value.firstOrNull { it.id == id }
       ?: archivedSessions.value.flatMap { it.sessions }.firstOrNull { it.id == id }
       ?: return null
-    val worktree = git.linkedWorktree(session.workingDirectory).getOrNull() ?: return null
+    // Where its programs run, not a worktree its agent only went into: that one may be someone else's.
+    val worktree = git.linkedWorktree(session.runsIn).getOrNull() ?: return null
     return LinkedWorktree(path = worktree.root, branch = worktree.branch, mainCheckout = worktree.mainRoot, hasChanges = worktree.hasChanges)
   }
+
+  /** The main checkout [checkout] is a linked worktree of; null for a main checkout, or outside git. */
+  private suspend fun mainCheckoutOf(checkout: GitCheckout?): String? = checkout?.let { git.mainCheckout(it.root).getOrNull() }
 
   override suspend fun removeWorktree(worktree: LinkedWorktree, force: Boolean): LemonadeCodeResult<Unit, SessionError> {
     // A shell, or an agent it ran, still in the folder could write into it as it goes, and on
@@ -427,6 +443,7 @@ internal class SessionServiceImpl(
     val folder = File(entry.workingDirectory).takeIf { it.isDirectory }?.absolutePath ?: home.path
     val parent = entry.parentId?.let(::SessionId)?.takeIf { parentId -> state.value.any { it.id == parentId } }
     val checkout = git.checkout(folder).getOrNull()
+    val main = mainCheckoutOf(checkout)
     return launch(folder, initialInput = null, restored = entry, after = after?.let(::SessionId), before = before?.let(::SessionId), claim = claim) { id ->
       Session(
         id = id,
@@ -440,6 +457,7 @@ internal class SessionServiceImpl(
         origin = entry.origin(),
         status = SessionStatus.Shell,
         customName = entry.customName,
+        mainCheckout = main,
       )
     }
   }
@@ -478,14 +496,17 @@ internal class SessionServiceImpl(
   )
 
   /**
-   * [session] as saved, with [resume], the command that resumes its agent. An [archived] one keeps
-   * what it shows while archived: its checkout, branch and agent.
+   * [session] as saved, with [resume], the command that resumes its agent. It starts again where its
+   * programs ran, where an agent's conversation is kept. An [archived] one keeps what it shows while
+   * archived: the folder its agent worked in, its checkout, branch and agent.
    */
   private fun saved(session: Session, resume: String?, withOutput: Boolean, archived: Boolean = false) = SavedSession(
     id = session.id.value,
     name = session.name,
     customName = session.customName,
-    workingDirectory = session.workingDirectory,
+    // Saved, workingDirectory is where it starts again, not the folder shown: copying the session's own across would resume Claude where it has no conversation.
+    workingDirectory = session.runsIn,
+    agentDirectory = session.workingDirectory.takeIf { archived && session.processDirectory != null },
     parentId = session.parentId?.value,
     placement = session.placement.name,
     origin = SavedSession.originName(session.origin),
@@ -546,17 +567,20 @@ internal class SessionServiceImpl(
   }
 
   /**
-   * Notes the agent running in the terminal, so the next launch can resume it. One brought back
-   * from last time counts until it shows up: for [resumeGrace], and after that for as long as the
-   * program it was started as still runs (Claude asking whether to trust a folder hasn't shown up
-   * yet). Once seen, it counts only while it runs, so an agent you quit yourself isn't started again.
+   * Notes the agent running in the terminal, so the next launch can resume it, and where it says it
+   * works, for [followFolder]. One brought back from last time counts until it shows up: for
+   * [resumeGrace], and after that for as long as the program it was started as still runs (Claude
+   * asking whether to trust a folder hasn't shown up yet). Once seen, it counts only while it runs,
+   * so an agent you quit yourself isn't started again.
    */
   private suspend fun trackAgent(id: SessionId, terminal: TerminalSession, pendingResume: String?) {
     val started = TimeSource.Monotonic.markNow()
     var seen = false
     while (terminal.isRunning) {
       delay(AgentPollInterval)
-      val found = withContext(dispatchers.io) { agents.resumeCommand(terminal.pid) }
+      val running = withContext(dispatchers.io) { agents.find(terminal.pid) }
+      runningAgents[id] = running
+      val found = running.firstOrNull()?.resume
       if (found != null) seen = true
       val pending = pendingResume?.takeIf { !seen }
       val starting = pending != null &&
@@ -614,27 +638,95 @@ internal class SessionServiceImpl(
   }
 
   /**
-   * Keeps folder, repository and branch in step with the shell, or the program holding its terminal,
-   * as they move and switch branches.
+   * Keeps folder, repository and branch in step with where the session works, as it moves and
+   * switches branches: the folder of the program holding the terminal, else the shell's. While an
+   * agent holds it and says it works in another checkout, that folder instead: Claude Code carries a
+   * `cd` forward without moving, so the folder its process is in is kept apart, as where the session
+   * starts again. Within the process's own checkout the branch and the diff are the same, so there
+   * the session stays where the process is.
    */
   private suspend fun followFolder(id: SessionId, terminal: TerminalSession) {
-    var lastFolder: String? = null
+    var last: Pair<String, String>? = null
     var tick = 0
+    val processRoot = RootOf()
+    val agentRoot = RootOf()
+    var main: Pair<String?, String?> = null to null
+    // A process stays in the group it started in, so each agent's is asked once.
+    val groups = HashMap<Long, Long>()
     while (terminal.isRunning) {
       delay(FolderPollInterval)
-      val folder = withContext(dispatchers.io) { terminal.currentDirectory() } ?: continue
-      val moved = folder != lastFolder
+      val foreground = withContext(dispatchers.io) { terminal.foreground() }
+      val process = foreground.directory ?: continue
+      val agents = runningAgents[id].orEmpty()
+      val _ = groups.keys.retainAll(agents.map { it.pid }.toSet())
+      // Only the agent in the group holding the terminal: not one that's suspended, or another under it,
+      // nor one whose group can't be read, like one that just quit. Where the terminal's own can't be
+      // told, as on Windows, the most recently started counts.
+      val holding = agents.firstOrNull { agent ->
+        val front = foreground.group ?: return@firstOrNull true
+        val group = groups[agent.pid] ?: withContext(dispatchers.io) { terminal.processGroupOf(agent.pid) }?.also { groups[agent.pid] = it }
+        group == front
+      }
+      val elsewhere = holding?.workingDirectory?.takeIf { it != process }
+      val folder = if (elsewhere == null) {
+        process
+      } else {
+        // Until git can tell where both are, the session stays as it is, and asks again next time.
+        val processAt = processRoot(process)
+        if (processAt !is LemonadeCodeResult.Success) continue
+        val shared = processAt.value
+        if (shared == null) {
+          elsewhere
+        } else {
+          val agentAt = agentRoot(elsewhere)
+          if (agentAt !is LemonadeCodeResult.Success) continue
+          if (agentAt.value == shared) process else elsewhere
+        }
+      }
+      val moved = (folder to process) != last
       if (!moved && tick++ % BranchCheckEvery != 0) continue
-      lastFolder = folder
+      last = folder to process
       val checkout = git.checkout(folder).getOrNull()
+      if (checkout?.root != main.first) {
+        when (val found = checkout?.let { git.mainCheckout(it.root) } ?: LemonadeCodeResult.success(null)) {
+          is LemonadeCodeResult.Success -> main = checkout?.root to found.value
+          // Not known yet: asked again on the next tick.
+          is LemonadeCodeResult.Failure -> last = null
+        }
+      }
+      val processRepository = if (folder == process) null else processRoot(process).getOrNull()
       update(id) { session ->
         session.copy(
           workingDirectory = folder,
+          processDirectory = process.takeIf { it != folder },
+          processRepositoryRoot = processRepository,
           repositoryRoot = checkout?.root,
           branch = checkout?.branch,
+          mainCheckout = main.second.takeIf { main.first == checkout?.root },
           name = if (session.parentId == null) rootName(folder) else session.name,
         )
       }
+    }
+  }
+
+  /**
+   * The top-level folder of the checkout a folder is in, null outside git, as git said when last
+   * asked: once each time the folder changes. When git can't tell, as when it times out, that's a
+   * failure, and git is asked again next time.
+   */
+  private inner class RootOf {
+    private var folder: String? = null
+    private var root: String? = null
+
+    suspend operator fun invoke(folder: String): LemonadeCodeResult<String?, GitError> {
+      if (folder == this.folder) return LemonadeCodeResult.success(root)
+      val found = when (val checkout = git.checkout(folder)) {
+        is LemonadeCodeResult.Success -> checkout.value.root
+        is LemonadeCodeResult.Failure -> if (checkout.error == GitError.NotARepository) null else return LemonadeCodeResult.failure(checkout.error)
+      }
+      this.folder = folder
+      root = found
+      return LemonadeCodeResult.success(found)
     }
   }
 

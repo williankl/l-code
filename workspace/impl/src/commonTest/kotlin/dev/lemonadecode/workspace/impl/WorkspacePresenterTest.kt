@@ -1232,6 +1232,7 @@ class WorkspacePresenterTest {
     branch = worktree.branch,
     placement = SessionPlacement.Worktree,
     folder = worktree.path,
+    mainCheckout = worktree.mainCheckout,
   )
 
   /** api-ratelimit in the main checkout, and its sub-session sub-2 in a worktree of its own. */
@@ -1348,6 +1349,51 @@ class WorkspacePresenterTest {
       val closed = awaitItemWhere { it.sessions.tiles.size == 2 }
       assertEquals(listOf(SessionId("s2")), sessions.closed)
       assertEquals(null, closed.closeSession)
+      assertEquals(emptyList(), sessions.removedWorktrees)
+    }
+  }
+
+  @Test
+  fun `a worktree an open session's agent was started in isn't offered, wherever it works now`() = runTest {
+    val repo = ShowcaseFixtures.Repo
+    withWorktree(inWorktree("s3", "sub-3").copy(workingDirectory = repo, repositoryRoot = repo, mainCheckout = null, processDirectory = worktree.path, processRepositoryRoot = worktree.path))
+    presenter.test {
+      awaitItem().eventSink(WorkspaceEvent.CloseSession("s2"))
+      val closed = awaitItemWhere { it.sessions.tiles.size == 2 }
+      assertEquals(null, closed.closeSession)
+      assertEquals(emptyList(), sessions.removedWorktrees)
+    }
+  }
+
+  @Test
+  fun `closing asks about the worktree a session's programs run in, not one its agent works in`() = runTest {
+    val agents = LinkedWorktree(path = "${ShowcaseFixtures.Repo}/.claude/worktrees/rate-limit", branch = "worktree-rate-limit", mainCheckout = ShowcaseFixtures.Repo, hasChanges = false)
+    sessions.setSessions(
+      listOf(
+        ShowcaseFixtures.session("ar", "api-ratelimit"),
+        inWorktree("s2", "sub-2").copy(workingDirectory = agents.path, repositoryRoot = agents.path, branch = agents.branch, processDirectory = worktree.path, processRepositoryRoot = worktree.path),
+      ),
+    )
+    sessions.worktrees = listOf(worktree, agents)
+    presenter.test {
+      awaitItem().eventSink(WorkspaceEvent.CloseSession("s2"))
+      val asking = awaitItemWhere { it.closeSession != null }
+      assertEquals(listOf("~/code/storefront.worktrees/sub-2"), asking.closeSession?.worktrees?.map { it.path })
+    }
+  }
+
+  @Test
+  fun `a worktree a session's agent only went into is never offered when it closes`() = runTest {
+    // Opened in the main checkout, its Claude went into a worktree someone else made.
+    val elsewhere = LinkedWorktree(path = "${ShowcaseFixtures.Home}/.herdr/worktrees/storefront/lane-x", branch = "lane-x", mainCheckout = ShowcaseFixtures.Repo, hasChanges = true)
+    val repo = ShowcaseFixtures.Repo
+    sessions.setSessions(listOf(ShowcaseFixtures.session("ar", "api-ratelimit").copy(workingDirectory = elsewhere.path, repositoryRoot = elsewhere.path, processDirectory = repo, processRepositoryRoot = repo)))
+    sessions.worktrees = listOf(elsewhere)
+    presenter.test {
+      awaitItem().eventSink(WorkspaceEvent.CloseSession("ar"))
+      val closed = awaitItemWhere { it.sessions.tiles.isEmpty() }
+      assertEquals(null, closed.closeSession)
+      assertEquals(listOf(ar), sessions.closed)
       assertEquals(emptyList(), sessions.removedWorktrees)
     }
   }

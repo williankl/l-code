@@ -40,6 +40,7 @@ import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -55,8 +56,11 @@ class SessionServiceImplTest {
   private var shell: ShellLauncher = ShLauncher
   private val store = MemorySessionStore()
 
-  /** What the agent finder reports, by shell process id. */
+  /** What the agent finder reports, by shell process id: the command that resumes it, and where it says it works. */
   private var agent: (Long) -> String? = { null }
+
+  /** Or every agent under a shell, by its process id, for a test that needs their processes and folders. */
+  @Volatile private var agentsUnder: ((Long) -> List<RunningAgent>)? = null
   private val services = mutableListOf<SessionServiceImpl>()
 
   /** Runs before each shell starts, with its folder: a test can hold a start there, or make it fail. */
@@ -65,16 +69,40 @@ class SessionServiceImplTest {
   /** Runs before git is asked about a folder: a test can hold a launch there. */
   @Volatile private var beforeCheckout: suspend (String) -> Unit = {}
 
+  /** Folders git can't tell the checkout of for now, as when it times out; and checkouts it can't tell the main checkout of. */
+  @Volatile private var checkoutFailsAt: Set<String> = emptySet()
+
+  @Volatile private var mainCheckoutFailsAt: Set<String> = emptySet()
+
+  /** How many times each has failed so far. */
+  private val checkoutFailures = AtomicInteger()
+  private val mainCheckoutFailures = AtomicInteger()
+
   /** Every shell started, in order, whether or not its session joined the list. */
   private val startedShells = CopyOnWriteArrayList<TerminalSession>()
 
-  /** The fake git, making a new worktree's folder as git does, for the shell started in it, and holding a checkout where a test asks. */
+  /**
+   * The fake git, making a new worktree's folder as git does, for the shell started in it, holding a
+   * checkout where a test asks, and failing where [checkoutFailsAt] and [mainCheckoutFailsAt] say.
+   */
   private val gitMakingWorktrees = object : GitDataSource by git {
     override suspend fun addWorktree(repositoryRoot: String, path: String, branch: String, startPoint: String): LemonadeCodeResult<Unit, GitError> = git.addWorktree(repositoryRoot, path, branch, startPoint).also { if (it.isSuccess) File(path).mkdirs() }
 
     override suspend fun checkout(directory: String): LemonadeCodeResult<GitCheckout, GitError> {
       beforeCheckout(directory)
+      if (directory in checkoutFailsAt) {
+        val _ = checkoutFailures.incrementAndGet()
+        return LemonadeCodeResult.failure(GitError.Unavailable("timed out"))
+      }
       return git.checkout(directory)
+    }
+
+    override suspend fun mainCheckout(repositoryRoot: String): LemonadeCodeResult<String?, GitError> {
+      if (repositoryRoot in mainCheckoutFailsAt) {
+        val _ = mainCheckoutFailures.incrementAndGet()
+        return LemonadeCodeResult.failure(GitError.Unavailable("timed out"))
+      }
+      return git.mainCheckout(repositoryRoot)
     }
   }
 
@@ -96,7 +124,7 @@ class SessionServiceImplTest {
     dispatchers = FakeLemonadeCodeCoroutineDispatchers(Dispatchers.IO),
     scope = scope,
     store = store,
-    agents = AgentLocator { pid -> agent(pid) },
+    agents = AgentLocator { pid -> agentsUnder?.invoke(pid) ?: agent(pid)?.let { listOf(RunningAgent(pid, it, null)) }.orEmpty() },
   ).also { services += it }
 
   private val service = newService(registry)
@@ -129,6 +157,206 @@ class SessionServiceImplTest {
     }
     assertEquals("storefront", moved.name)
     assertEquals("feat/x", moved.branch)
+  }
+
+  @Test
+  fun `a session follows its agent into another checkout only while that agent holds the terminal`() = runBlocking<Unit> {
+    val main = File(home, "storefront").apply { mkdirs() }
+    val launched = File(home, "storefront.worktrees/sub-1").apply { mkdirs() }
+    val first = File(main, ".claude/worktrees/rate-limit").apply { mkdirs() }
+    val second = File(home, "storefront.worktrees/flaky-login").apply { mkdirs() }
+    git.checkouts = listOf(launched, first, second).associate { it.path to GitCheckout(root = it.path, branch = "feat/${it.name}") }
+    git.linkedWorktrees = listOf(launched, first, second).associate { it.path to GitWorktree(root = it.path, branch = "feat/${it.name}", mainRoot = main.path, hasChanges = false) }
+    val id = service.openTerminal(launched.path).getOrNull()!!
+    val terminal = registry.terminal(id)!!
+    fun shown() = service.sessions.value.single()
+    suspend fun showing(folder: File) = withTimeout(10_000) { service.sessions.first { it.single().workingDirectory == folder.path }.single() }
+
+    // Claude holds the terminal and says it works in a worktree; its process stays where it started.
+    terminal.send("sleep 30\r")
+    val claude = newProgram(terminal, known = emptySet())
+    var agents = listOf(RunningAgent(claude, "claude", first.path))
+    agentsUnder = { pid -> agents.takeIf { pid == terminal.pid }.orEmpty() }
+    val moved = showing(first)
+    assertEquals(launched.path, moved.processDirectory)
+    assertEquals(launched.path, moved.processRepositoryRoot)
+    assertEquals(first.path, moved.repositoryRoot)
+    assertEquals("feat/rate-limit", moved.branch)
+    assertEquals(main.path, moved.mainCheckout)
+    assertEquals("rate-limit", moved.name)
+    assertEquals(launched.path, service.worktreeOf(id)?.path, "only where its programs run is offered for deletion")
+
+    // Suspended, it doesn't hold the terminal: the shell's folder counts, and stays while another program runs.
+    terminal.send("\u001a")
+    assertEquals(null, showing(launched).processDirectory)
+    terminal.send("sleep 31\r")
+    val other = newProgram(terminal, known = setOf(claude))
+    delay(2_500)
+    assertEquals(launched.path, shown().workingDirectory, "a pager or an editor isn't the agent")
+    terminal.send("\u0003")
+
+    // A second Claude, the newest: it counts while it has the terminal, and the first once it's back.
+    terminal.send("sleep 32\r")
+    val newer = newProgram(terminal, known = setOf(claude, other))
+    agents = listOf(RunningAgent(newer, "claude", second.path), RunningAgent(claude, "claude", first.path))
+    assertEquals(launched.path, showing(second).processDirectory)
+    terminal.send("\u001a")
+    assertEquals(null, showing(launched).processDirectory)
+    terminal.send("fg %1\r")
+    assertEquals(launched.path, showing(first).processDirectory)
+  }
+
+  @Test
+  fun `a session stays where its process is while the agent moves within the same checkout`() = runBlocking<Unit> {
+    val main = File(home, "storefront").apply { mkdirs() }
+    val web = File(main, "apps/web").apply { mkdirs() }
+    val worktree = File(home, "storefront.worktrees/sub-1").apply { mkdirs() }
+    git.checkouts = mapOf(main.path to GitCheckout(main.path, "main"), web.path to GitCheckout(main.path, "main"), worktree.path to GitCheckout(worktree.path, "feat/x"))
+    val id = service.openTerminal(main.path).getOrNull()!!
+    val terminal = registry.terminal(id)!!
+    val seen = CopyOnWriteArrayList<String>()
+    val watcher = launch(Dispatchers.Default) { service.sessions.collect { sessions -> sessions.singleOrNull()?.let { seen += it.workingDirectory } } }
+    terminal.send("sleep 30\r")
+    val claude = newProgram(terminal, known = emptySet())
+    var folder = worktree.path
+    agentsUnder = { pid -> listOf(RunningAgent(claude, "claude", folder)).takeIf { pid == terminal.pid }.orEmpty() }
+    withTimeout(10_000) { service.sessions.first { it.single().workingDirectory == worktree.path } }
+
+    // `cd apps/web` back in its own checkout: the branch and the diff are the process's, so is the folder.
+    folder = web.path
+    val back = withTimeout(10_000) { service.sessions.first { it.single().workingDirectory == main.path }.single() }
+    assertEquals(null, back.processDirectory)
+    assertEquals("storefront", back.name)
+    delay(2_500)
+    watcher.cancel()
+    assertTrue(web.path !in seen, "seen: $seen")
+    assertEquals(main.path, service.sessions.value.single().workingDirectory)
+  }
+
+  @Test
+  fun `while git can't say where the process is, the session doesn't follow its agent, and once git answers it stays`() = runBlocking<Unit> {
+    val main = File(home, "storefront").apply { mkdirs() }
+    val web = File(main, "apps/web").apply { mkdirs() }
+    git.checkouts = mapOf(main.path to GitCheckout(main.path, "main"), web.path to GitCheckout(main.path, "main"))
+    val id = service.openTerminal(main.path).getOrNull()!!
+    val terminal = registry.terminal(id)!!
+    terminal.send("sleep 30\r")
+    val claude = newProgram(terminal, known = emptySet())
+    val seen = CopyOnWriteArrayList<String>()
+    val watcher = launch(Dispatchers.Default) { service.sessions.collect { sessions -> sessions.singleOrNull()?.let { seen += it.workingDirectory } } }
+    // git times out on the process's checkout as Claude moves into a folder of the same one.
+    checkoutFailsAt = setOf(main.path)
+    val found = AtomicInteger()
+    agentsUnder = { pid ->
+      listOf(RunningAgent(claude, "claude", web.path)).takeIf { pid == terminal.pid }.orEmpty().also {
+        if (it.isNotEmpty()) {
+          val _ = found.incrementAndGet()
+        }
+      }
+    }
+    withTimeout(10_000) {
+      while (found.get() == 0) delay(20)
+      // Once the session knows of Claude, each look asks git about the process's checkout first.
+      val failed = checkoutFailures.get()
+      while (checkoutFailures.get() < failed + 2) delay(20)
+    }
+    checkoutFailsAt = emptySet()
+    withTimeout(10_000) { service.sessions.first { it.single().repositoryRoot == main.path } }
+    delay(2_500)
+    watcher.cancel()
+    assertTrue(web.path !in seen, "seen: $seen")
+    assertEquals(main.path, service.sessions.value.single().workingDirectory)
+  }
+
+  @Test
+  fun `a worktree's main checkout git couldn't tell at first is asked again`() = runBlocking<Unit> {
+    val main = File(home, "storefront").apply { mkdirs() }
+    val feat = File(home, "storefront.worktrees/feat").apply { mkdirs() }
+    git.checkouts = mapOf(feat.path to GitCheckout(feat.path, "feat/x"))
+    git.linkedWorktrees = mapOf(feat.path to GitWorktree(root = feat.path, branch = "feat/x", mainRoot = main.path, hasChanges = false))
+    mainCheckoutFailsAt = setOf(feat.path)
+    val id = service.openTerminal(feat.path).getOrNull()!!
+    assertEquals(null, service.sessions.value.single { it.id == id }.mainCheckout)
+    // Asked on opening, and again as the session first looks at its folder.
+    withTimeout(10_000) {
+      while (mainCheckoutFailures.get() < 2) delay(20)
+    }
+    mainCheckoutFailsAt = emptySet()
+    withTimeout(10_000) { service.sessions.first { it.single().mainCheckout == main.path } }
+  }
+
+  @Test
+  fun `an agent whose process group can't be read doesn't count while the terminal's can`() = runBlocking<Unit> {
+    val worktree = File(home, "storefront.worktrees/sub-1").apply { mkdirs() }
+    git.checkouts = mapOf(worktree.path to GitCheckout(worktree.path, "feat/x"))
+    val looks = AtomicInteger()
+    beforeCheckout = { folder ->
+      if (folder == home.path) {
+        val _ = looks.incrementAndGet()
+      }
+    }
+    val id = service.openTerminal().getOrNull()!!
+    val terminal = registry.terminal(id)!!
+    terminal.send("sleep 30\r")
+    val _ = newProgram(terminal, known = emptySet())
+    val seen = CopyOnWriteArrayList<String>()
+    val watcher = launch(Dispatchers.Default) { service.sessions.collect { sessions -> sessions.singleOrNull()?.let { seen += it.workingDirectory } } }
+    // A Claude that has just quit: the locator still names it, the OS no longer knows its group.
+    val gone = ProcessBuilder("true").start().also { it.waitFor() }.pid()
+    val found = AtomicInteger()
+    agentsUnder = { pid ->
+      listOf(RunningAgent(gone, "claude", worktree.path)).takeIf { pid == terminal.pid }.orEmpty().also {
+        if (it.isNotEmpty()) {
+          val _ = found.incrementAndGet()
+        }
+      }
+    }
+    // Until the session has looked at its folder twice more since it knew of that Claude, or followed it.
+    withTimeout(15_000) {
+      while (found.get() == 0) delay(20)
+      val looked = looks.get()
+      while (looks.get() < looked + 2 && worktree.path !in seen) delay(20)
+    }
+    watcher.cancel()
+    assertTrue(worktree.path !in seen, "seen: $seen")
+  }
+
+  @Test
+  fun `a session whose agent works elsewhere starts again where the agent was started, from quitting and from the archive`() = runBlocking<Unit> {
+    val worktree = File(home, "storefront/.claude/worktrees/rate-limit").apply { mkdirs() }
+    git.checkouts = mapOf(worktree.path to GitCheckout(root = worktree.path, branch = "worktree-rate-limit"))
+    // Each terminal's Claude is the program it runs.
+    agentsUnder = { shell ->
+      ProcessHandle.of(shell).flatMap { it.children().findFirst() }.map { listOf(RunningAgent(it.pid(), "echo resumed-agent", worktree.path)) }.orElse(emptyList())
+    }
+    val open = service.openTerminal().getOrNull()!!
+    val shelved = service.openTerminal().getOrNull()!!
+    listOf(open, shelved).forEach { registry.terminal(it)!!.send("sleep 30\r") }
+    withTimeout(10_000) { service.sessions.first { sessions -> sessions.all { it.workingDirectory == worktree.path } } }
+
+    service.archive(shelved)
+    val archived = service.archived.value.single().session
+    assertEquals(worktree.path, archived.workingDirectory, "archived, it shows where its agent worked")
+    assertEquals(home.path, archived.processDirectory)
+    service.shutdown()
+    assertEquals(home.path, store.saved!!.sessions.single().workingDirectory)
+    val entry = store.saved!!.archived.single().sessions.single()
+    assertEquals(home.path, entry.workingDirectory)
+    assertEquals(worktree.path, entry.agentDirectory)
+
+    agentsUnder = null
+    agent = { "echo resumed-agent" }
+    val starts = CopyOnWriteArrayList<String>()
+    beforeStart = { starts += it }
+    val nextRegistry = SessionRegistry()
+    val next = newService(nextRegistry)
+    assertEquals(1, next.restore())
+    assertEquals(worktree.path, next.archived.value.single().session.workingDirectory)
+    assertTrue(next.unarchive(shelved).isSuccess)
+    assertEquals(listOf(home.path, home.path), starts, "each starts where its conversation is kept")
+    withTimeout(10_000) {
+      while (nextRegistry.terminal(shelved)!!.screen().lines().none { it.trim() == "resumed-agent" }) delay(50)
+    }
   }
 
   @Test
@@ -915,6 +1143,18 @@ class SessionServiceImplTest {
   fun `suggested worktree branches are playful names under worktree`() {
     assertTrue(Regex("worktree/[a-z]+-[a-z]+").matches(service.suggestWorktreeBranch()))
   }
+
+  /** The pid of a program the shell of [terminal] started that isn't one of [known], once it has. */
+  private suspend fun newProgram(terminal: TerminalSession, known: Set<Long>): Long = withTimeout(5_000) {
+    var found = programOf(terminal, known)
+    while (found == null) {
+      delay(20)
+      found = programOf(terminal, known)
+    }
+    found
+  }
+
+  private fun programOf(terminal: TerminalSession, known: Set<Long>): Long? = ProcessHandle.of(terminal.pid).get().children().map { it.pid() }.filter { it !in known }.findFirst().orElse(null)
 
   private fun TerminalSession.screen(): String {
     textBuffer.lock()

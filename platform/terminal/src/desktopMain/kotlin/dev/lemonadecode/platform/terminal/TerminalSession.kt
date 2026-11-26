@@ -38,6 +38,9 @@ import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
 
+/** The program holding a terminal: its process [group], and its current [directory]; either null when it can't be told. */
+public data class TerminalForeground(val group: Long?, val directory: String?)
+
 /** What a running terminal reports besides the screen itself. */
 public sealed interface TerminalSignal {
   /** The program wrote output. */
@@ -144,16 +147,26 @@ public class TerminalSession(launch: TerminalLaunch) : AutoCloseable {
   public val pid: Long get() = process.pid()
 
   /**
-   * The current folder of the program the shell started that holds the terminal, else the shell's
-   * own, read from the OS. A program that moves without the shell, like Claude Code entering a
-   * worktree, is followed too. Where the OS can't be asked (Windows), the folder the shell last
-   * reported, if it exists here. Null when it can't be told. Blocks while it asks the OS.
+   * The process group holding the terminal (the shell's own while it's at its prompt), and the
+   * current folder of the program the shell started that holds it, else the shell's own, read from
+   * the OS, asking it for the group once. A program that moves without the shell, like Claude Code
+   * entering a worktree, is followed too. Where the OS can't be asked (Windows), the group is null
+   * and the folder is the one the shell last reported, if it exists here. Either is null when it
+   * can't be told. Blocks while it asks the OS.
    */
-  public fun currentDirectory(): String? {
-    if (!process.isAlive) return null
-    if (!ProcessDirectory.isSupported) return reportedDirectory?.takeIf { File(it).isDirectory }
-    return programGroup()?.let(ProcessDirectory::of) ?: ProcessDirectory.of(process.pid())
+  public fun foreground(): TerminalForeground {
+    if (!process.isAlive) return TerminalForeground(group = null, directory = null)
+    val group = ForegroundProcess.groupOf(process.pid())
+    if (!ProcessDirectory.isSupported) return TerminalForeground(group, reportedDirectory?.takeIf { File(it).isDirectory })
+    val program = group?.takeIf { it != process.pid() }
+    return TerminalForeground(group, program?.let(ProcessDirectory::of) ?: ProcessDirectory.of(process.pid()))
   }
+
+  /**
+   * The process group of [pid], a process the shell started, to tell whether it holds the terminal
+   * by comparing with [foreground]. Null when it can't be told. Blocks while it asks the OS.
+   */
+  public fun processGroupOf(pid: Long): Long? = ForegroundProcess.processGroupOf(pid)
 
   /**
    * The last [maxLines] lines of output, history included, as text: soft-wrapped lines joined back

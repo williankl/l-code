@@ -113,6 +113,13 @@ public interface GitDataSource {
   public suspend fun linkedWorktree(directory: String): LemonadeCodeResult<GitWorktree?, GitError>
 
   /**
+   * The main checkout (or bare repository) of the repository whose linked worktree [repositoryRoot],
+   * a checkout's top-level folder, is. Null when it is a main checkout itself, or a submodule. Unlike
+   * [linkedWorktree], it doesn't ask about changes, so it stays cheap.
+   */
+  public suspend fun mainCheckout(repositoryRoot: String): LemonadeCodeResult<String?, GitError>
+
+  /**
    * Removes the linked worktree at [path]: its folder and git's record of it. Its branch stays.
    * Without [force], git refuses while it has uncommitted changes or untracked files; with it,
    * they are lost. [repositoryRoot] is a checkout of the same repository, like its main one.

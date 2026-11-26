@@ -87,8 +87,9 @@ public interface SessionService {
   public suspend fun unarchive(id: SessionId): LemonadeCodeResult<Unarchived, SessionError>
 
   /**
-   * The linked git worktree the session's folder is in, with whether it has changes now. Null in a
-   * repository's main checkout, outside git, and when git can't tell. Archived sessions have theirs too.
+   * The linked git worktree the session's programs run in, with whether it has changes now; not one
+   * its agent only went into. Null in a repository's main checkout, outside git, and when git can't
+   * tell. Archived sessions have theirs too.
    */
   public suspend fun worktreeOf(id: SessionId): LinkedWorktree?
 

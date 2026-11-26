@@ -41,6 +41,7 @@ class FileSessionStoreTest {
           sessions = listOf(
             SavedSession(id = "b", name = "sub-1", workingDirectory = "/code/storefront.worktrees/sub-1", parentId = "a", branch = "feat/x", repositoryRoot = "/code/storefront.worktrees/sub-1", agent = "claude", resume = "claude --resume 7"),
             SavedSession(id = "c", name = "sub-2", workingDirectory = "/code/storefront.worktrees/sub-1", parentId = "b", output = listOf("$ make test")),
+            SavedSession(id = "e", name = "sub-3", workingDirectory = "/code/storefront", parentId = "b", agentDirectory = "/code/storefront/.claude/worktrees/rate-limit"),
           ),
           after = null,
           before = "d",

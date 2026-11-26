@@ -12,12 +12,16 @@ public data class Session(
   val name: String,
   /** Short name of the shell, e.g. `zsh`. */
   val shell: String,
-  /** The current folder of the program holding the terminal, else of the shell; absolute. */
+  /**
+   * Where it works, absolute: the folder an agent holding the terminal says it works in, else the
+   * current folder of the program holding the terminal, else of the shell.
+   */
   val workingDirectory: String,
   /** Top-level folder of the git checkout, or null outside a repository. */
   val repositoryRoot: String?,
   val branch: String?,
   val parentId: SessionId?,
+  /** Where it was started relative to its parent. Where it works now can differ; see [worksInOtherCheckoutThan]. */
   val placement: SessionPlacement,
   val origin: SessionOrigin,
   val status: SessionStatus,
@@ -25,12 +29,25 @@ public data class Session(
   val customName: String? = null,
   /** The agent running in it, e.g. `claude`; null while no agent reports from it. */
   val agent: String? = null,
+  /**
+   * The current folder of the program holding the terminal, as the system sees it, while the agent
+   * in it works in another one; null when that's [workingDirectory]. Claude Code carries a `cd`
+   * forward without moving, and keeps its conversation by the folder it started in, so the session
+   * starts again here.
+   */
+  val processDirectory: String? = null,
 ) {
   /** What the session is called on screen. */
   public val displayName: String get() = customName ?: name
+
+  /**
+   * Whether it works in another git checkout than [parent] does now: a worktree of the same
+   * repository, or another repository altogether.
+   */
+  public fun worksInOtherCheckoutThan(parent: Session): Boolean = repositoryRoot != null && repositoryRoot != parent.repositoryRoot
 }
 
-/** Where a session runs relative to its parent. */
+/** Where a session was started relative to its parent. */
 public enum class SessionPlacement { Root, SameFolder, Worktree }
 
 public sealed interface SessionOrigin {

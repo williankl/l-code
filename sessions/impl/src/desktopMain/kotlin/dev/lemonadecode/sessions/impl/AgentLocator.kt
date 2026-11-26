@@ -9,17 +9,25 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.io.File
 
-/** Finds an agent running in a terminal that can be picked up again later, and how. */
+/** Finds an agent running in a terminal that can be picked up again later, how, and where it works. */
 internal fun interface AgentLocator {
-  /** The command that resumes the agent running under the shell [shellPid], or null when none is. */
-  fun resumeCommand(shellPid: Long): String?
+  /** The agent running under the shell [shellPid], or null when none is. */
+  fun find(shellPid: Long): RunningAgent?
 }
+
+/**
+ * An agent running in a terminal. [resume] is the command that picks it up again in the folder it
+ * started in. [workingDirectory] is the folder it says it works in now, for an agent that keeps one
+ * of its own apart from its process's; null until it says, or once that folder is gone.
+ */
+internal data class RunningAgent(val resume: String, val workingDirectory: String? = null)
 
 /**
  * Claude Code keeps a file per running interactive session, `~/.claude/sessions/<pid>.json`, with
  * the conversation it has open. A session whose process descends from the shell runs in that
  * terminal. Claude only writes a conversation's transcript once something is said in it, so one
- * still empty has nothing to resume: plain `claude` starts it afresh instead.
+ * still empty has nothing to resume: plain `claude` starts it afresh instead. Where it works now is
+ * read from the end of that transcript; see [TranscriptTail].
  */
 @ContributesBinding(AppScope::class)
 @Inject
@@ -28,20 +36,38 @@ internal class ClaudeAgentLocator(home: HomeDirectory) : AgentLocator {
   private val folder = File(config, "sessions")
   private val json = Json { ignoreUnknownKeys = true }
 
-  override fun resumeCommand(shellPid: Long): String? {
+  /** The transcript each Claude Code process, by its id, has been seen to have open; the least recently asked about go first. */
+  private val transcripts = object : LinkedHashMap<Long, Transcript>(16, 0.75f, true) {
+    override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Long, Transcript>?): Boolean = size > MaxTranscripts
+  }
+
+  override fun find(shellPid: Long): RunningAgent? {
     val running = folder.listFiles { file -> file.name.endsWith(".json") }.orEmpty()
       .mapNotNull { file -> file.name.removeSuffix(".json").toLongOrNull()?.let { pid -> pid to file } }
       .filter { (pid, _) -> descendsFrom(pid, shellPid) }
-      .mapNotNull { (_, file) -> runCatching { json.decodeFromString(ClaudeSessionFile.serializer(), file.readText()) }.getOrNull() }
-      .filter { it.kind == null || it.kind == "interactive" }
-      .filter { ClaudeConversation.isId(it.sessionId) }
-    val newest = running.maxByOrNull { it.startedAt ?: 0L } ?: return null
-    return if (hasTranscript(newest)) ClaudeConversation.resumeCommand(newest.sessionId) else "claude"
+      .mapNotNull { (pid, file) -> runCatching { pid to json.decodeFromString(ClaudeSessionFile.serializer(), file.readText()) }.getOrNull() }
+      .filter { (_, session) -> session.kind == null || session.kind == "interactive" }
+      .filter { (_, session) -> ClaudeConversation.isId(session.sessionId) }
+    val (pid, newest) = running.maxByOrNull { (_, session) -> session.startedAt ?: 0L } ?: return null
+    val transcript = transcriptOf(pid, newest) ?: return RunningAgent("claude")
+    val resume = ClaudeConversation.resumeCommand(newest.sessionId) ?: return null
+    return RunningAgent(resume, transcript.workingDirectory())
   }
 
-  private fun hasTranscript(session: ClaudeSessionFile): Boolean {
-    val cwd = session.cwd ?: return false
-    return File(config, ClaudeConversation.transcript(session.sessionId, cwd)).isFile
+  /**
+   * The transcript of the conversation Claude Code process [pid] has open, once there is one. Kept
+   * once found, as it stays where the conversation began even if the folder the session file names
+   * changes meanwhile.
+   */
+  private fun transcriptOf(pid: Long, session: ClaudeSessionFile): TranscriptTail? {
+    val known = synchronized(transcripts) { transcripts[pid] }
+    if (known != null && known.sessionId == session.sessionId && known.tail.file.isFile) return known.tail
+    val cwd = session.cwd ?: return null
+    val file = File(config, ClaudeConversation.transcript(session.sessionId, cwd)).takeIf { it.isFile } ?: return null
+    // Without a start time, nothing in it can be told apart from what an earlier run wrote.
+    val tail = TranscriptTail(file, since = session.startedAt ?: Long.MAX_VALUE)
+    synchronized(transcripts) { transcripts[pid] = Transcript(session.sessionId, tail) }
+    return tail
   }
 
   private fun descendsFrom(pid: Long, ancestor: Long): Boolean {
@@ -59,10 +85,14 @@ internal class ClaudeAgentLocator(home: HomeDirectory) : AgentLocator {
     val sessionId: String,
     val cwd: String? = null,
     val kind: String? = null,
+    /** When the process started, in milliseconds since the epoch. */
     val startedAt: Long? = null,
   )
 
+  private class Transcript(val sessionId: String, val tail: TranscriptTail)
+
   private companion object {
     const val MaxDepth = 8
+    const val MaxTranscripts = 64
   }
 }

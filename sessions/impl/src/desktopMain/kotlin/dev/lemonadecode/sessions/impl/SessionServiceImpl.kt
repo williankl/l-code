@@ -80,6 +80,9 @@ internal class SessionServiceImpl(
   /** For each session with an agent running, the command that resumes it. */
   private val resumes = MutableStateFlow<Map<SessionId, String>>(emptyMap())
 
+  /** For each session whose agent says where it works, that folder. */
+  private val agentFolders = ConcurrentHashMap<SessionId, String>()
+
   /** The archived sessions as kept, the most recently archived first; [archivedSessions] shows them. */
   private val archives = MutableStateFlow<List<SavedArchive>>(emptyList())
   private val archivedSessions = MutableStateFlow<List<ArchivedSession>>(emptyList())
@@ -218,6 +221,7 @@ internal class SessionServiceImpl(
     ids.forEach { sessionId ->
       watchers.remove(sessionId)?.cancel()
       registry.remove(sessionId)?.let(::endShell)
+      val _ = agentFolders.remove(sessionId)
     }
   }
 
@@ -347,7 +351,8 @@ internal class SessionServiceImpl(
     id = SessionId(id),
     name = name,
     shell = launcher.shellName,
-    workingDirectory = workingDirectory,
+    workingDirectory = agentDirectory ?: workingDirectory,
+    processDirectory = workingDirectory.takeIf { agentDirectory != null },
     repositoryRoot = repositoryRoot,
     branch = branch,
     parentId = parentId?.let(::SessionId),
@@ -358,12 +363,14 @@ internal class SessionServiceImpl(
     agent = agent,
   )
 
-  override suspend fun worktreeOf(id: SessionId): LinkedWorktree? {
+  override suspend fun worktreesOf(id: SessionId): List<LinkedWorktree> {
     val session = state.value.firstOrNull { it.id == id }
       ?: archivedSessions.value.flatMap { it.sessions }.firstOrNull { it.id == id }
-      ?: return null
-    val worktree = git.linkedWorktree(session.workingDirectory).getOrNull() ?: return null
-    return LinkedWorktree(path = worktree.root, branch = worktree.branch, mainCheckout = worktree.mainRoot, hasChanges = worktree.hasChanges)
+      ?: return emptyList()
+    return listOfNotNull(session.workingDirectory, session.processDirectory)
+      .mapNotNull { folder -> git.linkedWorktree(folder).getOrNull() }
+      .distinctBy { it.root }
+      .map { LinkedWorktree(path = it.root, branch = it.branch, mainCheckout = it.mainRoot, hasChanges = it.hasChanges) }
   }
 
   override suspend fun removeWorktree(worktree: LinkedWorktree, force: Boolean): LemonadeCodeResult<Unit, SessionError> {
@@ -478,14 +485,16 @@ internal class SessionServiceImpl(
   )
 
   /**
-   * [session] as saved, with [resume], the command that resumes its agent. An [archived] one keeps
-   * what it shows while archived: its checkout, branch and agent.
+   * [session] as saved, with [resume], the command that resumes its agent. It starts again where its
+   * programs ran, where an agent's conversation is kept. An [archived] one keeps what it shows while
+   * archived: the folder its agent worked in, its checkout, branch and agent.
    */
   private fun saved(session: Session, resume: String?, withOutput: Boolean, archived: Boolean = false) = SavedSession(
     id = session.id.value,
     name = session.name,
     customName = session.customName,
-    workingDirectory = session.workingDirectory,
+    workingDirectory = session.processDirectory ?: session.workingDirectory,
+    agentDirectory = session.workingDirectory.takeIf { archived && session.processDirectory != null },
     parentId = session.parentId?.value,
     placement = session.placement.name,
     origin = SavedSession.originName(session.origin),
@@ -546,17 +555,21 @@ internal class SessionServiceImpl(
   }
 
   /**
-   * Notes the agent running in the terminal, so the next launch can resume it. One brought back
-   * from last time counts until it shows up: for [resumeGrace], and after that for as long as the
-   * program it was started as still runs (Claude asking whether to trust a folder hasn't shown up
-   * yet). Once seen, it counts only while it runs, so an agent you quit yourself isn't started again.
+   * Notes the agent running in the terminal, so the next launch can resume it, and where it says it
+   * works, for [followFolder]. One brought back from last time counts until it shows up: for
+   * [resumeGrace], and after that for as long as the program it was started as still runs (Claude
+   * asking whether to trust a folder hasn't shown up yet). Once seen, it counts only while it runs,
+   * so an agent you quit yourself isn't started again.
    */
   private suspend fun trackAgent(id: SessionId, terminal: TerminalSession, pendingResume: String?) {
     val started = TimeSource.Monotonic.markNow()
     var seen = false
     while (terminal.isRunning) {
       delay(AgentPollInterval)
-      val found = withContext(dispatchers.io) { agents.resumeCommand(terminal.pid) }
+      val agent = withContext(dispatchers.io) { agents.find(terminal.pid) }
+      val folder = agent?.workingDirectory
+      val _ = if (folder == null) agentFolders.remove(id) else agentFolders.put(id, folder)
+      val found = agent?.resume
       if (found != null) seen = true
       val pending = pendingResume?.takeIf { !seen }
       val starting = pending != null &&
@@ -614,22 +627,28 @@ internal class SessionServiceImpl(
   }
 
   /**
-   * Keeps folder, repository and branch in step with the shell, or the program holding its terminal,
-   * as they move and switch branches.
+   * Keeps folder, repository and branch in step with where the session works, as it moves and
+   * switches branches: the folder the agent holding the terminal says it works in, else the folder
+   * of the program holding it, else the shell's. Claude Code carries a `cd` forward without moving,
+   * so the folder its process is in is kept apart, as where the session starts again.
    */
   private suspend fun followFolder(id: SessionId, terminal: TerminalSession) {
-    var lastFolder: String? = null
+    var last: Pair<String, String>? = null
     var tick = 0
     while (terminal.isRunning) {
       delay(FolderPollInterval)
-      val folder = withContext(dispatchers.io) { terminal.currentDirectory() } ?: continue
-      val moved = folder != lastFolder
+      val process = withContext(dispatchers.io) { terminal.currentDirectory() } ?: continue
+      // Not once the shell has the terminal back, as when the agent is suspended. Where that can't be told, as on Windows, the agent counts.
+      val agent = agentFolders[id]?.takeIf { it != process && withContext(dispatchers.io) { terminal.programInForeground() } != false }
+      val folder = agent ?: process
+      val moved = (folder to process) != last
       if (!moved && tick++ % BranchCheckEvery != 0) continue
-      lastFolder = folder
+      last = folder to process
       val checkout = git.checkout(folder).getOrNull()
       update(id) { session ->
         session.copy(
           workingDirectory = folder,
+          processDirectory = process.takeIf { it != folder },
           repositoryRoot = checkout?.root,
           branch = checkout?.branch,
           name = if (session.parentId == null) rootName(folder) else session.name,

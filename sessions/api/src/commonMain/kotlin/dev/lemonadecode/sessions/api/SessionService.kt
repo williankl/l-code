@@ -87,10 +87,11 @@ public interface SessionService {
   public suspend fun unarchive(id: SessionId): LemonadeCodeResult<Unarchived, SessionError>
 
   /**
-   * The linked git worktree the session's folder is in, with whether it has changes now. Null in a
-   * repository's main checkout, outside git, and when git can't tell. Archived sessions have theirs too.
+   * The linked git worktrees the session is in, each once, with whether it has changes now: the one
+   * its folder is in, and the one its programs run in when an agent works elsewhere. None for a
+   * repository's main checkout, outside git, or when git can't tell. Archived sessions have theirs too.
    */
-  public suspend fun worktreeOf(id: SessionId): LinkedWorktree?
+  public suspend fun worktreesOf(id: SessionId): List<LinkedWorktree>
 
   /**
    * Deletes [worktree]'s folder with `git worktree remove`; its branch stays. Without [force] git

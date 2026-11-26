@@ -30,8 +30,10 @@ internal data class SavedArchive(
 }
 
 /**
- * One session to bring back. [resume] is the command that picks up the agent that was running in
- * it, where it left off; [output] is what the terminal showed, for sessions without one.
+ * One session to bring back. It starts again in [workingDirectory], where its programs ran: an
+ * agent's conversation is kept by that folder, even when the agent said it worked in another.
+ * [resume] is the command that picks up the agent that was running in it, where it left off;
+ * [output] is what the terminal showed, for sessions without one.
  * Enums are stored as names, so a renamed value falls back instead of failing the whole file.
  */
 @Serializable
@@ -51,6 +53,8 @@ internal data class SavedSession(
   val repositoryRoot: String? = null,
   val branch: String? = null,
   val agent: String? = null,
+  /** For an archived session whose agent worked in another folder than [workingDirectory], that folder, shown while it's archived. */
+  val agentDirectory: String? = null,
 ) {
   fun placement(): SessionPlacement = SessionPlacement.entries.firstOrNull { it.name == placement } ?: SessionPlacement.Root
 

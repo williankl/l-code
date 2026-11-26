@@ -1352,6 +1352,35 @@ class WorkspacePresenterTest {
   }
 
   @Test
+  fun `a worktree an open session's agent was started in isn't offered, wherever it works now`() = runTest {
+    val repo = ShowcaseFixtures.Repo
+    withWorktree(inWorktree("s3", "sub-3").copy(workingDirectory = repo, repositoryRoot = repo, processDirectory = worktree.path))
+    presenter.test {
+      awaitItem().eventSink(WorkspaceEvent.CloseSession("s2"))
+      val closed = awaitItemWhere { it.sessions.tiles.size == 2 }
+      assertEquals(null, closed.closeSession)
+      assertEquals(emptyList(), sessions.removedWorktrees)
+    }
+  }
+
+  @Test
+  fun `closing a session whose agent works in another worktree asks about both`() = runTest {
+    val agents = LinkedWorktree(path = "${ShowcaseFixtures.Repo}/.claude/worktrees/rate-limit", branch = "worktree-rate-limit", mainCheckout = ShowcaseFixtures.Repo, hasChanges = false)
+    sessions.setSessions(
+      listOf(
+        ShowcaseFixtures.session("ar", "api-ratelimit"),
+        inWorktree("s2", "sub-2").copy(workingDirectory = agents.path, repositoryRoot = agents.path, branch = agents.branch, processDirectory = worktree.path),
+      ),
+    )
+    sessions.worktrees = listOf(worktree, agents)
+    presenter.test {
+      awaitItem().eventSink(WorkspaceEvent.CloseSession("s2"))
+      val asking = awaitItemWhere { it.closeSession != null }
+      assertEquals(listOf("~/code/storefront/.claude/worktrees/rate-limit", "~/code/storefront.worktrees/sub-2"), asking.closeSession?.worktrees?.map { it.path })
+    }
+  }
+
+  @Test
   fun `closing a parent asks about the worktree its sub-sessions leave, once`() = runTest {
     withWorktree(inWorktree("s3", "sub-3"))
     presenter.test {

@@ -55,8 +55,9 @@ class SessionServiceImplTest {
   private var shell: ShellLauncher = ShLauncher
   private val store = MemorySessionStore()
 
-  /** What the agent finder reports, by shell process id. */
+  /** What the agent finder reports, by shell process id: the command that resumes it, and where it says it works. */
   private var agent: (Long) -> String? = { null }
+  private var agentFolder: (Long) -> String? = { null }
   private val services = mutableListOf<SessionServiceImpl>()
 
   /** Runs before each shell starts, with its folder: a test can hold a start there, or make it fail. */
@@ -96,7 +97,7 @@ class SessionServiceImplTest {
     dispatchers = FakeLemonadeCodeCoroutineDispatchers(Dispatchers.IO),
     scope = scope,
     store = store,
-    agents = AgentLocator { pid -> agent(pid) },
+    agents = AgentLocator { pid -> agent(pid)?.let { RunningAgent(it, agentFolder(pid)) } },
   ).also { services += it }
 
   private val service = newService(registry)
@@ -129,6 +130,71 @@ class SessionServiceImplTest {
     }
     assertEquals("storefront", moved.name)
     assertEquals("feat/x", moved.branch)
+  }
+
+  @Test
+  fun `a session follows the folder its agent works in, and the shell's again once the shell has the terminal back`() = runBlocking<Unit> {
+    val main = File(home, "storefront").apply { mkdirs() }
+    val launched = File(home, "storefront.worktrees/sub-1").apply { mkdirs() }
+    val worktree = File(main, ".claude/worktrees/rate-limit").apply { mkdirs() }
+    git.checkoutResult = LemonadeCodeResult.success(GitCheckout(root = worktree.path, branch = "worktree-rate-limit"))
+    git.linkedWorktrees = mapOf(
+      launched.path to GitWorktree(root = launched.path, branch = "feat/x", mainRoot = main.path, hasChanges = false),
+      worktree.path to GitWorktree(root = worktree.path, branch = "worktree-rate-limit", mainRoot = main.path, hasChanges = true),
+    )
+    val id = service.openTerminal(launched.path).getOrNull()!!
+    val terminal = registry.terminal(id)!!
+    // Claude holds the terminal and says it works in a worktree; its process stays where it started.
+    agent = { pid -> "claude".takeIf { pid == terminal.pid } }
+    agentFolder = { pid -> worktree.path.takeIf { pid == terminal.pid } }
+    terminal.send("sleep 30\r")
+    val moved = withTimeout(10_000) { service.sessions.first { it.single().workingDirectory == worktree.path }.single() }
+    assertEquals(launched.path, moved.processDirectory)
+    assertEquals(worktree.path, moved.repositoryRoot)
+    assertEquals("worktree-rate-limit", moved.branch)
+    assertEquals("rate-limit", moved.name)
+    assertEquals(listOf(worktree.path, launched.path), service.worktreesOf(id).map { it.path }, "it's in both")
+
+    // Suspended or gone, the shell has the terminal back, and the session is where the shell is.
+    terminal.send("\u0003")
+    val back = withTimeout(10_000) { service.sessions.first { it.single().workingDirectory == launched.path }.single() }
+    assertEquals(null, back.processDirectory)
+    assertEquals("sub-1", back.name)
+  }
+
+  @Test
+  fun `a session whose agent works elsewhere starts again where the agent was started, from quitting and from the archive`() = runBlocking<Unit> {
+    val worktree = File(home, "storefront/.claude/worktrees/rate-limit").apply { mkdirs() }
+    git.checkoutResult = LemonadeCodeResult.success(GitCheckout(root = worktree.path, branch = "worktree-rate-limit"))
+    agent = { "echo resumed-agent" }
+    agentFolder = { worktree.path }
+    val open = service.openTerminal().getOrNull()!!
+    val shelved = service.openTerminal().getOrNull()!!
+    listOf(open, shelved).forEach { registry.terminal(it)!!.send("sleep 30\r") }
+    withTimeout(10_000) { service.sessions.first { sessions -> sessions.all { it.workingDirectory == worktree.path } } }
+
+    service.archive(shelved)
+    val archived = service.archived.value.single().session
+    assertEquals(worktree.path, archived.workingDirectory, "archived, it shows where its agent worked")
+    assertEquals(home.path, archived.processDirectory)
+    service.shutdown()
+    assertEquals(home.path, store.saved!!.sessions.single().workingDirectory)
+    val entry = store.saved!!.archived.single().sessions.single()
+    assertEquals(home.path, entry.workingDirectory)
+    assertEquals(worktree.path, entry.agentDirectory)
+
+    agentFolder = { null }
+    val starts = CopyOnWriteArrayList<String>()
+    beforeStart = { starts += it }
+    val nextRegistry = SessionRegistry()
+    val next = newService(nextRegistry)
+    assertEquals(1, next.restore())
+    assertEquals(worktree.path, next.archived.value.single().session.workingDirectory)
+    assertTrue(next.unarchive(shelved).isSuccess)
+    assertEquals(listOf(home.path, home.path), starts, "each starts where its conversation is kept")
+    withTimeout(10_000) {
+      while (nextRegistry.terminal(shelved)!!.screen().lines().none { it.trim() == "resumed-agent" }) delay(50)
+    }
   }
 
   @Test
@@ -516,8 +582,8 @@ class SessionServiceImplTest {
     val outside = service.openTerminal(main.path).getOrNull()!!
 
     val worktree = LinkedWorktree(path = folder.path, branch = "feat/x", mainCheckout = main.path, hasChanges = true)
-    assertEquals(worktree, service.worktreeOf(inside))
-    assertEquals(null, service.worktreeOf(outside), "the main checkout isn't a linked worktree")
+    assertEquals(listOf(worktree), service.worktreesOf(inside))
+    assertEquals(emptyList(), service.worktreesOf(outside), "the main checkout isn't a linked worktree")
 
     val shell = registry.terminal(inside)!!.pid
     service.close(inside)
@@ -660,11 +726,11 @@ class SessionServiceImplTest {
     val id = service.openTerminal(folder.path).getOrNull()!!
     service.archive(id)
     assertTrue(folder.isDirectory, "archiving never deletes a worktree")
-    assertEquals(LinkedWorktree(path = folder.path, branch = "feat/x", mainCheckout = main.path, hasChanges = false), service.worktreeOf(id))
+    assertEquals(listOf(LinkedWorktree(path = folder.path, branch = "feat/x", mainCheckout = main.path, hasChanges = false)), service.worktreesOf(id))
 
     service.close(id)
     assertTrue(service.archived.value.isEmpty())
-    assertEquals(null, service.worktreeOf(id))
+    assertEquals(emptyList(), service.worktreesOf(id))
     assertTrue(git.removeWorktreeCalls.isEmpty())
   }
 

@@ -17,17 +17,16 @@ internal data class ClosingSession(
 
 /** Which worktrees closing sessions leaves with no session in them, and the dialog asking about them. */
 internal object ClosingSessions {
-  /**
-   * The worktrees the closing sessions are in ([found], one per session, null for none), each
-   * once, less those a session in [staying] still uses.
-   */
-  fun leftUnused(found: List<LinkedWorktree?>, staying: List<Session>): List<LinkedWorktree> = found
-    .filterNotNull()
+  /** The worktrees the closing sessions are in ([found]), each once, less those a session in [staying] still uses. */
+  fun leftUnused(found: List<LinkedWorktree>, staying: List<Session>): List<LinkedWorktree> = found
     .distinctBy { it.path }
     .filter { worktree -> staying.none { it.uses(worktree) } }
 
-  /** Its folder is in [worktree]: by where the shell is, or by the checkout git found it in. */
-  private fun Session.uses(worktree: LinkedWorktree): Boolean = worktree.contains(workingDirectory) || repositoryRoot?.let(worktree::contains) == true
+  /**
+   * It is in [worktree]: by where it works, by the checkout git found that in, or by where its
+   * programs run, where an agent working elsewhere keeps its conversation.
+   */
+  private fun Session.uses(worktree: LinkedWorktree): Boolean = listOfNotNull(workingDirectory, repositoryRoot, processDirectory).any(worktree::contains)
 
   fun dialog(closing: ClosingSession, home: String): CloseSessionDialogModel = CloseSessionDialogModel(
     sessionName = closing.name,

@@ -97,7 +97,9 @@ programs and coding agents.
   agent's indented reply pastes flush left, even when you start dragging at the first letter of a
   line rather than in the space before it. ⌘C (Ctrl+Shift+C) leaves the indentation out too while
   the setting is on. Select all doesn't copy by itself, and a click or a drag over empty space
-  leaves the clipboard as it was.
+  leaves the clipboard as it was. Each copy is confirmed by a brief **Copied the selection** toast
+  that goes away by itself, leaving the terminal focused and the text selected. ⌘C copies without
+  one.
 - **Scroll back** with the mouse wheel. Full-screen programs that handle the mouse themselves, like
   Claude Code's fullscreen mode, get the wheel instead, so it scrolls their own view.
 - **Open links** with Ctrl-click (or ⌘-click). That covers web addresses written out, even when they

@@ -66,6 +66,7 @@ import dev.lemonadecode.workspace.strings.recording_saved_toast
 import dev.lemonadecode.workspace.strings.session_archived
 import dev.lemonadecode.workspace.strings.session_path_copied
 import dev.lemonadecode.workspace.strings.size_gigabytes
+import dev.lemonadecode.workspace.strings.terminal_selection_copied
 import dev.lemonadecode.workspace.strings.time_hours_ago
 import dev.lemonadecode.workspace.strings.update_failed_checksum
 import dev.lemonadecode.workspace.strings.updates_up_to_date
@@ -1907,6 +1908,34 @@ class WorkspacePresenterTest {
       assertEquals(Res.string.file_path_copied.asLemonadeCodeString(path), copied.toast)
       assertIs<WorkspaceContentModel.Diff>(copied.content)
       awaitItemWhere { it.toast == null }
+    }
+  }
+
+  @Test
+  fun `a selection copied in the terminal confirms with a toast for a moment`() = runTest {
+    withSession()
+    presenter.test {
+      awaitItemWhere { it.content is WorkspaceContentModel.Terminal }.eventSink(WorkspaceEvent.CopiedTerminalSelection)
+      val copied = awaitItemWhere { it.toast != null }
+      assertEquals(Res.string.terminal_selection_copied.asLemonadeCodeString(), copied.toast)
+      assertFalse(copied.toastWarning)
+      assertIs<WorkspaceContentModel.Terminal>(copied.content)
+      awaitItemWhere { it.toast == null }
+    }
+  }
+
+  @Test
+  fun `copying again while the toast is up keeps it a full while longer, and it still goes`() = runTest {
+    withSession()
+    presenter.test {
+      awaitItemWhere { it.content is WorkspaceContentModel.Terminal }.eventSink(WorkspaceEvent.CopiedTerminalSelection)
+      val copied = awaitItemWhere { it.toast != null }
+      val shownAt = testScheduler.currentTime
+      testScheduler.advanceTimeBy(ToastMillis - 200)
+      // A triple click copies twice, the word and then the line: the same toast again.
+      copied.eventSink(WorkspaceEvent.CopiedTerminalSelection)
+      awaitItemWhere { it.toast == null }
+      assertEquals(shownAt + ToastMillis - 200 + ToastMillis, testScheduler.currentTime)
     }
   }
 

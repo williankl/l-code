@@ -53,14 +53,22 @@ instead. A program can move without the shell: Claude Code entering a worktree c
 and leaves the shell's where it was. Once the program quits, the shell's folder counts again.
 
 Claude Code also works in folders its process never enters: a `cd` in its shell tool carries over to
-its next commands, but the operating system still says Claude is where it started. So while Claude
-Code holds the terminal, Lemonade Code reads where it says it works from the end of its
-conversation's transcript, `~/.claude/projects/<folder>/<id>.jsonl`, where each line carries the
-folder it was written in, and follows that folder, its repository and branch instead. Only lines this
-run of Claude wrote count, by their time against when it started, so the history of a resumed
-conversation doesn't move the session; neither do its sub-agents' lines, nor a folder that's gone. The
-transcript is read only when it grows, and only what was added since the last look, from its end.
-Suspend Claude or quit it, and the shell's folder counts again.
+its next commands, but the operating system still says Claude is where it started. So Lemonade Code
+reads where it says it works from the end of its conversation's transcript,
+`~/.claude/projects/<folder>/<id>.jsonl`, where each line carries the folder it was written in. Only
+lines this run of Claude wrote count, by their time against when it started, so the history of a
+resumed conversation doesn't move the session; neither do its sub-agents' lines, nor a folder that's
+gone. The transcript is read only when it grows, and only what was added since the last look, from
+its end.
+
+That folder counts only while that Claude holds the terminal: while its process is in the process
+group the terminal's foreground belongs to, which also holds when it was started through a wrapper
+like `npx`. A suspended Claude, or the pager or editor you run meanwhile, doesn't move the session;
+with two Claudes under one shell, the one in the foreground counts. And it counts only once it's in
+another checkout than the one Claude's process is in: within that one, the branch and the diff are
+the same, so the session stays where the process is rather than following every `cd apps/web`. Then
+the session shows that folder, its repository and branch. On Windows, where the foreground can't be
+asked, a running Claude always counts.
 
 Claude keeps the conversation by the folder it was started in, so that's the one a session starts
 again in after a restart or from the archive, wherever Claude was working by then.
@@ -145,19 +153,20 @@ A session that isn't a sub-session is named after its folder anyway, so one whos
 into a worktree of its own, like Claude Code's `.claude/worktrees/<name>`, already shows that
 worktree's name. A sub-session keeps the name it started with wherever its agent goes.
 
-A sub-session's header says where it works now, from its checkout and its parent's: **worktree**,
-with its branch, while they're in different checkouts, however it got there, and **same folder**
-while they share one, even from a folder further in. Another repository altogether counts as a
-worktree too, since git calls every checkout one. Outside git it says **same folder** only in the
-parent's very folder, and names its own folder otherwise. A new worktree under a sub-session that's in
-a worktree goes next to that worktree.
+A sub-session's header says where it works now, however it got there: **worktree**, with its
+branch, while its checkout is a linked worktree, which git tells apart by its main checkout. Otherwise
+**same folder** while it's in the checkout its parent's programs run in, even from a folder further
+in, wherever the parent's Claude has gone; outside git, only in that very folder. Anywhere else, like
+another repository's main checkout, it names its own folder. A new worktree always goes in the
+`.worktrees` folder beside the repository's main checkout, whichever of its worktrees the session
+starting it is in.
 
-**Closing.** Before a session closes, Lemonade Code asks git about the folder of the session and of
-each sub-session closing with it, and about the folder its Claude Code was started in when it works
-in another. A folder is in a *linked* worktree when `git rev-parse --git-dir`
+**Closing.** Before a session closes, Lemonade Code asks git about the folder the session's programs
+run in, and each sub-session's closing with it; not a folder its Claude Code only `cd`'d into, which
+may be a worktree someone else made. A folder is in a *linked* worktree when `git rev-parse --git-dir`
 and `--git-common-dir`, asked from its top-level folder, name different folders; in a repository's
 main checkout they're the same one. A worktree that a session staying open, or an archived one, is
-still in, or started its Claude Code in, is left out.
+still in, by where it runs or where its Claude Code works, is left out.
 If any are left, the dialog asks about them, with what `git status` says about uncommitted changes
 and untracked files.
 

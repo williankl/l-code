@@ -2,12 +2,15 @@ package dev.lemonadecode.workspace.impl.ui
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.DesktopComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.MouseButton
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertIsFocused
+import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasSetTextAction
@@ -19,6 +22,8 @@ import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onParent
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performMouseInput
@@ -27,6 +32,7 @@ import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.rightClick
 import androidx.compose.ui.test.runDesktopComposeUiTest
+import androidx.compose.ui.test.tripleClick
 import androidx.compose.ui.test.withKeyDown
 import dev.lemonadecode.domain.mobile.LogPackages
 import dev.lemonadecode.domain.review.CommentStatus
@@ -44,17 +50,23 @@ import dev.lemonadecode.platform.designsystem.LemonadeCodeTheme
 import dev.lemonadecode.platform.process.HomeDirectory
 import dev.lemonadecode.platform.sound.Chime
 import dev.lemonadecode.platform.sound.testing.FakeSoundPlayer
+import dev.lemonadecode.platform.terminal.TerminalClipboard
+import dev.lemonadecode.platform.terminal.TerminalLaunch
+import dev.lemonadecode.platform.terminal.TerminalSession
 import dev.lemonadecode.review.fake.FakeReviewService
+import dev.lemonadecode.sessions.api.SessionTerminals
 import dev.lemonadecode.sessions.fake.FakeSessionService
 import dev.lemonadecode.settings.fake.FakeSettingsService
 import dev.lemonadecode.updates.fake.FakeUpdateService
 import dev.lemonadecode.workspace.impl.WorkspacePresenter
+import dev.lemonadecode.workspace.impl.WorkspaceScreen
 import dev.lemonadecode.workspace.impl.showcase.ShowcaseDevices
 import dev.lemonadecode.workspace.impl.showcase.ShowcaseFixtures
 import dev.lemonadecode.workspace.ui.WorkspaceContent
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 /**
@@ -414,6 +426,49 @@ class WorkspaceFlowUiTest {
       waitFor(hasTestTag("terminal:cf"))
       waitUntil(timeoutMillis = 5_000) { onAllNodes(hasContentDescription("Hide archived sessions")).fetchSemanticsNodes().isEmpty() }
       assertEquals(listOf(SessionId("cf")), sessions.unarchivedIds)
+    }
+  }
+
+  @Test
+  fun `a live terminal copies a selection only once copy on select is on, and the toast leaves it focused and selected`() {
+    withRepository()
+    val copied = mutableListOf<String>()
+    val clipboard = object : TerminalClipboard {
+      override fun read(): String? = null
+
+      override fun write(text: String) {
+        copied += text
+      }
+    }
+    val launch = TerminalLaunch(listOf("/bin/sh", "-c", "printf 'alpha beta\\ngamma delta\\n'; sleep 30"), System.getProperty("java.io.tmpdir"))
+    TerminalSession(launch).use { session ->
+      val terminals = object : SessionTerminals {
+        override fun terminal(id: SessionId): TerminalSession? = session.takeIf { id == ar }
+      }
+      runDesktopComposeUiTest(width = 1440, height = 900) {
+        setContent { WorkspaceScreen({ presenter }, terminals, clipboard).Content(model = presenter.present()) }
+        waitFor(hasText("gamma delta", substring = true))
+        val first = onNodeWithText("alpha beta", substring = true)
+        first.performMouseInput { tripleClick(Offset(4f, centerY)) }
+        waitForIdle()
+        onNodeWithText("Copied the selection").assertDoesNotExist()
+        assertEquals(emptyList(), copied)
+
+        runBlocking { settings.update { it.copy(copyOnSelect = true) } }
+        waitForIdle()
+        // Two copies, the word and then the line, with the toast already up for the second.
+        first.performMouseInput { tripleClick(Offset(4f, centerY)) }
+        waitFor(hasText("Copied the selection"))
+        assertEquals(listOf("alpha", "alpha beta"), copied)
+
+        // The terminal keeps the focus, and the line its highlight.
+        first.onParent().assertIsFocused()
+        val row = first.fetchSemanticsNode().boundsInRoot
+        val next = onNodeWithText("gamma delta", substring = true).fetchSemanticsNode().boundsInRoot
+        val pixels = onRoot().captureToImage().toPixelMap()
+        val x = (row.left + 400f).toInt()
+        assertNotEquals(pixels[x, next.center.y.toInt()], pixels[x, row.center.y.toInt()])
+      }
     }
   }
 

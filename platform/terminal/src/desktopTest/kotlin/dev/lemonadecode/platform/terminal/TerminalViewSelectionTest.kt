@@ -52,6 +52,9 @@ class TerminalViewSelectionTest {
   }
   private var copyOnSelect by mutableStateOf(false)
 
+  /** What the clipboard held each time the view reported a selection copied: "null" for nothing. */
+  private val reported = mutableListOf<String>()
+
   private class Rig(val scene: ImageComposeScene, val cellWidth: Float, val cellHeight: Float) {
     var time = 0L
 
@@ -94,7 +97,7 @@ class TerminalViewSelectionTest {
         val layout = rememberTextMeasurer().measure(AnnotatedString("M".repeat(100)), style, softWrap = false)
         width = layout.size.width / 100f
         height = layout.size.height.toFloat()
-        TerminalView(session, colors, style, clipboard = clipboard, copyOnSelect = copyOnSelect)
+        TerminalView(session, colors, style, clipboard = clipboard, copyOnSelect = copyOnSelect, onSelectionCopied = { reported += clipboard.copied.toString() })
       }.use { scene ->
         val rig = Rig(scene, 0f, 0f)
         val _ = rig.frame()
@@ -321,6 +324,70 @@ class TerminalViewSelectionTest {
     assertNull(clipboard.copied)
     copy()
     assertEquals("if x:\n      run()\n  done", clipboard.copied)
+  }
+
+  @Test
+  fun `with copy on select each copy a selection makes is reported, once it's on the clipboard`() = withTerminal {
+    copyOnSelect = true
+    val _ = frame()
+    mouse(PointerEventType.Press, at(6, 0), pressed = true)
+    mouse(PointerEventType.Move, at(3, 1), pressed = true)
+    mouse(PointerEventType.Move, at(5, 1), pressed = true)
+    assertEquals(emptyList(), reported)
+    mouse(PointerEventType.Release, at(5, 1), pressed = false)
+    assertEquals(listOf("beta\ngamma"), reported)
+    time += 1_000
+    // A triple click copies twice, the word and then the line, and each is reported.
+    repeat(3) { click(at(2, 2)) }
+    assertEquals(listOf("beta\ngamma", "epsilon", "epsilon"), reported)
+    time += 1_000
+    click(at(1, 0))
+    click(at(1, 0))
+    time += 1_000
+    mouse(PointerEventType.Press, at(10, 0), pressed = true, keyboardModifiers = PointerKeyboardModifiers(isShiftPressed = true))
+    assertEquals(listOf("beta\ngamma", "epsilon", "epsilon", "alpha"), reported)
+    mouse(PointerEventType.Release, at(10, 0), pressed = false)
+    assertEquals(listOf("beta\ngamma", "epsilon", "epsilon", "alpha", "alpha beta"), reported)
+  }
+
+  @Test
+  fun `with copy on select a click, a wobbly click, a drag over spaces and select all report nothing`() = withTerminal(Indented) {
+    copyOnSelect = true
+    val _ = frame()
+    click(at(4, 0))
+    time += 1_000
+    wobblyClick(Offset(3.45f * cellWidth, 0.5f * cellHeight), wobble = Offset(0.8f, 0f))
+    time += 1_000
+    dragSpaces()
+    selectAll()
+    assertNull(clipboard.copied)
+    assertEquals(emptyList(), reported)
+  }
+
+  @Test
+  fun `the copy key isn't reported, and without copy on select nothing is`() = withTerminal {
+    copyOnSelect = true
+    val _ = frame()
+    click(at(8, 1))
+    click(at(8, 1))
+    assertEquals(listOf("delta"), reported)
+    clipboard.copied = null
+    copy()
+    assertEquals("delta", clipboard.copied)
+    assertEquals(listOf("delta"), reported)
+
+    copyOnSelect = false
+    val _ = frame()
+    time += 1_000
+    mouse(PointerEventType.Press, at(6, 0), pressed = true)
+    mouse(PointerEventType.Move, at(3, 1), pressed = true)
+    mouse(PointerEventType.Release, at(3, 1), pressed = false)
+    time += 1_000
+    click(at(1, 0))
+    click(at(1, 0))
+    copy()
+    assertEquals("alpha", clipboard.copied)
+    assertEquals(listOf("delta"), reported)
   }
 
   /** Wraps an AWT event the way the window does, so the view sees what it would see for real. */

@@ -117,6 +117,9 @@ public sealed interface WorkspaceEvent {
   /** Settings › Copy on select. */
   public data class SetCopyOnSelect(val enabled: Boolean) : WorkspaceEvent
 
+  /** Copy on select put a selection in the terminal on the clipboard: confirms it with a toast. */
+  public data object CopiedTerminalSelection : WorkspaceEvent
+
   public data class SetMobilePlugin(val enabled: Boolean) : WorkspaceEvent
 
   public data object CheckForUpdates : WorkspaceEvent

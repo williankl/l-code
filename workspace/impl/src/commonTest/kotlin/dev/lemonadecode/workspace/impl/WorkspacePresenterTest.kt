@@ -66,6 +66,7 @@ import dev.lemonadecode.workspace.strings.recording_saved_toast
 import dev.lemonadecode.workspace.strings.session_archived
 import dev.lemonadecode.workspace.strings.session_path_copied
 import dev.lemonadecode.workspace.strings.size_gigabytes
+import dev.lemonadecode.workspace.strings.terminal_selection_copied
 import dev.lemonadecode.workspace.strings.time_hours_ago
 import dev.lemonadecode.workspace.strings.update_failed_checksum
 import dev.lemonadecode.workspace.strings.updates_up_to_date
@@ -1907,6 +1908,69 @@ class WorkspacePresenterTest {
       assertEquals(Res.string.file_path_copied.asLemonadeCodeString(path), copied.toast)
       assertIs<WorkspaceContentModel.Diff>(copied.content)
       awaitItemWhere { it.toast == null }
+    }
+  }
+
+  @Test
+  fun `a selection copied in the terminal confirms with a toast for a moment`() = runTest {
+    withSession()
+    presenter.test {
+      awaitItemWhere { it.content is WorkspaceContentModel.Terminal }.eventSink(WorkspaceEvent.CopiedTerminalSelection)
+      val copied = awaitItemWhere { it.toast != null }
+      assertEquals(Res.string.terminal_selection_copied.asLemonadeCodeString(), copied.toast)
+      assertFalse(copied.toastWarning)
+      assertIs<WorkspaceContentModel.Terminal>(copied.content)
+      awaitItemWhere { it.toast == null }
+    }
+  }
+
+  @Test
+  fun `copying again while the toast is up keeps it a full while longer, and it still goes`() = runTest {
+    withSession()
+    presenter.test {
+      awaitItemWhere { it.content is WorkspaceContentModel.Terminal }.eventSink(WorkspaceEvent.CopiedTerminalSelection)
+      val copied = awaitItemWhere { it.toast != null }
+      val shownAt = testScheduler.currentTime
+      testScheduler.advanceTimeBy(ToastMillis - 200)
+      // A triple click copies twice, the word and then the line: the same toast again.
+      copied.eventSink(WorkspaceEvent.CopiedTerminalSelection)
+      awaitItemWhere { it.toast == null }
+      assertEquals(shownAt + ToastMillis - 200 + ToastMillis, testScheduler.currentTime)
+    }
+  }
+
+  @Test
+  fun `a selection copied in the terminal leaves a warning toast that's up, and shows over a confirmation or nothing`() = runTest {
+    withSession()
+    settings.update { it.copy(mobilePlugin = true) }
+    mobile.setDevices(ShowcaseDevices.connected)
+    val pixel = ShowcaseDevices.pixel.id
+    val warning = Res.string.recording_low_space_toast.asLemonadeCodeString(Res.string.size_gigabytes.asLemonadeCodeString(1), "Pixel 8")
+    val copied = Res.string.terminal_selection_copied.asLemonadeCodeString()
+    val path = Res.string.file_path_copied.asLemonadeCodeString("/tmp/a")
+    presenter.test {
+      awaitItem()
+      mobile.recordings.value = mapOf(pixel to ScreenRecording.Recording(Now))
+      mobile.recordings.value = mapOf(pixel to ScreenRecording.Recording(Now, spaceLeft = 1_600_000_000L))
+      val low = awaitItemWhere { it.toast != null }
+      val warnedAt = testScheduler.currentTime
+      assertEquals(warning, low.toast)
+      // The warning stays, and still hides on its own timer.
+      low.eventSink(WorkspaceEvent.CopiedTerminalSelection)
+      val gone = awaitItemWhere { it.toast != warning }
+      assertNull(gone.toast)
+      assertEquals(warnedAt + ToastMillis, testScheduler.currentTime)
+
+      // Nothing up, though the gone warning left its flag: the copy shows, as a confirmation.
+      gone.eventSink(WorkspaceEvent.CopiedTerminalSelection)
+      val shown = awaitItemWhere { it.toast != null }
+      assertEquals(copied, shown.toast)
+      assertFalse(shown.toastWarning)
+
+      // Over another confirmation it shows too.
+      shown.eventSink(WorkspaceEvent.CopiedFilePath("/tmp/a"))
+      awaitItemWhere { it.toast == path }.eventSink(WorkspaceEvent.CopiedTerminalSelection)
+      assertEquals(copied, awaitItemWhere { it.toast != path }.toast)
     }
   }
 

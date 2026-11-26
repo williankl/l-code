@@ -19,6 +19,7 @@ import dev.lemonadecode.platform.designsystem.isDark
 import dev.lemonadecode.platform.di.AppScope
 import dev.lemonadecode.platform.localization.ProvideAppLanguage
 import dev.lemonadecode.platform.presenter.presenterAsState
+import dev.lemonadecode.platform.terminal.TerminalClipboard
 import dev.lemonadecode.platform.terminal.TerminalColors
 import dev.lemonadecode.platform.terminal.TerminalView
 import dev.lemonadecode.platform.terminal.openInBrowser
@@ -28,15 +29,20 @@ import dev.lemonadecode.workspace.ui.DevicesWindowContent
 import dev.lemonadecode.workspace.ui.WorkspaceContent
 import dev.lemonadecode.workspace.ui.toThemeMode
 import dev.lemonadecode.workspace.uimodel.DevicesWindow
+import dev.lemonadecode.workspace.uimodel.WorkspaceEvent
 import dev.lemonadecode.workspace.uimodel.WorkspaceModel
 import dev.zacsweers.metro.ContributesTo
 import dev.zacsweers.metro.Inject
 
-/** The workspace window content: the presenter's Model drawn with live terminals. */
+/**
+ * The workspace window content: the presenter's Model drawn with live terminals. They copy to and
+ * paste from [clipboard], the system's unless a test swaps it.
+ */
 @Inject
 public class WorkspaceScreen internal constructor(
   private val presenterProvider: () -> WorkspacePresenter,
   private val terminals: SessionTerminals,
+  private val clipboard: TerminalClipboard = TerminalClipboard.System,
 ) {
   /** The workspace's Model, for the main window and the Devices window to share. Call it once. */
   @Composable
@@ -62,7 +68,7 @@ public class WorkspaceScreen internal constructor(
     Themed(model, onBackground, onDarkTheme) {
       WorkspaceContent(
         model = model,
-        terminal = { sessionId, slotModifier -> LiveTerminal(sessionId, slotModifier, model.settings.copyOnSelect) },
+        terminal = { sessionId, slotModifier -> LiveTerminal(sessionId, slotModifier, model.settings.copyOnSelect, model.eventSink) },
         modifier = modifier,
       )
     }
@@ -118,8 +124,9 @@ public class WorkspaceScreen internal constructor(
     }
   }
 
+  /** A session's terminal. With [copyOnSelect], each selection it copies is reported to [onEvent]. */
   @Composable
-  private fun LiveTerminal(sessionId: String, modifier: Modifier, copyOnSelect: Boolean) {
+  private fun LiveTerminal(sessionId: String, modifier: Modifier, copyOnSelect: Boolean, onEvent: (WorkspaceEvent) -> Unit) {
     val session = terminals.terminal(SessionId(sessionId)) ?: return
     val focusRequester = remember(sessionId) { FocusRequester() }
     TerminalView(
@@ -133,7 +140,9 @@ public class WorkspaceScreen internal constructor(
         top = LemonadeTheme.spaces.spacing400,
         bottom = LemonadeTheme.spaces.spacing400,
       ),
+      clipboard = clipboard,
       copyOnSelect = copyOnSelect,
+      onSelectionCopied = { onEvent(WorkspaceEvent.CopiedTerminalSelection) },
     )
     LaunchedEffect(sessionId) { focusRequester.requestFocus() }
   }

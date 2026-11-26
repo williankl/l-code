@@ -10,7 +10,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class SubSessionPlannerTest {
-  private fun session(id: String, name: String, parent: String? = null, placement: SessionPlacement = SessionPlacement.Root, dir: String = "/code/storefront") = Session(
+  private fun session(id: String, name: String, parent: String? = null, placement: SessionPlacement = SessionPlacement.Root, dir: String = "/code/storefront", mainCheckout: String? = null) = Session(
     id = SessionId(id),
     name = name,
     shell = "zsh",
@@ -21,6 +21,7 @@ class SubSessionPlannerTest {
     placement = placement,
     origin = SessionOrigin.Opened,
     status = SessionStatus.Idle,
+    mainCheckout = mainCheckout,
   )
 
   @Test
@@ -106,20 +107,23 @@ class SubSessionPlannerTest {
   @Test
   fun `a worktree of a worktree stays in the same worktrees folder`() {
     val root = session("ar", "api-ratelimit")
-    val parent = session("w", "sub-1", parent = "ar", placement = SessionPlacement.Worktree, dir = "/code/storefront.worktrees/sub-1")
+    val parent = session("w", "sub-1", parent = "ar", placement = SessionPlacement.Worktree, dir = "/code/storefront.worktrees/sub-1", mainCheckout = "/code/storefront")
     val plan = SubSessionPlanner.plan(parent, listOf(root, parent), SubSessionLocation.NewWorktree, "sub")
     assertEquals("/code/storefront.worktrees/sub-2", plan?.workingDirectory)
   }
 
   @Test
-  fun `where a sub-session works now places its worktrees, not how it started`() {
-    val root = session("ar", "api-ratelimit")
-    // Started in a worktree, its agent back in the repository: in the repository's worktrees folder, not beside the repository.
-    val back = session("w", "sub-1", parent = "ar", placement = SessionPlacement.Worktree)
-    assertEquals("/code/storefront.worktrees/sub-2", SubSessionPlanner.plan(back, listOf(root, back), SubSessionLocation.NewWorktree, "sub")?.workingDirectory)
-    // Started in the same folder, its agent now in a worktree of its own: beside that one.
-    val moved = session("s", "sub-1", parent = "ar", placement = SessionPlacement.SameFolder, dir = "/code/storefront/.claude/worktrees/rate-limit")
-    assertEquals("/code/storefront/.claude/worktrees/sub-2", SubSessionPlanner.plan(moved, listOf(root, moved), SubSessionLocation.NewWorktree, "sub")?.workingDirectory)
+  fun `new worktrees go next to the main checkout, wherever anyone's agent is`() {
+    // The root's Claude went into sub-1's worktree: a worktree under sub-1 still goes beside it.
+    val root = session("ar", "api-ratelimit", dir = "/code/storefront.worktrees/sub-1", mainCheckout = "/code/storefront")
+    val sub1 = session("w", "sub-1", parent = "ar", placement = SessionPlacement.Worktree, dir = "/code/storefront.worktrees/sub-1", mainCheckout = "/code/storefront")
+    assertEquals("/code/storefront.worktrees/sub-2", SubSessionPlanner.plan(sub1, listOf(root, sub1), SubSessionLocation.NewWorktree, "sub")?.workingDirectory)
+    // A root session whose Claude went into a worktree: in the repository's folder, not one of the worktree's own.
+    val wandered = session("cf", "feat", dir = "/code/storefront.worktrees/feat", mainCheckout = "/code/storefront")
+    assertEquals("/code/storefront.worktrees/sub-1", SubSessionPlanner.plan(wandered, listOf(wandered), SubSessionLocation.NewWorktree, "sub")?.workingDirectory)
+    // Claude Code's own worktree, inside the main checkout, is no different.
+    val claude = session("cc", "rate-limit", dir = "/code/storefront/.claude/worktrees/rate-limit", mainCheckout = "/code/storefront")
+    assertEquals("/code/storefront.worktrees/sub-1", SubSessionPlanner.plan(claude, listOf(claude), SubSessionLocation.NewWorktree, "sub")?.workingDirectory)
   }
 
   @Test

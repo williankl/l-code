@@ -133,27 +133,31 @@ internal class GitCliDataSource(
     .flatMap { it.requireSuccess() }
     .map { }
 
-  /**
-   * A linked worktree has a git folder of its own inside the repository's, so `--git-dir` and
-   * `--git-common-dir` differ; in a main checkout or a submodule they are the same folder, printed
-   * alike. Both are asked from the top-level folder, where neither is relative to a subfolder.
-   */
   override suspend fun linkedWorktree(directory: String): LemonadeCodeResult<GitWorktree?, GitError> {
     val checkout = when (val found = checkout(directory)) {
       is LemonadeCodeResult.Success -> found.value
       is LemonadeCodeResult.Failure -> return if (found.error == GitError.NotARepository) LemonadeCodeResult.success(null) else found
     }
     val root = checkout.root
-    return git(root, "rev-parse", "--git-dir", "--git-common-dir").flatMap { it.requireSuccess() }.flatMap { dirs ->
-      val (gitDir, commonDir) = dirs.stdout.lines().map { it.trim() }.filter { it.isNotEmpty() }.let { it.getOrNull(0) to it.getOrNull(1) }
-      if (gitDir == commonDir) return@flatMap LemonadeCodeResult.success(null)
-      git(root, "worktree", "list", "--porcelain").flatMap { it.requireSuccess() }.flatMap { list ->
-        val main = mainWorktree(list.stdout) ?: return@flatMap LemonadeCodeResult.failure(GitError.CommandFailed("git lists no main worktree"))
-        // What `git worktree remove` checks before it refuses, untracked files shown whatever the config says.
-        git(root, "status", "--porcelain", "--untracked-files=normal", "--ignore-submodules=none").flatMap { it.requireSuccess() }.map { status ->
-          GitWorktree(root = root, branch = checkout.branch, mainRoot = main, hasChanges = status.stdout.isNotBlank())
-        }
+    return mainCheckout(root).flatMap { main ->
+      if (main == null) return@flatMap LemonadeCodeResult.success(null)
+      // What `git worktree remove` checks before it refuses, untracked files shown whatever the config says.
+      git(root, "status", "--porcelain", "--untracked-files=normal", "--ignore-submodules=none").flatMap { it.requireSuccess() }.map { status ->
+        GitWorktree(root = root, branch = checkout.branch, mainRoot = main, hasChanges = status.stdout.isNotBlank())
       }
+    }
+  }
+
+  /**
+   * A linked worktree has a git folder of its own inside the repository's, so `--git-dir` and
+   * `--git-common-dir` differ; in a main checkout or a submodule they are the same folder, printed
+   * alike. Both are asked from the top-level folder, where neither is relative to a subfolder.
+   */
+  override suspend fun mainCheckout(repositoryRoot: String): LemonadeCodeResult<String?, GitError> = git(repositoryRoot, "rev-parse", "--git-dir", "--git-common-dir").flatMap { it.requireSuccess() }.flatMap { dirs ->
+    val (gitDir, commonDir) = dirs.stdout.lines().map { it.trim() }.filter { it.isNotEmpty() }.let { it.getOrNull(0) to it.getOrNull(1) }
+    if (gitDir == commonDir) return@flatMap LemonadeCodeResult.success(null)
+    git(repositoryRoot, "worktree", "list", "--porcelain").flatMap { it.requireSuccess() }.flatMap { list ->
+      mainWorktree(list.stdout)?.let { LemonadeCodeResult.success(it) } ?: LemonadeCodeResult.failure(GitError.CommandFailed("git lists no main worktree"))
     }
   }
 

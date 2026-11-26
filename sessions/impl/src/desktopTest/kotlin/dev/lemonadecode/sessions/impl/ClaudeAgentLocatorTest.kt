@@ -37,6 +37,16 @@ class ClaudeAgentLocatorTest {
     error("the shell never started its program")
   }
 
+  /** The two programs [shell] started, once both have. */
+  private fun bothPrograms(shell: Process): List<Long> {
+    repeat(100) {
+      val pids = shell.toHandle().children().map { it.pid() }.toList()
+      if (pids.size == 2) return pids
+      Thread.sleep(20)
+    }
+    error("the shell never started both programs")
+  }
+
   private fun claudeSession(pid: Long, id: String, kind: String = "interactive", cwd: String = "/Users/you/code/store.front", startedAt: Long = 1) {
     File(sessions, "$pid.json").writeText("""{"pid":$pid,"sessionId":"$id","cwd":"$cwd","startedAt":$startedAt,"kind":"$kind"}""")
   }
@@ -54,13 +64,14 @@ class ClaudeAgentLocatorTest {
     claudeSession(program(), "0b7c3a2e-1111-4222-8333-944455556666")
     transcript("0b7c3a2e-1111-4222-8333-944455556666")
     claudeSession(elsewhere.pid(), "someone-elses")
-    assertEquals("claude --resume 0b7c3a2e-1111-4222-8333-944455556666", locator.find(shell.pid())?.resume)
+    assertEquals("claude --resume 0b7c3a2e-1111-4222-8333-944455556666", locator.find(shell.pid()).firstOrNull()?.resume)
   }
 
   @Test
   fun `claude open with nothing said yet starts claude again, and says nothing of where it works`() {
-    claudeSession(program(), "0b7c3a2e-1111-4222-8333-944455556666")
-    assertEquals(RunningAgent("claude"), locator.find(shell.pid()))
+    val pid = program()
+    claudeSession(pid, "0b7c3a2e-1111-4222-8333-944455556666")
+    assertEquals(listOf(RunningAgent(pid, "claude", null)), locator.find(shell.pid()))
   }
 
   @Test
@@ -68,12 +79,37 @@ class ClaudeAgentLocatorTest {
     val id = "0b7c3a2e-1111-4222-8333-944455556666"
     val worktree = File(home, "code/store.front/.claude/worktrees/rate-limit").apply { mkdirs() }
     val docs = File(home, "code/store.front/docs").apply { mkdirs() }
-    claudeSession(program(), id, startedAt = 1_000_000)
+    val pid = program()
+    claudeSession(pid, id, startedAt = 1_000_000)
     // Written before this run, as a resumed conversation's history is.
     transcript(id, line(worktree, at = 999_000))
-    assertEquals(RunningAgent("claude --resume $id"), locator.find(shell.pid()))
+    assertEquals(listOf(RunningAgent(pid, "claude --resume $id", null)), locator.find(shell.pid()))
     transcript(id, line(docs, at = 1_002_000))
-    assertEquals(RunningAgent("claude --resume $id", docs.path), locator.find(shell.pid()))
+    assertEquals(listOf(RunningAgent(pid, "claude --resume $id", docs.path)), locator.find(shell.pid()))
+  }
+
+  @Test
+  fun `every agent under the shell is found, the most recently started first, each with its own folder`() {
+    val two = ProcessBuilder("/bin/sh", "-c", "sleep 30 & sleep 30; wait").start()
+    try {
+      val (first, second) = bothPrograms(two)
+      val older = File(home, "code/store.front.worktrees/older").apply { mkdirs() }
+      val newer = File(home, "code/store.front.worktrees/newer").apply { mkdirs() }
+      claudeSession(first, "0b7c3a2e-1111-4222-8333-944455556666", startedAt = 1_000)
+      claudeSession(second, "1c8d4b3f-2222-4333-8444-a55566667777", startedAt = 2_000)
+      transcript("0b7c3a2e-1111-4222-8333-944455556666", line(older, at = 1_500))
+      transcript("1c8d4b3f-2222-4333-8444-a55566667777", line(newer, at = 2_500))
+      assertEquals(
+        listOf(
+          RunningAgent(second, "claude --resume 1c8d4b3f-2222-4333-8444-a55566667777", newer.path),
+          RunningAgent(first, "claude --resume 0b7c3a2e-1111-4222-8333-944455556666", older.path),
+        ),
+        locator.find(two.pid()),
+      )
+    } finally {
+      two.descendants().forEach { it.destroy() }
+      two.destroy()
+    }
   }
 
   @Test
@@ -82,26 +118,26 @@ class ClaudeAgentLocatorTest {
     val pid = program()
     claudeSession(pid, id)
     transcript(id)
-    assertEquals("claude --resume $id", locator.find(shell.pid())?.resume)
+    assertEquals("claude --resume $id", locator.find(shell.pid()).firstOrNull()?.resume)
     claudeSession(pid, id, cwd = "/Users/you/code/store.front/.claude/worktrees/rate-limit")
-    assertEquals("claude --resume $id", locator.find(shell.pid())?.resume)
+    assertEquals("claude --resume $id", locator.find(shell.pid()).firstOrNull()?.resume)
   }
 
   @Test
   fun `nothing to resume without a conversation under the shell`() {
     claudeSession(elsewhere.pid(), "someone-elses")
-    assertNull(locator.find(shell.pid())?.resume)
+    assertNull(locator.find(shell.pid()).firstOrNull()?.resume)
   }
 
   @Test
   fun `an id that isn't plain never reaches the shell`() {
     claudeSession(program(), "x; touch pwned")
-    assertNull(locator.find(shell.pid())?.resume)
+    assertNull(locator.find(shell.pid()).firstOrNull()?.resume)
   }
 
   @Test
   fun `an id Claude would read as an option never reaches it`() {
     claudeSession(program(), "--dangerously-skip-permissions")
-    assertNull(locator.find(shell.pid())?.resume)
+    assertNull(locator.find(shell.pid()).firstOrNull()?.resume)
   }
 }

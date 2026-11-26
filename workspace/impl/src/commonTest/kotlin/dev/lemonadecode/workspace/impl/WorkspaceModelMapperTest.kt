@@ -118,27 +118,35 @@ class WorkspaceModelMapperTest {
   }
 
   @Test
-  fun `a sub-session's header says where it works now, whatever it started as`() {
+  fun `a sub-session's header says where it works now, whatever it started as and wherever its parent's agent is`() {
     val repo = ShowcaseFixtures.Repo
     val parent = ShowcaseFixtures.session("ar", "api-ratelimit")
     fun tags(session: Session, of: Session = parent) = SessionsMapper.header(session, of, NavigationStyle.Tree).tags.map { it.label }
     val worktree = Res.string.tag_sub_session_worktree.asLemonadeCodeString()
     val sameFolder = Res.string.tag_sub_session_same_folder.asLemonadeCodeString()
+    val sub1 = "$repo.worktrees/sub-1"
 
-    // Started in the parent's folder, its agent now in a worktree of its own: that worktree, and its branch.
-    val moved = ShowcaseFixtures.session("s1", "sub-1", parent = "ar", branch = "worktree-rate-limit", folder = "$repo/.claude/worktrees/rate-limit")
+    // In a worktree of its own: the worktree and its branch, even with the parent's Claude in that worktree too.
+    val inWorktree = ShowcaseFixtures.session("s1", "sub-1", parent = "ar", branch = "feat/sub-1", placement = SessionPlacement.Worktree, folder = sub1, mainCheckout = repo)
+    val parentVisiting = parent.copy(workingDirectory = sub1, repositoryRoot = sub1, branch = "feat/sub-1", mainCheckout = repo, processDirectory = repo, processRepositoryRoot = repo)
+    assertEquals(listOf(worktree, "feat/sub-1".asLemonadeCodeString()), tags(inWorktree, of = parentVisiting))
+    assertEquals(listOf(worktree), SessionsMapper.header(inWorktree, parent, NavigationStyle.Flat).tags.map { it.label })
+    // In the main checkout the parent runs in, while the parent's Claude works in a worktree: the same folder.
+    val sameCheckout = ShowcaseFixtures.session("s2", "sub-2", parent = "ar")
+    assertEquals(listOf(sameFolder), tags(sameCheckout, of = parentVisiting))
+    // Started in the same folder, its own Claude now in a worktree: that worktree, and its branch.
+    val moved = sameCheckout.copy(workingDirectory = "$repo/.claude/worktrees/rate-limit", repositoryRoot = "$repo/.claude/worktrees/rate-limit", branch = "worktree-rate-limit", mainCheckout = repo, processDirectory = repo, processRepositoryRoot = repo)
     assertEquals(listOf(worktree, "worktree-rate-limit".asLemonadeCodeString()), tags(moved))
-    assertEquals(listOf(worktree), SessionsMapper.header(moved, parent, NavigationStyle.Flat).tags.map { it.label })
-    // Started in a worktree, its agent back in the parent's checkout, if in a folder of its own: the same folder, no branch.
-    val back = ShowcaseFixtures.session("s2", "fix-tax", parent = "ar", placement = SessionPlacement.Worktree).copy(workingDirectory = "$repo/docs")
+    // Started in a worktree, back in the parent's checkout, if in a folder further in: the same folder, no branch.
+    val back = ShowcaseFixtures.session("s3", "fix-tax", parent = "ar", placement = SessionPlacement.Worktree).copy(workingDirectory = "$repo/docs")
     assertEquals(listOf(sameFolder), tags(back))
-    // Another repository altogether is a checkout of its own too, which git calls a worktree.
-    val elsewhere = ShowcaseFixtures.session("s3", "sub-2", parent = "ar", branch = "main", folder = "${ShowcaseFixtures.Home}/code/docs-site")
-    assertEquals(listOf(worktree, "main".asLemonadeCodeString()), tags(elsewhere))
+    // In another repository's main checkout: neither, so it names its folder.
+    val docsSite = ShowcaseFixtures.session("s4", "sub-4", parent = "ar", branch = "main", folder = "${ShowcaseFixtures.Home}/code/docs-site")
+    assertEquals(listOf(Res.string.tag_sub_session_folder.asLemonadeCodeString("docs-site")), tags(docsSite))
 
-    // Outside git, the same folder only while it is the parent's; else it names its own.
+    // Outside git, the same folder only in the very folder the parent runs in; else it names its own.
     val notes = parent.copy(workingDirectory = "${ShowcaseFixtures.Home}/notes", repositoryRoot = null, branch = null)
-    val inNotes = ShowcaseFixtures.session("s4", "sub-3", parent = "ar").copy(workingDirectory = notes.workingDirectory, repositoryRoot = null, branch = null)
+    val inNotes = ShowcaseFixtures.session("s5", "sub-5", parent = "ar").copy(workingDirectory = notes.workingDirectory, repositoryRoot = null, branch = null)
     assertEquals(listOf(sameFolder), tags(inNotes, of = notes))
     assertEquals(listOf(Res.string.tag_sub_session_folder.asLemonadeCodeString("drafts")), tags(inNotes.copy(workingDirectory = "${notes.workingDirectory}/drafts"), of = notes))
   }

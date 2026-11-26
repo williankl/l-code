@@ -161,7 +161,9 @@ public class FakeSessionService(initial: List<Session> = emptyList()) : SessionS
         parentId = parentId,
         workingDirectory = plan.workingDirectory,
         repositoryRoot = if (plan.createsBranch) plan.workingDirectory else parent.repositoryRoot,
+        mainCheckout = if (plan.createsBranch) parent.mainCheckout ?: parent.repositoryRoot else parent.mainCheckout,
         processDirectory = null,
+        processRepositoryRoot = null,
         branch = plan.branch,
         placement = if (plan.createsBranch) SessionPlacement.Worktree else SessionPlacement.SameFolder,
         origin = origin,
@@ -292,9 +294,9 @@ public class FakeSessionService(initial: List<Session> = emptyList()) : SessionS
     return LemonadeCodeResult.success(Unarchived(id, missing, kept.map { it.id }))
   }
 
-  override suspend fun worktreesOf(id: SessionId): List<LinkedWorktree> {
-    val session = (state.value + archivedState.value.flatMap { it.sessions }).firstOrNull { it.id == id } ?: return emptyList()
-    return listOfNotNull(session.workingDirectory, session.processDirectory).mapNotNull { folder -> worktrees.firstOrNull { it.contains(folder) } }.distinct()
+  override suspend fun worktreeOf(id: SessionId): LinkedWorktree? {
+    val session = (state.value + archivedState.value.flatMap { it.sessions }).firstOrNull { it.id == id } ?: return null
+    return worktrees.firstOrNull { it.contains(session.runsIn) }
   }
 
   override suspend fun removeWorktree(worktree: LinkedWorktree, force: Boolean): LemonadeCodeResult<Unit, SessionError> {

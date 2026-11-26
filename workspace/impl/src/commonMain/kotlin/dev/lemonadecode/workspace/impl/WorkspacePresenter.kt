@@ -383,7 +383,7 @@ public class WorkspacePresenter internal constructor(
         /**
          * Closes [id] and its sub-sessions, but first asks whether to delete the worktrees that
          * leaves with no session in them, if there are any. Outside git there are none to ask about,
-         * unless an agent working there was started in one.
+         * unless the session's programs run in git while its agent works outside.
          * An archived session goes for good with those archived with it, the same way.
          */
         fun requestClose(id: SessionId) {
@@ -397,7 +397,7 @@ public class WorkspacePresenter internal constructor(
           closeMenusOf(closing)
           scope.launch {
             val found = try {
-              doomed.map { async { sessionService.worktreesOf(it.id) } }.awaitAll().flatten()
+              doomed.map { async { sessionService.worktreeOf(it.id) } }.awaitAll()
             } finally {
               lookingUp.remove(id)
             }

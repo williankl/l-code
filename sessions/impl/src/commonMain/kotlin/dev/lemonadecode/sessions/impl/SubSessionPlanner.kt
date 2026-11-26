@@ -10,7 +10,7 @@ import dev.lemonadecode.domain.session.SubSessionPlan
  * the repository, in a `<repo>.worktrees/` folder, on the branch the user typed, in a folder named
  * after its last part, and the sub-session takes the folder's name: `worktree/generating-bugs` makes
  * `generating-bugs`. With no branch typed, a `sub-1` folder on a branch named after the parent's.
- * A worktree of a sub-session working in another checkout than its own parent goes next to that one.
+ * The folder is the main checkout's, whichever of the repository's worktrees the parent is in.
  */
 internal object SubSessionPlanner {
   /** [folderTaken] tells whether something is already at a path, so a new worktree goes elsewhere. */
@@ -26,12 +26,8 @@ internal object SubSessionPlanner {
       )
       SubSessionLocation.NewWorktree -> {
         val root = parent.repositoryRoot ?: return null
-        val grandparent = parent.parentId?.let { id -> existing.firstOrNull { it.id == id } }
-        val folder = if (grandparent != null && parent.worksInOtherCheckoutThan(grandparent)) {
-          root.substringBeforeLast('/')
-        } else {
-          "${root.substringBeforeLast('/')}/${root.substringAfterLast('/')}.worktrees"
-        }
+        val main = parent.mainCheckout ?: root
+        val folder = "${main.substringBeforeLast('/')}/${main.substringAfterLast('/')}.worktrees"
         val name = if (branch == null) {
           nextName(existing, prefix) { folderTaken("$folder/$it") }
         } else {

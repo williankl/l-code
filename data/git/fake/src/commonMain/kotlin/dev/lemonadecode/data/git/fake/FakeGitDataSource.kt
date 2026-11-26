@@ -11,6 +11,9 @@ import dev.lemonadecode.platform.core.LemonadeCodeResult
 /** Configurable [GitDataSource]: set the results, read the calls. */
 public class FakeGitDataSource : GitDataSource {
   public var checkoutResult: LemonadeCodeResult<GitCheckout, GitError> = LemonadeCodeResult.failure(GitError.NotARepository)
+
+  /** Checkouts by the folder asked about; any other folder gets [checkoutResult]. */
+  public var checkouts: Map<String, GitCheckout> = emptyMap()
   public var defaultBranchResult: LemonadeCodeResult<String, GitError> = LemonadeCodeResult.success("main")
   public var branchesResult: LemonadeCodeResult<List<String>, GitError> = LemonadeCodeResult.success(listOf("main"))
   public var branchTipsResult: LemonadeCodeResult<Map<String, GitBranchTip>, GitError> = LemonadeCodeResult.success(emptyMap())
@@ -39,7 +42,7 @@ public class FakeGitDataSource : GitDataSource {
 
   public data class RemoveWorktreeCall(val root: String, val path: String, val force: Boolean)
 
-  override suspend fun checkout(directory: String): LemonadeCodeResult<GitCheckout, GitError> = checkoutResult
+  override suspend fun checkout(directory: String): LemonadeCodeResult<GitCheckout, GitError> = checkouts[directory]?.let { LemonadeCodeResult.success(it) } ?: checkoutResult
 
   override suspend fun defaultBranch(repositoryRoot: String): LemonadeCodeResult<String, GitError> = defaultBranchResult
 
@@ -86,6 +89,9 @@ public class FakeGitDataSource : GitDataSource {
   }
 
   override suspend fun linkedWorktree(directory: String): LemonadeCodeResult<GitWorktree?, GitError> = LemonadeCodeResult.success(linkedWorktrees[directory])
+
+  /** The main checkout of the [linkedWorktrees] entry for [repositoryRoot]; null for any other. */
+  override suspend fun mainCheckout(repositoryRoot: String): LemonadeCodeResult<String?, GitError> = LemonadeCodeResult.success(linkedWorktrees[repositoryRoot]?.mainRoot)
 
   override suspend fun removeWorktree(
     repositoryRoot: String,

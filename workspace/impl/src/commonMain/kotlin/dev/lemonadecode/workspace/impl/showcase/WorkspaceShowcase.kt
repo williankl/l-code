@@ -387,6 +387,7 @@ private fun bothKindsScene(closing: ClosingSession? = null): Scene {
     branch = SuggestedBranch,
     placement = SessionPlacement.Worktree,
     folder = "$Repo.worktrees/$WorktreeName",
+    mainCheckout = Repo,
   )
   val sessions = treeSessions.toMutableList().apply { addAll(indexOfFirst { it.id.value == "d4" } + 1, listOf(sameFolder, worktree)) }
   return treeScene(

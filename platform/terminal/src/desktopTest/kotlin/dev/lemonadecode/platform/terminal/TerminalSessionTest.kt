@@ -7,6 +7,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 class TerminalSessionTest {
@@ -78,6 +79,36 @@ class TerminalSessionTest {
       withTimeout(5_000) {
         while (session.currentDirectory()?.let { java.io.File(it).canonicalPath } != start.path) delay(50)
       }
+    }
+  }
+
+  @Test
+  fun `a program holds the terminal by its process group, even started through a wrapper`() = runBlocking<Unit> {
+    if (System.getProperty("os.name").orEmpty().startsWith("Windows")) return@runBlocking
+    val start = java.nio.file.Files.createTempDirectory("lemonade-code-group").toFile().canonicalFile
+    TerminalSession(TerminalLaunch(command = listOf("/bin/sh"), workingDirectory = start.path)).use { session ->
+      // The way npx starts Claude: a wrapper leads the group, with the program under it.
+      session.send("sh -c 'sleep 30; true'\r")
+      val program = withTimeout(5_000) {
+        var found: Long? = null
+        while (found == null) {
+          found = ProcessHandle.of(session.pid).get().descendants().filter { it.parent().map { parent -> parent.pid() != session.pid }.orElse(false) }.findFirst().map { it.pid() }.orElse(null)
+          if (found == null) delay(20)
+        }
+        found
+      }
+      withTimeout(5_000) {
+        while (session.foreground().group != session.processGroupOf(program)) delay(50)
+      }
+      assertNotEquals(program, session.processGroupOf(program), "the wrapper leads the group, not the program")
+      assertEquals(start.path, session.foreground().directory?.let { java.io.File(it).canonicalPath })
+      // Suspended, the shell has the terminal back.
+      session.send("\u001a")
+      withTimeout(5_000) {
+        while (session.foreground().group != session.pid) delay(50)
+      }
+      assertNotEquals(session.foreground().group, session.processGroupOf(program))
+      ProcessHandle.of(session.pid).get().descendants().forEach { it.destroyForcibly() }
     }
   }
 

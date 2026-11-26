@@ -96,10 +96,10 @@ internal object SessionsMapper {
   }
 
   /**
-   * The header of [session]. A sub-session says where it works next to [parent] now, wherever it
-   * started: in another git checkout, a worktree on its own branch (git calls any checkout one, so a
-   * repository other than the parent's counts too); in the parent's checkout, the same folder.
-   * Outside git, the same folder only if it is the parent's; else it names its own.
+   * The header of [session]. A sub-session says where it works now, wherever it started: in a linked
+   * worktree, the worktree and its branch. Otherwise the same folder while it's in the checkout its
+   * parent's programs run in (outside git, that very folder), wherever the parent's agent is; else
+   * it names its own folder.
    */
   fun header(session: Session, parent: Session?, style: NavigationStyle): SessionHeaderModel {
     val shellAndBranch = listOfNotNull(
@@ -107,10 +107,11 @@ internal object SessionsMapper {
       session.branch?.let { HeaderTagModel(it.asLemonadeCodeString()) },
     )
     if (parent == null) return SessionHeaderModel(session.displayName, null, shellAndBranch, canStartSubSession = style == NavigationStyle.Tree)
-    val worktree = session.worksInOtherCheckoutThan(parent)
+    val worktree = session.mainCheckout != null
+    val withParent = session.repositoryRoot?.let { it == parent.runsInRepository } ?: (session.workingDirectory == parent.runsIn)
     val kind = when {
       worktree -> Res.string.tag_sub_session_worktree.asLemonadeCodeString()
-      session.repositoryRoot != null || session.workingDirectory == parent.workingDirectory -> Res.string.tag_sub_session_same_folder.asLemonadeCodeString()
+      withParent -> Res.string.tag_sub_session_same_folder.asLemonadeCodeString()
       else -> Res.string.tag_sub_session_folder.asLemonadeCodeString(folderName(session.workingDirectory))
     }.let { HeaderTagModel(it, HeaderTagIcon.SubSession) }
     return when (style) {

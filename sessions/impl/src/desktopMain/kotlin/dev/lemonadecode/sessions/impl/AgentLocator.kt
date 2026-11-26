@@ -9,18 +9,19 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.io.File
 
-/** Finds an agent running in a terminal that can be picked up again later, how, and where it works. */
+/** Finds the agents running in a terminal that can be picked up again later, how, and where they work. */
 internal fun interface AgentLocator {
-  /** The agent running under the shell [shellPid], or null when none is. */
-  fun find(shellPid: Long): RunningAgent?
+  /** The agents running under the shell [shellPid], the most recently started first; none when none is. */
+  fun find(shellPid: Long): List<RunningAgent>
 }
 
 /**
- * An agent running in a terminal. [resume] is the command that picks it up again in the folder it
- * started in. [workingDirectory] is the folder it says it works in now, for an agent that keeps one
- * of its own apart from its process's; null until it says, or once that folder is gone.
+ * An agent running in a terminal, as process [pid], running or stopped. [resume] is the command that
+ * picks it up again in the folder it started in. [workingDirectory] is the folder it says it works in
+ * now, for an agent that keeps one of its own apart from its process's; null until it says, or once
+ * that folder is gone.
  */
-internal data class RunningAgent(val resume: String, val workingDirectory: String? = null)
+internal data class RunningAgent(val pid: Long, val resume: String, val workingDirectory: String?)
 
 /**
  * Claude Code keeps a file per running interactive session, `~/.claude/sessions/<pid>.json`, with
@@ -41,18 +42,18 @@ internal class ClaudeAgentLocator(home: HomeDirectory) : AgentLocator {
     override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Long, Transcript>?): Boolean = size > MaxTranscripts
   }
 
-  override fun find(shellPid: Long): RunningAgent? {
-    val running = folder.listFiles { file -> file.name.endsWith(".json") }.orEmpty()
-      .mapNotNull { file -> file.name.removeSuffix(".json").toLongOrNull()?.let { pid -> pid to file } }
-      .filter { (pid, _) -> descendsFrom(pid, shellPid) }
-      .mapNotNull { (pid, file) -> runCatching { pid to json.decodeFromString(ClaudeSessionFile.serializer(), file.readText()) }.getOrNull() }
-      .filter { (_, session) -> session.kind == null || session.kind == "interactive" }
-      .filter { (_, session) -> ClaudeConversation.isId(session.sessionId) }
-    val (pid, newest) = running.maxByOrNull { (_, session) -> session.startedAt ?: 0L } ?: return null
-    val transcript = transcriptOf(pid, newest) ?: return RunningAgent("claude")
-    val resume = ClaudeConversation.resumeCommand(newest.sessionId) ?: return null
-    return RunningAgent(resume, transcript.workingDirectory())
-  }
+  override fun find(shellPid: Long): List<RunningAgent> = folder.listFiles { file -> file.name.endsWith(".json") }.orEmpty()
+    .mapNotNull { file -> file.name.removeSuffix(".json").toLongOrNull()?.let { pid -> pid to file } }
+    .filter { (pid, _) -> descendsFrom(pid, shellPid) }
+    .mapNotNull { (pid, file) -> runCatching { pid to json.decodeFromString(ClaudeSessionFile.serializer(), file.readText()) }.getOrNull() }
+    .filter { (_, session) -> session.kind == null || session.kind == "interactive" }
+    .filter { (_, session) -> ClaudeConversation.isId(session.sessionId) }
+    .sortedByDescending { (_, session) -> session.startedAt ?: 0L }
+    .mapNotNull { (pid, session) ->
+      val transcript = transcriptOf(pid, session)
+      val resume = if (transcript == null) "claude" else ClaudeConversation.resumeCommand(session.sessionId)
+      resume?.let { RunningAgent(pid, it, transcript?.workingDirectory()) }
+    }
 
   /**
    * The transcript of the conversation Claude Code process [pid] has open, once there is one. Kept

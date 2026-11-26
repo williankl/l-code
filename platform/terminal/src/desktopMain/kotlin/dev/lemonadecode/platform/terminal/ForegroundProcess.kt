@@ -17,6 +17,16 @@ internal object ForegroundProcess {
     }
   }.getOrNull()
 
+  /** The process group [pid] is in; null when it can't be told. */
+  fun processGroupOf(pid: Long): Long? = runCatching {
+    when {
+      // Field 5 of /proc/<pid>/stat, counted after the parenthesised command name.
+      os.startsWith("Linux") -> File("/proc/$pid/stat").readText().substringAfterLast(')').trim().split(' ')[2].toLong()
+      os.startsWith("Mac") -> ps(pid, "pgid=").trim().toLongOrNull()
+      else -> null
+    }
+  }.getOrNull()
+
   /** The short name of process [pid], e.g. `claude`; null when it can't be told. */
   fun nameOf(pid: Long): String? = runCatching {
     when {

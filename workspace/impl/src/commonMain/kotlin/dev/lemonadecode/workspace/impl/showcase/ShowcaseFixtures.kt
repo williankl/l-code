@@ -42,6 +42,8 @@ internal object ShowcaseFixtures {
     origin: SessionOrigin = if (parent == null) SessionOrigin.Opened else SessionOrigin.Split,
     placement: SessionPlacement = if (parent == null) SessionPlacement.Root else SessionPlacement.SameFolder,
     folder: String = Repo,
+    /** The repository's main checkout, for a session in a linked worktree of it. */
+    mainCheckout: String? = null,
   ) = Session(
     id = SessionId(id),
     name = name,
@@ -55,6 +57,7 @@ internal object ShowcaseFixtures {
     status = status,
     // The design's sessions run Claude Code whenever they show a status.
     agent = "claude".takeIf { status != SessionStatus.Shell && status != SessionStatus.Exited },
+    mainCheckout = mainCheckout,
   )
 
   fun comment(

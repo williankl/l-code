@@ -57,7 +57,9 @@ class SessionServiceImplTest {
 
   /** What the agent finder reports, by shell process id: the command that resumes it, and where it says it works. */
   private var agent: (Long) -> String? = { null }
-  private var agentFolder: (Long) -> String? = { null }
+
+  /** Or every agent under a shell, by its process id, for a test that needs their processes and folders. */
+  @Volatile private var agentsUnder: ((Long) -> List<RunningAgent>)? = null
   private val services = mutableListOf<SessionServiceImpl>()
 
   /** Runs before each shell starts, with its folder: a test can hold a start there, or make it fail. */
@@ -97,7 +99,7 @@ class SessionServiceImplTest {
     dispatchers = FakeLemonadeCodeCoroutineDispatchers(Dispatchers.IO),
     scope = scope,
     store = store,
-    agents = AgentLocator { pid -> agent(pid)?.let { RunningAgent(it, agentFolder(pid)) } },
+    agents = AgentLocator { pid -> agentsUnder?.invoke(pid) ?: agent(pid)?.let { listOf(RunningAgent(pid, it, null)) }.orEmpty() },
   ).also { services += it }
 
   private val service = newService(registry)
@@ -133,41 +135,87 @@ class SessionServiceImplTest {
   }
 
   @Test
-  fun `a session follows the folder its agent works in, and the shell's again once the shell has the terminal back`() = runBlocking<Unit> {
+  fun `a session follows its agent into another checkout only while that agent holds the terminal`() = runBlocking<Unit> {
     val main = File(home, "storefront").apply { mkdirs() }
     val launched = File(home, "storefront.worktrees/sub-1").apply { mkdirs() }
-    val worktree = File(main, ".claude/worktrees/rate-limit").apply { mkdirs() }
-    git.checkoutResult = LemonadeCodeResult.success(GitCheckout(root = worktree.path, branch = "worktree-rate-limit"))
-    git.linkedWorktrees = mapOf(
-      launched.path to GitWorktree(root = launched.path, branch = "feat/x", mainRoot = main.path, hasChanges = false),
-      worktree.path to GitWorktree(root = worktree.path, branch = "worktree-rate-limit", mainRoot = main.path, hasChanges = true),
-    )
+    val first = File(main, ".claude/worktrees/rate-limit").apply { mkdirs() }
+    val second = File(home, "storefront.worktrees/flaky-login").apply { mkdirs() }
+    git.checkouts = listOf(launched, first, second).associate { it.path to GitCheckout(root = it.path, branch = "feat/${it.name}") }
+    git.linkedWorktrees = listOf(launched, first, second).associate { it.path to GitWorktree(root = it.path, branch = "feat/${it.name}", mainRoot = main.path, hasChanges = false) }
     val id = service.openTerminal(launched.path).getOrNull()!!
     val terminal = registry.terminal(id)!!
-    // Claude holds the terminal and says it works in a worktree; its process stays where it started.
-    agent = { pid -> "claude".takeIf { pid == terminal.pid } }
-    agentFolder = { pid -> worktree.path.takeIf { pid == terminal.pid } }
-    terminal.send("sleep 30\r")
-    val moved = withTimeout(10_000) { service.sessions.first { it.single().workingDirectory == worktree.path }.single() }
-    assertEquals(launched.path, moved.processDirectory)
-    assertEquals(worktree.path, moved.repositoryRoot)
-    assertEquals("worktree-rate-limit", moved.branch)
-    assertEquals("rate-limit", moved.name)
-    assertEquals(listOf(worktree.path, launched.path), service.worktreesOf(id).map { it.path }, "it's in both")
+    fun shown() = service.sessions.value.single()
+    suspend fun showing(folder: File) = withTimeout(10_000) { service.sessions.first { it.single().workingDirectory == folder.path }.single() }
 
-    // Suspended or gone, the shell has the terminal back, and the session is where the shell is.
+    // Claude holds the terminal and says it works in a worktree; its process stays where it started.
+    terminal.send("sleep 30\r")
+    val claude = newProgram(terminal, known = emptySet())
+    var agents = listOf(RunningAgent(claude, "claude", first.path))
+    agentsUnder = { pid -> agents.takeIf { pid == terminal.pid }.orEmpty() }
+    val moved = showing(first)
+    assertEquals(launched.path, moved.processDirectory)
+    assertEquals(launched.path, moved.processRepositoryRoot)
+    assertEquals(first.path, moved.repositoryRoot)
+    assertEquals("feat/rate-limit", moved.branch)
+    assertEquals(main.path, moved.mainCheckout)
+    assertEquals("rate-limit", moved.name)
+    assertEquals(launched.path, service.worktreeOf(id)?.path, "only where its programs run is offered for deletion")
+
+    // Suspended, it doesn't hold the terminal: the shell's folder counts, and stays while another program runs.
+    terminal.send("\u001a")
+    assertEquals(null, showing(launched).processDirectory)
+    terminal.send("sleep 31\r")
+    val other = newProgram(terminal, known = setOf(claude))
+    delay(2_500)
+    assertEquals(launched.path, shown().workingDirectory, "a pager or an editor isn't the agent")
     terminal.send("\u0003")
-    val back = withTimeout(10_000) { service.sessions.first { it.single().workingDirectory == launched.path }.single() }
+
+    // A second Claude, the newest: it counts while it has the terminal, and the first once it's back.
+    terminal.send("sleep 32\r")
+    val newer = newProgram(terminal, known = setOf(claude, other))
+    agents = listOf(RunningAgent(newer, "claude", second.path), RunningAgent(claude, "claude", first.path))
+    assertEquals(launched.path, showing(second).processDirectory)
+    terminal.send("\u001a")
+    assertEquals(null, showing(launched).processDirectory)
+    terminal.send("fg %1\r")
+    assertEquals(launched.path, showing(first).processDirectory)
+  }
+
+  @Test
+  fun `a session stays where its process is while the agent moves within the same checkout`() = runBlocking<Unit> {
+    val main = File(home, "storefront").apply { mkdirs() }
+    val web = File(main, "apps/web").apply { mkdirs() }
+    val worktree = File(home, "storefront.worktrees/sub-1").apply { mkdirs() }
+    git.checkouts = mapOf(main.path to GitCheckout(main.path, "main"), web.path to GitCheckout(main.path, "main"), worktree.path to GitCheckout(worktree.path, "feat/x"))
+    val id = service.openTerminal(main.path).getOrNull()!!
+    val terminal = registry.terminal(id)!!
+    val seen = CopyOnWriteArrayList<String>()
+    val watcher = launch(Dispatchers.Default) { service.sessions.collect { sessions -> sessions.singleOrNull()?.let { seen += it.workingDirectory } } }
+    terminal.send("sleep 30\r")
+    val claude = newProgram(terminal, known = emptySet())
+    var folder = worktree.path
+    agentsUnder = { pid -> listOf(RunningAgent(claude, "claude", folder)).takeIf { pid == terminal.pid }.orEmpty() }
+    withTimeout(10_000) { service.sessions.first { it.single().workingDirectory == worktree.path } }
+
+    // `cd apps/web` back in its own checkout: the branch and the diff are the process's, so is the folder.
+    folder = web.path
+    val back = withTimeout(10_000) { service.sessions.first { it.single().workingDirectory == main.path }.single() }
     assertEquals(null, back.processDirectory)
-    assertEquals("sub-1", back.name)
+    assertEquals("storefront", back.name)
+    delay(2_500)
+    watcher.cancel()
+    assertTrue(web.path !in seen, "seen: $seen")
+    assertEquals(main.path, service.sessions.value.single().workingDirectory)
   }
 
   @Test
   fun `a session whose agent works elsewhere starts again where the agent was started, from quitting and from the archive`() = runBlocking<Unit> {
     val worktree = File(home, "storefront/.claude/worktrees/rate-limit").apply { mkdirs() }
-    git.checkoutResult = LemonadeCodeResult.success(GitCheckout(root = worktree.path, branch = "worktree-rate-limit"))
-    agent = { "echo resumed-agent" }
-    agentFolder = { worktree.path }
+    git.checkouts = mapOf(worktree.path to GitCheckout(root = worktree.path, branch = "worktree-rate-limit"))
+    // Each terminal's Claude is the program it runs.
+    agentsUnder = { shell ->
+      ProcessHandle.of(shell).flatMap { it.children().findFirst() }.map { listOf(RunningAgent(it.pid(), "echo resumed-agent", worktree.path)) }.orElse(emptyList())
+    }
     val open = service.openTerminal().getOrNull()!!
     val shelved = service.openTerminal().getOrNull()!!
     listOf(open, shelved).forEach { registry.terminal(it)!!.send("sleep 30\r") }
@@ -183,7 +231,8 @@ class SessionServiceImplTest {
     assertEquals(home.path, entry.workingDirectory)
     assertEquals(worktree.path, entry.agentDirectory)
 
-    agentFolder = { null }
+    agentsUnder = null
+    agent = { "echo resumed-agent" }
     val starts = CopyOnWriteArrayList<String>()
     beforeStart = { starts += it }
     val nextRegistry = SessionRegistry()
@@ -582,8 +631,8 @@ class SessionServiceImplTest {
     val outside = service.openTerminal(main.path).getOrNull()!!
 
     val worktree = LinkedWorktree(path = folder.path, branch = "feat/x", mainCheckout = main.path, hasChanges = true)
-    assertEquals(listOf(worktree), service.worktreesOf(inside))
-    assertEquals(emptyList(), service.worktreesOf(outside), "the main checkout isn't a linked worktree")
+    assertEquals(worktree, service.worktreeOf(inside))
+    assertEquals(null, service.worktreeOf(outside), "the main checkout isn't a linked worktree")
 
     val shell = registry.terminal(inside)!!.pid
     service.close(inside)
@@ -726,11 +775,11 @@ class SessionServiceImplTest {
     val id = service.openTerminal(folder.path).getOrNull()!!
     service.archive(id)
     assertTrue(folder.isDirectory, "archiving never deletes a worktree")
-    assertEquals(listOf(LinkedWorktree(path = folder.path, branch = "feat/x", mainCheckout = main.path, hasChanges = false)), service.worktreesOf(id))
+    assertEquals(LinkedWorktree(path = folder.path, branch = "feat/x", mainCheckout = main.path, hasChanges = false), service.worktreeOf(id))
 
     service.close(id)
     assertTrue(service.archived.value.isEmpty())
-    assertEquals(emptyList(), service.worktreesOf(id))
+    assertEquals(null, service.worktreeOf(id))
     assertTrue(git.removeWorktreeCalls.isEmpty())
   }
 
@@ -981,6 +1030,18 @@ class SessionServiceImplTest {
   fun `suggested worktree branches are playful names under worktree`() {
     assertTrue(Regex("worktree/[a-z]+-[a-z]+").matches(service.suggestWorktreeBranch()))
   }
+
+  /** The pid of a program the shell of [terminal] started that isn't one of [known], once it has. */
+  private suspend fun newProgram(terminal: TerminalSession, known: Set<Long>): Long = withTimeout(5_000) {
+    var found = programOf(terminal, known)
+    while (found == null) {
+      delay(20)
+      found = programOf(terminal, known)
+    }
+    found
+  }
+
+  private fun programOf(terminal: TerminalSession, known: Set<Long>): Long? = ProcessHandle.of(terminal.pid).get().children().map { it.pid() }.filter { it !in known }.findFirst().orElse(null)
 
   private fun TerminalSession.screen(): String {
     textBuffer.lock()

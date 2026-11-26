@@ -182,6 +182,9 @@ class GitCliDataSourceTest {
     assertEquals(repo.canonicalPath, File(linked.mainRoot).canonicalPath)
     assertEquals("feature-sub-1", linked.branch)
     assertEquals(false, linked.hasChanges)
+
+    assertEquals(null, dataSource.mainCheckout(repo.path).getOrNull(), "a main checkout has none")
+    assertEquals(repo.canonicalPath, dataSource.mainCheckout(linked.root).getOrNull()?.let { File(it).canonicalPath })
   }
 
   @Test

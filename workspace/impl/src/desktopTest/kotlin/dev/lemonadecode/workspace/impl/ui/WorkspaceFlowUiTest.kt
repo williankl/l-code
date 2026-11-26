@@ -310,7 +310,7 @@ class WorkspaceFlowUiTest {
     sessions.setSessions(
       listOf(
         ShowcaseFixtures.session("ar", "api-ratelimit"),
-        ShowcaseFixtures.session("s2", "sub-2", parent = "ar", branch = worktree.branch, placement = SessionPlacement.Worktree, folder = worktree.path),
+        ShowcaseFixtures.session("s2", "sub-2", parent = "ar", branch = worktree.branch, placement = SessionPlacement.Worktree, folder = worktree.path, mainCheckout = worktree.mainCheckout),
       ),
     )
     sessions.worktrees = listOf(worktree)

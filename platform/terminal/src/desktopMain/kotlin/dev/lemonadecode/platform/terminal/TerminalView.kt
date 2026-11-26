@@ -26,6 +26,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.awt.awtEventOrNull
@@ -118,7 +119,7 @@ public interface TerminalClipboard {
  * Links, written out or marked by the program, underline under the mouse; Ctrl- or ⌘-click hands
  * them to [onOpenLink]. With [copyOnSelect], a selection made with the mouse is copied as soon as
  * it's finished, and what's copied, that way or with the copy key, loses the indentation its lines
- * share.
+ * share. [onSelectionCopied] hears of each copy the mouse makes this way, not of the copy key's.
  */
 @Composable
 public fun TerminalView(
@@ -130,6 +131,7 @@ public fun TerminalView(
   clipboard: TerminalClipboard = TerminalClipboard.System,
   onOpenLink: (String) -> Unit = ::openInBrowser,
   copyOnSelect: Boolean = false,
+  onSelectionCopied: () -> Unit = {},
 ) {
   val version by session.version.collectAsState()
   val measurer = rememberTextMeasurer()
@@ -145,14 +147,18 @@ public fun TerminalView(
   var hovered by remember(session) { mutableStateOf<TerminalLink?>(null) }
   var composing by remember(session) { mutableStateOf("") }
   val cursorAnchor = remember { CursorAnchor() }
+  // The latest one, without restarting the mouse handling, which would forget a click in progress.
+  val selectionCopied by rememberUpdatedState(onSelectionCopied)
 
   /**
-   * Writes [selected] to [clipboard], for the copy key and the mouse alike. With [copyOnSelect] it
-   * loses the indentation its lines share, and blank text isn't written.
+   * Writes [selected] to [clipboard], for the copy key and the mouse alike, and says whether it did.
+   * With [copyOnSelect] it loses the indentation its lines share, and blank text isn't written.
    */
-  fun copyToClipboard(selected: TerminalSelection) {
+  fun copyToClipboard(selected: TerminalSelection): Boolean {
     val text = selected.text(trimIndent = copyOnSelect, lineAt = session::lineText)
-    if (!copyOnSelect || text.isNotBlank()) clipboard.write(text)
+    if (copyOnSelect && text.isBlank()) return false
+    clipboard.write(text)
+    return true
   }
 
   BoxWithConstraints(
@@ -220,10 +226,10 @@ public fun TerminalView(
           return floor(position.x / width).toInt().coerceIn(0, columns - 1) to floor(position.y / height).toInt().coerceIn(0, rows - 1)
         }
 
-        /** Copies the finished selection when [copyOnSelect] asks for it. */
+        /** Copies the finished selection when [copyOnSelect] asks for it, and says so once it's on the clipboard. */
         fun copySelection() {
           val finished = selection ?: return
-          if (copyOnSelect) copyToClipboard(finished)
+          if (copyOnSelect && copyToClipboard(finished)) selectionCopied()
         }
 
         awaitPointerEventScope {

@@ -82,6 +82,7 @@ import dev.lemonadecode.workspace.strings.screenshot_attached
 import dev.lemonadecode.workspace.strings.screenshot_failed
 import dev.lemonadecode.workspace.strings.session_archived
 import dev.lemonadecode.workspace.strings.session_path_copied
+import dev.lemonadecode.workspace.strings.terminal_selection_copied
 import dev.lemonadecode.workspace.strings.worktree_deleted
 import dev.lemonadecode.workspace.strings.worktrees_deleted
 import dev.lemonadecode.workspace.uimodel.DeviceKeyModel
@@ -250,7 +251,9 @@ public class WorkspacePresenter internal constructor(
         fun updateDevices(transform: (DevicesViewState) -> DevicesViewState) = update { state -> state.devices?.let { state.copy(devices = transform(it)) } ?: state }
         fun showToast(message: LemonadeCodeString) {
           update { it.copy(toast = message, toastWarning = false) }
-          toastTimer.restart(scope) { update { state -> if (state.toast === message) state.copy(toast = null) else state } }
+          // By value, not identity: a toast equal to the one showing doesn't replace it in the state, and
+          // the same toast shown again while it's up must still hide in the end.
+          toastTimer.restart(scope) { update { state -> if (state.toast == message) state.copy(toast = null) else state } }
         }
 
         /** The page of [window]'s device, or the Devices panel's when [window] is null. */
@@ -683,6 +686,8 @@ public class WorkspacePresenter internal constructor(
           )
           is WorkspaceEvent.SetAnimations -> scope.launch { settingsService.update { it.copy(animations = event.enabled) } }
           is WorkspaceEvent.SetCopyOnSelect -> scope.launch { settingsService.update { it.copy(copyOnSelect = event.enabled) } }
+          // A warning still up outranks it: every selection sends this, and the warning may be all that reaches you.
+          WorkspaceEvent.CopiedTerminalSelection -> if (view.toast == null || !view.toastWarning) showToast(Res.string.terminal_selection_copied.asLemonadeCodeString())
           is WorkspaceEvent.SetMobilePlugin -> {
             if (!event.enabled) update { it.copy(devices = null, deviceWindows = emptyMap()) }
             scope.launch { settingsService.update { it.copy(mobilePlugin = event.enabled) } }

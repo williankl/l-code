@@ -252,7 +252,7 @@ public class WorkspacePresenter internal constructor(
         fun showToast(message: LemonadeCodeString) {
           update { it.copy(toast = message, toastWarning = false) }
           // By value, not identity: a toast equal to the one showing doesn't replace it in the state, and
-          // the same toast again while it's up, like a triple click's two copies, must still hide in the end.
+          // the same toast shown again while it's up must still hide in the end.
           toastTimer.restart(scope) { update { state -> if (state.toast == message) state.copy(toast = null) else state } }
         }
 
@@ -685,7 +685,8 @@ public class WorkspacePresenter internal constructor(
           )
           is WorkspaceEvent.SetAnimations -> scope.launch { settingsService.update { it.copy(animations = event.enabled) } }
           is WorkspaceEvent.SetCopyOnSelect -> scope.launch { settingsService.update { it.copy(copyOnSelect = event.enabled) } }
-          WorkspaceEvent.CopiedTerminalSelection -> showToast(Res.string.terminal_selection_copied.asLemonadeCodeString())
+          // A warning still up outranks it: every selection sends this, and the warning may be all that reaches you.
+          WorkspaceEvent.CopiedTerminalSelection -> if (view.toast == null || !view.toastWarning) showToast(Res.string.terminal_selection_copied.asLemonadeCodeString())
           is WorkspaceEvent.SetMobilePlugin -> {
             if (!event.enabled) update { it.copy(devices = null, deviceWindows = emptyMap()) }
             scope.launch { settingsService.update { it.copy(mobilePlugin = event.enabled) } }

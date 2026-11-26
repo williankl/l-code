@@ -124,7 +124,7 @@ public class WorkspaceScreen internal constructor(
     }
   }
 
-  /** A session's terminal. With [copyOnSelect], each selection it copies is confirmed with a toast. */
+  /** A session's terminal. With [copyOnSelect], each selection it copies is reported to [onEvent]. */
   @Composable
   private fun LiveTerminal(sessionId: String, modifier: Modifier, copyOnSelect: Boolean, onEvent: (WorkspaceEvent) -> Unit) {
     val session = terminals.terminal(SessionId(sessionId)) ?: return

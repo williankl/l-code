@@ -169,7 +169,8 @@ public fun TerminalView(
           session = session,
           paste = { clipboard.read() },
           // A call, not ::copyToClipboard: Compose would keep that reference with the setting it first saw.
-          copy = { selection?.takeUnless { it.isEmpty }?.let { copyToClipboard(it) } != null },
+          // True when there was a selection, whether or not anything was written.
+          copy = { selection?.takeUnless { it.isEmpty }?.let { val _ = copyToClipboard(it) } != null },
           selectAll = { selection = session.everything() },
         )
         when (handleKey(event, keys)) {

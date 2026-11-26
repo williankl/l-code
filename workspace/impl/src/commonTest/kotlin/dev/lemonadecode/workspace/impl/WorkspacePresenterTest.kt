@@ -1939,6 +1939,41 @@ class WorkspacePresenterTest {
     }
   }
 
+  @Test
+  fun `a selection copied in the terminal leaves a warning toast that's up, and shows over a confirmation or nothing`() = runTest {
+    withSession()
+    settings.update { it.copy(mobilePlugin = true) }
+    mobile.setDevices(ShowcaseDevices.connected)
+    val pixel = ShowcaseDevices.pixel.id
+    val warning = Res.string.recording_low_space_toast.asLemonadeCodeString(Res.string.size_gigabytes.asLemonadeCodeString(1), "Pixel 8")
+    val copied = Res.string.terminal_selection_copied.asLemonadeCodeString()
+    val path = Res.string.file_path_copied.asLemonadeCodeString("/tmp/a")
+    presenter.test {
+      awaitItem()
+      mobile.recordings.value = mapOf(pixel to ScreenRecording.Recording(Now))
+      mobile.recordings.value = mapOf(pixel to ScreenRecording.Recording(Now, spaceLeft = 1_600_000_000L))
+      val low = awaitItemWhere { it.toast != null }
+      val warnedAt = testScheduler.currentTime
+      assertEquals(warning, low.toast)
+      // The warning stays, and still hides on its own timer.
+      low.eventSink(WorkspaceEvent.CopiedTerminalSelection)
+      val gone = awaitItemWhere { it.toast != warning }
+      assertNull(gone.toast)
+      assertEquals(warnedAt + ToastMillis, testScheduler.currentTime)
+
+      // Nothing up, though the gone warning left its flag: the copy shows, as a confirmation.
+      gone.eventSink(WorkspaceEvent.CopiedTerminalSelection)
+      val shown = awaitItemWhere { it.toast != null }
+      assertEquals(copied, shown.toast)
+      assertFalse(shown.toastWarning)
+
+      // Over another confirmation it shows too.
+      shown.eventSink(WorkspaceEvent.CopiedFilePath("/tmp/a"))
+      awaitItemWhere { it.toast == path }.eventSink(WorkspaceEvent.CopiedTerminalSelection)
+      assertEquals(copied, awaitItemWhere { it.toast != path }.toast)
+    }
+  }
+
   private fun dev.lemonadecode.workspace.uimodel.WorkspaceModel.lines(path: String): List<DiffRowModel.Line> = (content as? WorkspaceContentModel.Diff)?.review?.files?.first { it.path == path }?.rows?.filterIsInstance<DiffRowModel.Line>().orEmpty()
 
   private val storefrontImport = ImportableSession("herdr:1", "storefront", null, ShowcaseFixtures.Repo, conversation = "chat-1")

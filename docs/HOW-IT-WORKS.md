@@ -52,6 +52,19 @@ While a program the shell started holds the terminal, Lemonade Code asks for tha
 instead. A program can move without the shell: Claude Code entering a worktree changes its own folder
 and leaves the shell's where it was. Once the program quits, the shell's folder counts again.
 
+Claude Code also works in folders its process never enters: a `cd` in its shell tool carries over to
+its next commands, but the operating system still says Claude is where it started. So while Claude
+Code holds the terminal, Lemonade Code reads where it says it works from the end of its
+conversation's transcript, `~/.claude/projects/<folder>/<id>.jsonl`, where each line carries the
+folder it was written in, and follows that folder, its repository and branch instead. Only lines this
+run of Claude wrote count, by their time against when it started, so the history of a resumed
+conversation doesn't move the session; neither do its sub-agents' lines, nor a folder that's gone. The
+transcript is read only when it grows, and only what was added since the last look, from its end.
+Suspend Claude or quit it, and the shell's folder counts again.
+
+Claude keeps the conversation by the folder it was started in, so that's the one a session starts
+again in after a restart or from the archive, wherever Claude was working by then.
+
 On Windows, the PowerShell prompt reports its folder to the terminal itself (with the OSC 9;9
 escape sequence).
 
@@ -132,11 +145,19 @@ A session that isn't a sub-session is named after its folder anyway, so one whos
 into a worktree of its own, like Claude Code's `.claude/worktrees/<name>`, already shows that
 worktree's name. A sub-session keeps the name it started with wherever its agent goes.
 
+A sub-session's header says where it works now, from its checkout and its parent's: **worktree**,
+with its branch, while they're in different checkouts, however it got there, and **same folder**
+while they share one, even from a folder further in. Another repository altogether counts as a
+worktree too, since git calls every checkout one. Outside git it says **same folder** only in the
+parent's very folder, and names its own folder otherwise. A new worktree under a sub-session that's in
+a worktree goes next to that worktree.
+
 **Closing.** Before a session closes, Lemonade Code asks git about the folder of the session and of
-each sub-session closing with it. A folder is in a *linked* worktree when `git rev-parse --git-dir`
+each sub-session closing with it, and about the folder its Claude Code was started in when it works
+in another. A folder is in a *linked* worktree when `git rev-parse --git-dir`
 and `--git-common-dir`, asked from its top-level folder, name different folders; in a repository's
 main checkout they're the same one. A worktree that a session staying open, or an archived one, is
-still in is left out.
+still in, or started its Claude Code in, is left out.
 If any are left, the dialog asks about them, with what `git status` says about uncommitted changes
 and untracked files.
 
@@ -150,7 +171,8 @@ session stays closed, the worktree stays where it was, and the error banner says
 ## Saving and restoring sessions
 
 When you quit, Lemonade Code saves every session to `sessions.json`, next to your settings: its name,
-its place in the tree, the folder it was in, and the last 1,000 lines it showed. They're saved in the
+its place in the tree, the folder it was in (for Claude Code, the one it was started in), and the last
+1,000 lines it showed. They're saved in the
 order the sidebar shows them, each followed by its sub-sessions, so sessions dragged into a new order
 come back in it. Then it ends the sessions and whatever was running in them.
 
@@ -165,8 +187,8 @@ The file is also kept up to date while the app runs, so after a crash your sessi
 just without their latest output.
 
 **Archived sessions** are kept in the same file. Archiving a session saves it and its sub-sessions
-the same way, with what each terminal showed and the conversation to resume, plus its branch and
-the siblings it sat between, then ends their shells. Nothing starts for them at launch. Restoring
+the same way, with what each terminal showed and the conversation to resume, plus its branch, the
+folder its agent was working in, and the siblings it sat between, then ends their shells. Nothing starts for them at launch. Restoring
 one opens each again in a fresh shell, the way launch does, and puts it back before the sibling it
 sat before, or after the one it sat after; under its parent if that's open, else at the top. Unlike
 launch, a session whose folder has gone starts at home without resuming its agent, since a Claude

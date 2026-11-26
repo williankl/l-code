@@ -29,7 +29,9 @@ new terminal window. Open as many as you like with **+** or **⌘T**.
 
 As you `cd` around, Lemonade Code follows along. The session's name, the top bar, the diff and your
 comments all switch to the folder and branch the shell is in. While a program runs in it, they follow
-the program instead, so when Claude Code moves into a worktree, the session moves with it.
+the program instead. Claude Code is followed to wherever it says it's working, so when it moves into
+a worktree, or `cd`s into another checkout with its own shell, the session moves with it, branch
+included. Once it quits, the session is wherever your shell is again.
 
 **Status at a glance.** When an agent like Claude Code is running, the session shows what it's doing:
 
@@ -184,6 +186,10 @@ A sub-session can start in one of two places:
 | **Name in the list** | `sub-1`, `sub-2`… | The worktree's, like `generating-bugs` |
 | **Good for** | Reviews and quick follow-ups | Parallel work that must never collide |
 
+The header says where a sub-session works now, not only where it started: **same folder** while
+it's in its parent's checkout, **worktree** with its branch once it's in another one, like a worktree
+its Claude Code went into.
+
 A new worktree asks for its branch first, filled in with a playful suggestion like
 `worktree/generating-bugs`. Press **Enter** to keep it, or type over it: everything is yours to
 rename, `worktree/` included. The folder follows the name as you type, and so does the sub-session:
@@ -204,8 +210,10 @@ Before anything is created, the panel shows you the exact name, folder and branc
 When you close a session (right-click › **Close session**, a middle click or **⌘W**) and that would
 leave a git worktree with no session in it, Lemonade Code asks before anything closes. That covers a
 worktree you made for a sub-session and one an agent made for itself, like Claude Code entering a
-worktree, and the worktrees of the sub-sessions that close with it. A repository's main checkout is
-never offered, and neither is a worktree another open session is still in.
+worktree, and the worktrees of the sub-sessions that close with it. A session whose Claude Code moved
+on from the worktree it was started in is asked about both. A repository's main checkout is never
+offered, and neither is a worktree another open session is still in, or where its Claude Code was
+started.
 
 The dialog names the session and each worktree, with its folder and branch. A worktree with
 uncommitted changes or new files says so: they're lost if you delete it.
@@ -408,10 +416,11 @@ Quit whenever you like. Every session is saved: its name, where it sits in the t
 you gave it, the folder its shell was in and the last 1,000 lines it showed. Next time you open the
 app, each one comes back in a fresh shell in that folder, with its old output above the new prompt.
 
-If Claude Code was running in a session, its conversation is resumed too. Programs other than Claude
-Code start fresh. Sessions are also saved while the app runs, so even after a crash you keep them
-(just not their latest output). [Archived sessions](#archiving-sessions) stay archived: nothing starts
-for them until you restore them.
+If Claude Code was running in a session, its conversation is resumed too, in the folder Claude was
+started in, where it keeps the conversation, even if it was working somewhere else by then. Programs
+other than Claude Code start fresh. Sessions are also saved while the app runs, so even after a crash
+you keep them (just not their latest output). [Archived sessions](#archiving-sessions) stay
+archived: nothing starts for them until you restore them.
 
 ---
 

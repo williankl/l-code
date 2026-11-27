@@ -1991,21 +1991,17 @@ class WorkspacePresenterTest {
   }
 
   @Test
-  fun `copying a folder path again while its toast is up closes the menu again, and the toast still goes`() = runTest {
+  fun `copying a folder path again while its toast is up keeps it a full while longer, even with the menu already closed`() = runTest {
     withFamily()
-    val copied = Res.string.session_path_copied.asLemonadeCodeString(ShowcaseFixtures.Repo)
     presenter.test {
       awaitItem().eventSink(WorkspaceEvent.OpenSessionMenu("cf"))
       awaitItemWhere { it.sessions.menu != null }.eventSink(WorkspaceEvent.CopiedSessionPath(ShowcaseFixtures.Repo))
       val first = awaitItemWhere { it.toast != null }
       assertNull(first.sessions.menu)
       testScheduler.advanceTimeBy(ToastMillis - 200)
-      first.eventSink(WorkspaceEvent.OpenSessionMenu("cf"))
-      awaitItemWhere { it.sessions.menu != null }.eventSink(WorkspaceEvent.CopiedSessionPath(ShowcaseFixtures.Repo))
+      // Nothing left to close, so the second copy changes nothing but the wait.
+      first.eventSink(WorkspaceEvent.CopiedSessionPath(ShowcaseFixtures.Repo))
       val againAt = testScheduler.currentTime
-      // The menu closes in the same update that shows the toast.
-      val again = awaitItemWhere { it.sessions.menu == null }
-      assertEquals(copied, again.toast)
       awaitItemWhere { it.toast == null }
       assertEquals(againAt + ToastMillis, testScheduler.currentTime)
     }
@@ -2022,6 +2018,26 @@ class WorkspacePresenterTest {
       awaitItemWhere { it.toastWarning }.eventSink(WorkspaceEvent.OpenSessionMenu("cf"))
       awaitItemWhere { it.sessions.menu != null }.eventSink(WorkspaceEvent.CopiedSessionPath(ShowcaseFixtures.Repo))
       assertFalse(awaitItemWhere { it.toast == Res.string.session_path_copied.asLemonadeCodeString(ShowcaseFixtures.Repo) }.toastWarning)
+    }
+  }
+
+  @Test
+  fun `copying a folder path after a disk warning has gone confirms, so a copied selection still replaces it`() = runTest {
+    withFamily()
+    settings.update { it.copy(mobilePlugin = true) }
+    mobile.setDevices(ShowcaseDevices.connected)
+    val path = Res.string.session_path_copied.asLemonadeCodeString(ShowcaseFixtures.Repo)
+    presenter.test {
+      awaitItem()
+      mobile.recordings.value = mapOf(ShowcaseDevices.pixel.id to ScreenRecording.Recording(Now, spaceLeft = 1_600_000_000L))
+      awaitItemWhere { it.toastWarning }
+      // The warning goes, and leaves its flag behind.
+      awaitItemWhere { it.toast == null }.eventSink(WorkspaceEvent.OpenSessionMenu("cf"))
+      awaitItemWhere { it.sessions.menu != null }.eventSink(WorkspaceEvent.CopiedSessionPath(ShowcaseFixtures.Repo))
+      val copied = awaitItemWhere { it.toast == path }
+      assertFalse(copied.toastWarning)
+      copied.eventSink(WorkspaceEvent.CopiedTerminalSelection)
+      assertEquals(Res.string.terminal_selection_copied.asLemonadeCodeString(), awaitItemWhere { it.toast != path }.toast)
     }
   }
 

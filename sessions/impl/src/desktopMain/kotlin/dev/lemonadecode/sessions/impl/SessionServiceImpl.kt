@@ -84,8 +84,8 @@ internal class SessionServiceImpl(
   /** For each session, the agents running in it, the most recently started first. */
   private val runningAgents = ConcurrentHashMap<SessionId, List<RunningAgent>>()
 
-  /** For each session, the process id of the agent holding its terminal, as [followFolder] last saw; none while none does. */
-  private val agentsInFront = ConcurrentHashMap<SessionId, Long>()
+  /** For each session, the process id of the agent holding its terminal when [followFolder] last chose its folder; none while none does. */
+  private val agentInFront = ConcurrentHashMap<SessionId, Long>()
 
   /** The archived sessions as kept, the most recently archived first; [archivedSessions] shows them. */
   private val archives = MutableStateFlow<List<SavedArchive>>(emptyList())
@@ -232,7 +232,7 @@ internal class SessionServiceImpl(
       watchers.remove(sessionId)?.cancel()
       registry.remove(sessionId)?.let(::endShell)
       val _ = runningAgents.remove(sessionId)
-      val _ = agentsInFront.remove(sessionId)
+      val _ = agentInFront.remove(sessionId)
     }
   }
 
@@ -585,7 +585,7 @@ internal class SessionServiceImpl(
       delay(AgentPollInterval)
       val running = withContext(dispatchers.io) { agents.find(terminal.pid) }
       runningAgents[id] = running
-      val found = (running.firstOrNull { it.pid == agentsInFront[id] } ?: running.firstOrNull())?.resume
+      val found = (running.firstOrNull { it.pid == agentInFront[id] } ?: running.firstOrNull())?.resume
       if (found != null) seen = true
       val pending = pendingResume?.takeIf { !seen }
       val starting = pending != null &&
@@ -672,7 +672,6 @@ internal class SessionServiceImpl(
         val group = groups[agent.pid] ?: withContext(dispatchers.io) { terminal.processGroupOf(agent.pid) }?.also { groups[agent.pid] = it }
         group == front
       }
-      if (holding != null) agentsInFront[id] = holding.pid else agentsInFront -= id
       val elsewhere = holding?.workingDirectory?.takeIf { it != process }
       val folder = if (elsewhere == null) {
         process
@@ -689,6 +688,8 @@ internal class SessionServiceImpl(
           if (agentAt.value == shared) process else elsewhere
         }
       }
+      // Noted with the folder it decided, so the conversation saved is always that folder's.
+      if (holding != null) agentInFront[id] = holding.pid else agentInFront -= id
       val moved = (folder to process) != last
       if (!moved && tick++ % BranchCheckEvery != 0) continue
       last = folder to process

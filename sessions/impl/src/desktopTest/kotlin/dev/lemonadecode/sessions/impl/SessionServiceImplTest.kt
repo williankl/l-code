@@ -572,6 +572,54 @@ class SessionServiceImplTest {
   }
 
   @Test
+  fun `while git can't say where the Claude now in front works, the conversation saved stays the one of the folder saved`() = runBlocking<Unit> {
+    val first = File(home, "first").apply { mkdirs() }
+    val second = File(home, "second").apply { mkdirs() }
+    val firstWorks = File(home, "storefront.worktrees/rate-limit").apply { mkdirs() }
+    val secondWorks = File(home, "storefront.worktrees/flaky-login").apply { mkdirs() }
+    git.checkouts = listOf(first, second, firstWorks, secondWorks).associate { it.path to GitCheckout(root = it.path, branch = "feat/${it.name}") }
+    assertEquals(0, service.restore())
+    val id = service.openTerminal(first.path).getOrNull()!!
+    val terminal = registry.terminal(id)!!
+    fun saved() = store.saved?.sessions?.singleOrNull()?.let { it.workingDirectory to it.resume }
+    suspend fun saving(folder: File, resume: String) = withTimeout(20_000) {
+      while (saved() != folder.path to resume) delay(50)
+    }
+    suspend fun showing(folder: File) = withTimeout(20_000) { service.sessions.first { it.single().workingDirectory == folder.path } }
+
+    // Each Claude works in a checkout of its own, apart from the folder it was started in.
+    terminal.send("sleep 30\r")
+    val older = newProgram(terminal, known = emptySet())
+    var agents = listOf(RunningAgent(older, "echo resumed-first", firstWorks.path))
+    agentsUnder = { pid -> agents.takeIf { pid == terminal.pid }.orEmpty() }
+    showing(firstWorks)
+    terminal.send("\u001a")
+    showing(first)
+    terminal.send("cd ../second\r")
+    terminal.send("sleep 31\r")
+    val newer = newProgram(terminal, known = setOf(older))
+    agents = listOf(RunningAgent(newer, "echo resumed-second", secondWorks.path), RunningAgent(older, "echo resumed-first", firstWorks.path))
+    showing(secondWorks)
+    terminal.send("\u001a")
+    showing(second)
+    saving(second, "echo resumed-second")
+
+    // git times out on the first Claude's folder as it comes back: the session stays saved as it was.
+    checkoutFailsAt = setOf(first.path)
+    val failed = checkoutFailures.get()
+    terminal.send("fg %1\r")
+    withTimeout(20_000) {
+      while (checkoutFailures.get() < failed + 2) delay(20)
+    }
+    delay(1_500)
+    assertEquals(second.path to "echo resumed-second", saved())
+
+    // Once git answers, the folder and the conversation move together.
+    checkoutFailsAt = emptySet()
+    saving(first, "echo resumed-first")
+  }
+
+  @Test
   fun `a resumed agent still starting up is kept, one that failed to start is dropped`() = runBlocking<Unit> {
     // Neither ever registers as an agent: one sits at a prompt (as Claude does asking to trust a folder), one exits.
     store.saved = SavedSessions(

@@ -182,6 +182,18 @@ public class WorkspacePresenter internal constructor(
         value = clock.nowMillis()
       }
     }
+
+    /**
+     * Every toast shows here, with [alongside] in the same update. Its timer runs in the presenter's
+     * scope, not an effect's, so a toast a recording shows still hides after the effect starts over.
+     */
+    fun showToast(message: LemonadeCodeString, warning: Boolean = false, alongside: (WorkspaceViewState) -> WorkspaceViewState = { it }) {
+      view = alongside(view).copy(toast = message, toastWarning = warning)
+      // By value, not identity: a toast equal to the one showing doesn't replace it in the state, and
+      // the same toast shown again while it's up must still hide in the end.
+      toastTimer.restart(scope) { if (view.toast == message) view = view.copy(toast = null) }
+    }
+
     // A recording that ends, stopped or by itself, says how: saved, or why not. The device may be gone by then.
     val recordingNames = remember { mutableMapOf<DeviceId, String>() }
     val seenRecordings = remember { mutableMapOf<DeviceId, ScreenRecording>() }
@@ -194,17 +206,14 @@ public class WorkspacePresenter internal constructor(
           // Devices panel closed; again only once it has recovered and runs low again.
           val left = recording.spaceLeft
           if (left != null && (before as? ScreenRecording.Recording)?.spaceLeft == null) {
-            val warning = DevicesMapper.lowSpaceToast(recordingNames[id] ?: id.value, left)
-            view = view.copy(toast = warning, toastWarning = true)
-            toastTimer.restart(scope) { if (view.toast === warning) view = view.copy(toast = null) }
+            showToast(DevicesMapper.lowSpaceToast(recordingNames[id] ?: id.value, left), warning = true)
           }
         } else if (before is ScreenRecording.Recording) {
           val (message, failed) = DevicesMapper.recordingEnded(recording, recordingNames[id] ?: id.value, homeDirectory.path) ?: continue
           if (failed) {
             view = view.copy(error = message)
           } else {
-            view = view.copy(toast = message, toastWarning = false)
-            toastTimer.restart(scope) { if (view.toast === message) view = view.copy(toast = null) }
+            showToast(message)
           }
         }
       }
@@ -249,12 +258,6 @@ public class WorkspacePresenter internal constructor(
         }
         fun fail(message: LemonadeCodeString) = update { it.copy(error = message) }
         fun updateDevices(transform: (DevicesViewState) -> DevicesViewState) = update { state -> state.devices?.let { state.copy(devices = transform(it)) } ?: state }
-        fun showToast(message: LemonadeCodeString) {
-          update { it.copy(toast = message, toastWarning = false) }
-          // By value, not identity: a toast equal to the one showing doesn't replace it in the state, and
-          // the same toast shown again while it's up must still hide in the end.
-          toastTimer.restart(scope) { update { state -> if (state.toast == message) state.copy(toast = null) else state } }
-        }
 
         /** The page of [window]'s device, or the Devices panel's when [window] is null. */
         fun pageOf(window: DeviceId?): DevicePageState? = if (window == null) view.devices?.page else view.deviceWindows[window]?.page
@@ -627,10 +630,8 @@ public class WorkspacePresenter internal constructor(
             }
           }
           WorkspaceEvent.CancelRenamingSession -> update { it.copy(renaming = null, sessionMenu = null) }
-          is WorkspaceEvent.CopiedSessionPath -> {
-            val message = Res.string.session_path_copied.asLemonadeCodeString(event.path)
-            update { it.copy(sessionMenu = null, renaming = null, toast = message) }
-            toastTimer.restart(scope) { update { state -> if (state.toast === message) state.copy(toast = null) else state } }
+          is WorkspaceEvent.CopiedSessionPath -> showToast(Res.string.session_path_copied.asLemonadeCodeString(event.path)) {
+            it.copy(sessionMenu = null, renaming = null)
           }
           is WorkspaceEvent.ArchiveSession -> sessionOf(event.sessionId)?.let(::archive)
           WorkspaceEvent.ToggleArchivedSessions -> update { it.copy(archivedOpen = !it.archivedOpen) }

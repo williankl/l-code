@@ -44,10 +44,9 @@ public data class Session(
   /** The main checkout of the repository, while [repositoryRoot] is a linked worktree of it; null otherwise. */
   val mainCheckout: String? = null,
   /**
-   * The folders every agent running in it says it works in, the one holding the terminal or not:
-   * a suspended Claude Code carries on there after `fg`. For an archived session, as when it was
-   * archived. Only keeps a worktree from being offered for deletion; [workingDirectory] is where
-   * the session shows it works.
+   * The folders of every agent running in it, the one holding the terminal or not, suspended ones
+   * included: where each says it works, and where it was started. For an archived session, as when
+   * it was archived. Unlike [workingDirectory], not where the session works.
    */
   val agentDirectories: List<String> = emptyList(),
 ) {

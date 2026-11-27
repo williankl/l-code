@@ -245,6 +245,24 @@ class SessionServiceImplTest {
   }
 
   @Test
+  fun `a suspended Claude that hasn't said where it works still keeps the folder it was started in`() = runBlocking<Unit> {
+    val main = File(home, "storefront").apply { mkdirs() }
+    val worktree = File(home, "storefront.worktrees/rate-limit").apply { mkdirs() }
+    git.checkouts = listOf(main, worktree).associate { it.path to GitCheckout(root = it.path, branch = "feat/${it.name}") }
+    val id = service.openTerminal(worktree.path).getOrNull()!!
+    val terminal = registry.terminal(id)!!
+    terminal.send("sleep 30\r")
+    val claude = newProgram(terminal, known = emptySet())
+    agentsUnder = { pid -> listOf(RunningAgent(claude, "claude", workingDirectory = null, startedIn = worktree.path)).takeIf { pid == terminal.pid }.orEmpty() }
+
+    // Suspended, and the shell gone back to the main checkout: nothing else of the session is in that worktree.
+    terminal.send("\u001a")
+    terminal.send("cd ../../storefront\r")
+    val moved = withTimeout(20_000) { service.sessions.first { it.single().workingDirectory == main.path }.single() }
+    assertEquals(listOf(worktree.path), moved.agentDirectories)
+  }
+
+  @Test
   fun `a session stays where its process is while the agent moves within the same checkout`() = runBlocking<Unit> {
     val main = File(home, "storefront").apply { mkdirs() }
     val web = File(main, "apps/web").apply { mkdirs() }

@@ -166,9 +166,11 @@ run in, and each sub-session's closing with it; not a folder its Claude Code onl
 may be a worktree someone else made. A folder is in a *linked* worktree when `git rev-parse --git-dir`
 and `--git-common-dir`, asked from its top-level folder, name different folders; in a repository's
 main checkout they're the same one. A worktree that a session staying open, or an archived one, is
-still in, by where it runs or where any Claude Code running in it works, is left out. That's every
-Claude under its shell, in the foreground or not: one suspended with Ctrl-Z carries on in its folder
-after `fg`. An archived session keeps where they worked when it was archived.
+still in, by where it runs or where any Claude Code running in it works or was started, is left out.
+That's every Claude under its shell, in the foreground or not: one suspended with Ctrl-Z carries on
+in its folder after `fg`. Where it was started comes from its own `~/.claude/sessions/<pid>.json`, so
+it counts even before Claude has said where it works. An archived session keeps those folders as
+they were when it was archived.
 If any are left, the dialog asks about them, with what `git status` says about uncommitted changes
 and untracked files.
 

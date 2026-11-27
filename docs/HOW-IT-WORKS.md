@@ -66,9 +66,11 @@ group the terminal's foreground belongs to, which also holds when it was started
 like `npx`. A suspended Claude, or the pager or editor you run meanwhile, doesn't move the session;
 with two Claudes under one shell, the one in the foreground counts. And it counts only once it's in
 another checkout than the one Claude's process is in: within that one, the branch and the diff are
-the same, so the session stays where the process is rather than following every `cd apps/web`. Then
-the session shows that folder, its repository and branch. On Windows, where the foreground can't be
-asked, a running Claude always counts.
+the same, so the session stays where the process is rather than following every `cd apps/web`.
+Outside git, a folder inside the one Claude's process is in doesn't count either, so Claude started
+in your home folder going into `~/Downloads` leaves the session named `~`; a checkout in there, or a
+folder anywhere else, does count. Then the session shows that folder, its repository and branch. On
+Windows, where the foreground can't be asked, a running Claude always counts.
 
 Claude keeps the conversation by the folder it was started in, so that's the one a session starts
 again in after a restart or from the archive, wherever Claude was working by then.

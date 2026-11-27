@@ -234,6 +234,42 @@ class SessionServiceImplTest {
   }
 
   @Test
+  fun `outside git, a session stays where its process is while the agent works in a folder inside it`() = runBlocking<Unit> {
+    val downloads = File(home, "Downloads").apply { mkdirs() }
+    val repo = File(home, "code/storefront").apply { mkdirs() }
+    val elsewhere = Files.createTempDirectory("lemonade-code-elsewhere").toFile().canonicalFile
+    git.checkouts = mapOf(repo.path to GitCheckout(repo.path, "main"))
+    val id = service.openTerminal().getOrNull()!!
+    val terminal = registry.terminal(id)!!
+    suspend fun showing(folder: File) = withTimeout(10_000) { service.sessions.first { it.single().workingDirectory == folder.path }.single() }
+    terminal.send("sleep 30\r")
+    val claude = newProgram(terminal, known = emptySet())
+    var folder = elsewhere.path
+    agentsUnder = { pid -> listOf(RunningAgent(claude, "claude", folder)).takeIf { pid == terminal.pid }.orEmpty() }
+
+    // Outside git and outside its process's folder: followed.
+    assertEquals(home.path, showing(elsewhere).processDirectory)
+
+    // `cd Downloads` from home: still home, and still named so.
+    val seen = CopyOnWriteArrayList<String>()
+    val watcher = launch(Dispatchers.Default) { service.sessions.collect { sessions -> sessions.singleOrNull()?.let { seen += it.workingDirectory } } }
+    folder = downloads.path
+    val back = showing(home)
+    assertEquals(null, back.processDirectory)
+    assertEquals("~", back.name)
+    delay(2_500)
+    watcher.cancel()
+    assertTrue(downloads.path !in seen, "seen: $seen")
+
+    // A checkout in there has a branch and a diff of its own: followed.
+    folder = repo.path
+    val inRepo = showing(repo)
+    assertEquals(home.path, inRepo.processDirectory)
+    assertEquals("storefront", inRepo.name)
+    val _ = elsewhere.deleteRecursively()
+  }
+
+  @Test
   fun `while git can't say where the process is, the session doesn't follow its agent, and once git answers it stays`() = runBlocking<Unit> {
     val main = File(home, "storefront").apply { mkdirs() }
     val web = File(main, "apps/web").apply { mkdirs() }

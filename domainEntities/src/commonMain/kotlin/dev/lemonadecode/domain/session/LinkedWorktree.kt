@@ -15,13 +15,16 @@ public data class LinkedWorktree(
   val hasChanges: Boolean,
 ) {
   /** Whether [folder] is this worktree's folder or inside it. */
-  public fun contains(folder: String): Boolean {
-    val root = path.normalizedPath()
-    val inner = folder.normalizedPath()
-    // Windows paths ignore case, and git writes them with forward slashes.
-    val windows = root.getOrNull(1) == ':'
-    return inner.equals(root, ignoreCase = windows) || inner.startsWith("$root/", ignoreCase = windows)
-  }
+  public fun contains(folder: String): Boolean = isInFolder(folder, path)
+}
+
+/** Whether [folder] is [root] or a folder inside it, both absolute. */
+public fun isInFolder(folder: String, root: String): Boolean {
+  val outer = root.normalizedPath()
+  val inner = folder.normalizedPath()
+  // Windows paths ignore case, and git writes them with forward slashes.
+  val windows = outer.getOrNull(1) == ':'
+  return inner.equals(outer, ignoreCase = windows) || inner.startsWith("$outer/", ignoreCase = windows)
 }
 
 private fun String.normalizedPath(): String = replace('\\', '/').trimEnd('/')

@@ -677,7 +677,7 @@ internal class SessionServiceImpl(
         if (processAt !is LemonadeCodeResult.Success) continue
         val shared = processAt.value
         // Outside git, a folder inside the process's is as much its own as one in its checkout is.
-        if (shared == null && !isInFolder(elsewhere, process)) {
+        if (shared == null && !elsewhere.isInFolder(process)) {
           elsewhere
         } else {
           val agentAt = agentRoot(elsewhere)

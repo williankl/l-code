@@ -15,6 +15,7 @@ import dev.lemonadecode.domain.session.SessionPlacement
 import dev.lemonadecode.domain.session.SessionStatus
 import dev.lemonadecode.domain.session.SubSessionLocation
 import dev.lemonadecode.domain.session.SubSessionPlan
+import dev.lemonadecode.domain.session.isInFolder
 import dev.lemonadecode.platform.architecture.LemonadeCodeCoroutineDispatchers
 import dev.lemonadecode.platform.core.LemonadeCodeResult
 import dev.lemonadecode.platform.core.getOrNull
@@ -643,7 +644,7 @@ internal class SessionServiceImpl(
    * agent holds it and says it works in another checkout, that folder instead: Claude Code carries a
    * `cd` forward without moving, so the folder its process is in is kept apart, as where the session
    * starts again. Within the process's own checkout the branch and the diff are the same, so there
-   * the session stays where the process is.
+   * the session stays where the process is; outside git it does too, in a folder inside the process's.
    */
   private suspend fun followFolder(id: SessionId, terminal: TerminalSession) {
     var last: Pair<String, String>? = null
@@ -675,7 +676,8 @@ internal class SessionServiceImpl(
         val processAt = processRoot(process)
         if (processAt !is LemonadeCodeResult.Success) continue
         val shared = processAt.value
-        if (shared == null) {
+        // Outside git, a folder inside the process's is as much its own as one in its checkout is.
+        if (shared == null && !elsewhere.isInFolder(process)) {
           elsewhere
         } else {
           val agentAt = agentRoot(elsewhere)

@@ -32,8 +32,9 @@ comments all switch to the folder and branch the shell is in. While a program ru
 the program instead. Claude Code is followed to wherever it says it's working once that's another
 checkout, so when it moves into a worktree, or `cd`s into another repository with its own shell, the
 session moves with it, branch included. Within the checkout it started in, the branch and the diff
-stay the same, so the session stays put. Once Claude quits, or you suspend it, the session is
-wherever your shell is again.
+stay the same, so the session stays put. Outside git, so does a folder inside the one it started in:
+Claude started in your home folder going into `~/Downloads` doesn't rename the session. Once Claude
+quits, or you suspend it, the session is wherever your shell is again.
 
 **Status at a glance.** When an agent like Claude Code is running, the session shows what it's doing:
 

@@ -3,7 +3,11 @@ package dev.lemonadecode.platform.terminal
 import java.io.File
 import java.util.concurrent.TimeUnit
 
-/** Tells whether a shell has its terminal to itself, or a program it started is in the foreground, and which. */
+/**
+ * Tells whether a shell has its terminal to itself, or a program it started is in the foreground, and which.
+ * On macOS the groups come from the kernel the way `ps` reads them (see [DarwinProcess]), and from
+ * `ps` itself whenever the kernel doesn't hand them back.
+ */
 internal object ForegroundProcess {
   private val os = System.getProperty("os.name").orEmpty()
 
@@ -12,7 +16,7 @@ internal object ForegroundProcess {
     when {
       // Field 8 of /proc/<pid>/stat, counted after the parenthesised command name.
       os.startsWith("Linux") -> File("/proc/$pid/stat").readText().substringAfterLast(')').trim().split(' ')[5].toLong()
-      os.startsWith("Mac") -> fromPs(pid)
+      os.startsWith("Mac") -> DarwinProcess.groups(pid)?.terminalGroup ?: fromPs(pid)
       else -> null
     }
   }.getOrNull()
@@ -22,7 +26,7 @@ internal object ForegroundProcess {
     when {
       // Field 5 of /proc/<pid>/stat, counted after the parenthesised command name.
       os.startsWith("Linux") -> File("/proc/$pid/stat").readText().substringAfterLast(')').trim().split(' ')[2].toLong()
-      os.startsWith("Mac") -> ps(pid, "pgid=").trim().toLongOrNull()
+      os.startsWith("Mac") -> DarwinProcess.groups(pid)?.group ?: ps(pid, "pgid=").trim().toLongOrNull()
       else -> null
     }
   }.getOrNull()

@@ -1,6 +1,7 @@
 package dev.lemonadecode.workspace.impl
 
 import dev.lemonadecode.domain.mobile.DeviceApp
+import dev.lemonadecode.domain.mobile.DeviceId
 import dev.lemonadecode.domain.mobile.LogPackages
 import dev.lemonadecode.domain.mobile.MobileError
 import dev.lemonadecode.domain.mobile.RecordingFailure
@@ -690,6 +691,52 @@ class WorkspacePresenterTest {
       // A confirmation after it is no warning.
       again.eventSink(WorkspaceEvent.CopiedFilePath("/tmp/a"))
       assertEquals(false, awaitItemWhere { it.toast == Res.string.file_path_copied.asLemonadeCodeString("/tmp/a") }.toastWarning)
+    }
+  }
+
+  @Test
+  fun `the same disk warning again while it's up keeps it a full while longer, and it still goes`() = runTest {
+    withSession()
+    settings.update { it.copy(mobilePlugin = true) }
+    mobile.setDevices(ShowcaseDevices.connected + twinPixel)
+    val pixel = ShowcaseDevices.pixel.id
+    val low = ScreenRecording.Recording(Now, spaceLeft = 1_600_000_000L)
+    presenter.test {
+      awaitItem()
+      mobile.recordings.value = mapOf(pixel to low, twinPixel.id to ScreenRecording.Recording(Now))
+      val warned = awaitItemWhere { it.toast != null }
+      assertEquals(Res.string.recording_low_space_toast.asLemonadeCodeString(Res.string.size_gigabytes.asLemonadeCodeString(1), "Pixel 8"), warned.toast)
+      assertTrue(warned.toastWarning)
+      testScheduler.advanceTimeBy(ToastMillis - 200)
+      // The other Pixel 8 records to the same disk, so it warns in the same words.
+      mobile.recordings.value = mapOf(pixel to low, twinPixel.id to low)
+      val againAt = testScheduler.currentTime
+      awaitItemWhere { it.toast == null }
+      assertEquals(againAt + ToastMillis, testScheduler.currentTime)
+    }
+  }
+
+  @Test
+  fun `the same recording saved toast again while it's up keeps it a full while longer, and it still goes`() = runTest {
+    withSession()
+    settings.update { it.copy(mobilePlugin = true) }
+    mobile.setDevices(ShowcaseDevices.connected + twinPixel)
+    val pixel = ShowcaseDevices.pixel.id
+    val video = ScreenRecording.Saved(listOf("${ShowcaseFixtures.Home}/Movies/Lemonade Code/Pixel-8.mp4"), durationMillis = 5_000)
+    presenter.test {
+      awaitItem()
+      mobile.recordings.value = mapOf(pixel to ScreenRecording.Recording(Now), twinPixel.id to ScreenRecording.Recording(Now))
+      testScheduler.runCurrent()
+      mobile.recordings.value = mapOf(pixel to video, twinPixel.id to ScreenRecording.Recording(Now))
+      val saved = awaitItemWhere { it.toast != null }
+      assertEquals(Res.string.recording_saved_toast.asLemonadeCodeString("Pixel 8", "~/Movies/Lemonade Code"), saved.toast)
+      assertFalse(saved.toastWarning)
+      testScheduler.advanceTimeBy(ToastMillis - 200)
+      // The other Pixel 8 stops too, and its toast says the same.
+      mobile.recordings.value = mapOf(pixel to video, twinPixel.id to video)
+      val againAt = testScheduler.currentTime
+      awaitItemWhere { it.toast == null }
+      assertEquals(againAt + ToastMillis, testScheduler.currentTime)
     }
   }
 
@@ -1944,6 +1991,41 @@ class WorkspacePresenterTest {
   }
 
   @Test
+  fun `copying a folder path again while its toast is up closes the menu again, and the toast still goes`() = runTest {
+    withFamily()
+    val copied = Res.string.session_path_copied.asLemonadeCodeString(ShowcaseFixtures.Repo)
+    presenter.test {
+      awaitItem().eventSink(WorkspaceEvent.OpenSessionMenu("cf"))
+      awaitItemWhere { it.sessions.menu != null }.eventSink(WorkspaceEvent.CopiedSessionPath(ShowcaseFixtures.Repo))
+      val first = awaitItemWhere { it.toast != null }
+      assertNull(first.sessions.menu)
+      testScheduler.advanceTimeBy(ToastMillis - 200)
+      first.eventSink(WorkspaceEvent.OpenSessionMenu("cf"))
+      awaitItemWhere { it.sessions.menu != null }.eventSink(WorkspaceEvent.CopiedSessionPath(ShowcaseFixtures.Repo))
+      val againAt = testScheduler.currentTime
+      // The menu closes in the same update that shows the toast.
+      val again = awaitItemWhere { it.sessions.menu == null }
+      assertEquals(copied, again.toast)
+      awaitItemWhere { it.toast == null }
+      assertEquals(againAt + ToastMillis, testScheduler.currentTime)
+    }
+  }
+
+  @Test
+  fun `copying a folder path over a disk warning confirms, it doesn't warn`() = runTest {
+    withFamily()
+    settings.update { it.copy(mobilePlugin = true) }
+    mobile.setDevices(ShowcaseDevices.connected)
+    presenter.test {
+      awaitItem()
+      mobile.recordings.value = mapOf(ShowcaseDevices.pixel.id to ScreenRecording.Recording(Now, spaceLeft = 1_600_000_000L))
+      awaitItemWhere { it.toastWarning }.eventSink(WorkspaceEvent.OpenSessionMenu("cf"))
+      awaitItemWhere { it.sessions.menu != null }.eventSink(WorkspaceEvent.CopiedSessionPath(ShowcaseFixtures.Repo))
+      assertFalse(awaitItemWhere { it.toast == Res.string.session_path_copied.asLemonadeCodeString(ShowcaseFixtures.Repo) }.toastWarning)
+    }
+  }
+
+  @Test
   fun `copying a file's path from the diff confirms with a toast for a moment`() = runTest {
     withSession()
     val path = ShowcaseFixtures.path("rl")
@@ -2021,6 +2103,9 @@ class WorkspacePresenterTest {
   }
 
   private fun dev.lemonadecode.workspace.uimodel.WorkspaceModel.lines(path: String): List<DiffRowModel.Line> = (content as? WorkspaceContentModel.Diff)?.review?.files?.first { it.path == path }?.rows?.filterIsInstance<DiffRowModel.Line>().orEmpty()
+
+  // A second Pixel 8: its recording's toasts say just what the first one's do.
+  private val twinPixel = ShowcaseDevices.pixel.copy(id = DeviceId("38021FDH2000CD"), address = "38021FDH2000CD")
 
   private val storefrontImport = ImportableSession("herdr:1", "storefront", null, ShowcaseFixtures.Repo, conversation = "chat-1")
   private val worktreeImport = ImportableSession("herdr:2", "rate-limit", null, "${ShowcaseFixtures.Repo}.worktrees/rate-limit", parentKey = "herdr:1", worktree = true)

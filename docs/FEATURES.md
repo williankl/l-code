@@ -422,10 +422,11 @@ you gave it, the folder its shell was in and the last 1,000 lines it showed. Nex
 app, each one comes back in a fresh shell in that folder, with its old output above the new prompt.
 
 If Claude Code was running in a session, its conversation is resumed too, in the folder Claude was
-started in, where it keeps the conversation, even if it was working somewhere else by then. Programs
-other than Claude Code start fresh. Sessions are also saved while the app runs, so even after a crash
-you keep them (just not their latest output). [Archived sessions](#archiving-sessions) stay
-archived: nothing starts for them until you restore them.
+started in, where it keeps the conversation, even if it was working somewhere else by then. With two
+running in one session, the one in the foreground is resumed. Programs other than Claude Code start
+fresh. Sessions are also saved while the app runs, so even after a crash you keep them (just not
+their latest output). [Archived sessions](#archiving-sessions) stay archived: nothing starts for
+them until you restore them.
 
 ---
 

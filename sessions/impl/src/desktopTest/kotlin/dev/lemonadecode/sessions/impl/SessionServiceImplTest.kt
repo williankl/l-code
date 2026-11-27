@@ -528,6 +528,50 @@ class SessionServiceImplTest {
   }
 
   @Test
+  fun `with two Claudes in a session, the one holding the terminal is resumed where it was started, else the newest`() = runBlocking<Unit> {
+    val first = File(home, "first").apply { mkdirs() }
+    val second = File(home, "second").apply { mkdirs() }
+    assertEquals(0, service.restore())
+    val id = service.openTerminal(first.path).getOrNull()!!
+    val terminal = registry.terminal(id)!!
+    suspend fun saving(folder: File, resume: String) = withTimeout(10_000) {
+      while (store.saved?.sessions?.singleOrNull()?.let { it.workingDirectory == folder.path && it.resume == resume } != true) delay(50)
+    }
+    suspend fun shellInFront() = withTimeout(5_000) {
+      while (terminal.programInForeground() != false) delay(50)
+    }
+
+    // One Claude started in `first`, suspended; another started in `second`.
+    terminal.send("sleep 30\r")
+    val older = newProgram(terminal, known = emptySet())
+    var agents = listOf(RunningAgent(older, "echo resumed-first", null))
+    agentsUnder = { pid -> agents.takeIf { pid == terminal.pid }.orEmpty() }
+    saving(first, "echo resumed-first")
+    terminal.send("\u001a")
+    shellInFront()
+    terminal.send("cd ../second\r")
+    terminal.send("sleep 31\r")
+    val newer = newProgram(terminal, known = setOf(older))
+    agents = listOf(RunningAgent(newer, "echo resumed-second", null), RunningAgent(older, "echo resumed-first", null))
+    saving(second, "echo resumed-second")
+
+    // The shell in front: its folder and the newest Claude, as before.
+    terminal.send("\u001a")
+    shellInFront()
+    saving(second, "echo resumed-second")
+
+    // The first back in front: its folder, and its conversation with it.
+    terminal.send("fg %1\r")
+    saving(first, "echo resumed-first")
+    service.shutdown()
+    val nextRegistry = SessionRegistry()
+    assertEquals(1, newService(nextRegistry).restore())
+    withTimeout(10_000) {
+      while (nextRegistry.terminal(id)!!.screen().lines().none { it.trim() == "resumed-first" }) delay(50)
+    }
+  }
+
+  @Test
   fun `a resumed agent still starting up is kept, one that failed to start is dropped`() = runBlocking<Unit> {
     // Neither ever registers as an agent: one sits at a prompt (as Claude does asking to trust a folder), one exits.
     store.saved = SavedSessions(

@@ -55,6 +55,8 @@ internal data class SavedSession(
   val agent: String? = null,
   /** For an archived session whose agent worked in another folder than [workingDirectory], that folder, shown while it's archived. */
   val agentDirectory: String? = null,
+  /** For an archived session, the folders every agent running in it said it worked in, so no worktree among them is offered for deletion. */
+  val agentDirectories: List<String>? = null,
 ) {
   fun placement(): SessionPlacement = SessionPlacement.entries.firstOrNull { it.name == placement } ?: SessionPlacement.Root
 

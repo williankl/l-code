@@ -368,6 +368,7 @@ internal class SessionServiceImpl(
     status = SessionStatus.Shell,
     customName = customName,
     agent = agent,
+    agentDirectories = agentDirectories.orEmpty(),
   )
 
   override suspend fun worktreeOf(id: SessionId): LinkedWorktree? {
@@ -518,6 +519,7 @@ internal class SessionServiceImpl(
     branch = session.branch.takeIf { archived },
     // The program the resume command starts, when the agent isn't reporting.
     agent = (session.agent ?: resume?.substringBefore(' ')).takeIf { archived },
+    agentDirectories = session.agentDirectories.takeIf { archived && it.isNotEmpty() },
   )
 
   private suspend fun launch(
@@ -593,6 +595,8 @@ internal class SessionServiceImpl(
           else -> current + (id to resume)
         }
       }
+      // Each one's folder, in front or not: a worktree a suspended Claude works in isn't offered for deletion.
+      update(id) { it.copy(agentDirectories = running.mapNotNull(RunningAgent::workingDirectory).distinct()) }
     }
   }
 

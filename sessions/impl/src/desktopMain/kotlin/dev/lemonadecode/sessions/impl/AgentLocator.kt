@@ -74,6 +74,8 @@ internal class ClaudeAgentLocator(home: HomeDirectory) : AgentLocator {
   private fun descendsFrom(pid: Long, ancestor: Long): Boolean {
     var current = ProcessHandle.of(pid).orElse(null)?.takeIf { it.isAlive } ?: return false
     repeat(MaxDepth) {
+      // Process 1, launchd or init, never has a parent: asking would only say so, at a cost.
+      if (!IsWindows && current.pid() == 1L) return false
       val parent = current.parent().orElse(null) ?: return false
       if (parent.pid() == ancestor) return true
       current = parent

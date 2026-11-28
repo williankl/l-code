@@ -254,6 +254,7 @@ class SessionServiceImplTest {
     terminal.send("sleep 30\r")
     val claude = newProgram(terminal, known = emptySet())
     agentsUnder = { pid -> listOf(RunningAgent(claude, "claude", workingDirectory = null, startedIn = worktree.path)).takeIf { pid == terminal.pid }.orEmpty() }
+    withTimeout(20_000) { service.sessions.first { it.single().agentDirectories == listOf(worktree.path) } }
 
     // Suspended, and the shell gone back to the main checkout: nothing else of the session is in that worktree.
     terminal.send("\u001a")

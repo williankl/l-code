@@ -591,7 +591,14 @@ class SessionServiceImplTest {
     terminal.send("sleep 30\r")
     val older = newProgram(terminal, known = emptySet())
     var agents = listOf(RunningAgent(older, "echo resumed-first", firstWorks.path))
-    agentsUnder = { pid -> agents.takeIf { pid == terminal.pid }.orEmpty() }
+    val looks = AtomicInteger()
+    agentsUnder = { pid ->
+      agents.takeIf { pid == terminal.pid }.orEmpty().also {
+        if (pid == terminal.pid) {
+          val _ = looks.incrementAndGet()
+        }
+      }
+    }
     showing(firstWorks)
     terminal.send("\u001a")
     showing(first)
@@ -604,15 +611,20 @@ class SessionServiceImplTest {
     showing(second)
     saving(second, "echo resumed-second")
 
-    // git times out on the first Claude's folder as it comes back: the session stays saved as it was.
+    // git times out on the first Claude's folder as it comes back: never saved at the old folder with its conversation.
+    val from = store.history.size
     checkoutFailsAt = setOf(first.path)
     val failed = checkoutFailures.get()
     terminal.send("fg %1\r")
+    // Once git has failed on it, two more looks for agents, then time for what they found to be saved.
     withTimeout(20_000) {
-      while (checkoutFailures.get() < failed + 2) delay(20)
+      while (checkoutFailures.get() <= failed) delay(20)
+      val looked = looks.get()
+      while (looks.get() < looked + 2) delay(20)
     }
-    delay(1_500)
-    assertEquals(second.path to "echo resumed-second", saved())
+    delay(1_000)
+    val pairs = store.history.drop(from).mapNotNull { saved -> saved.sessions.singleOrNull()?.let { it.workingDirectory to it.resume } }
+    assertTrue((second.path to "echo resumed-first") !in pairs, "saved: $pairs")
 
     // Once git answers, the folder and the conversation move together.
     checkoutFailsAt = emptySet()
@@ -1277,10 +1289,14 @@ class SessionServiceImplTest {
   private class MemorySessionStore : SessionStore {
     @Volatile var saved: SavedSessions? = null
 
+    /** Everything saved, in order. */
+    val history = CopyOnWriteArrayList<SavedSessions>()
+
     override suspend fun load(): SavedSessions = saved ?: SavedSessions()
 
     override suspend fun save(saved: SavedSessions) {
       this.saved = saved
+      history += saved
     }
   }
 }

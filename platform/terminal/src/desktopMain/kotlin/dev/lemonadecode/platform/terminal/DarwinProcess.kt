@@ -55,9 +55,33 @@ internal object DarwinProcess {
   }
 
   /** The groups of process [pid] as `ps` reads them, from its `kinfo_proc`; null when the kernel doesn't hand that back. */
-  fun groups(pid: Long): Groups? {
-    val sysctl = calls?.sysctl ?: return null
-    if (pid !in 1..Int.MAX_VALUE) return null
+  fun groups(pid: Long): Groups? = (kinfo(pid) as? Kinfo.Record)?.let { Groups(group = it.group, terminalGroup = it.terminalGroup) }
+
+  /**
+   * The parent of process [pid] from its `kinfo_proc`, the record `ProcessHandle.of`, `isAlive` and
+   * `parent` each read on macOS; [ProcessParent.NoProcess] when the kernel finds no such process.
+   */
+  fun parent(pid: Long): ProcessParent = when (val read = kinfo(pid)) {
+    is Kinfo.Record -> ProcessParent.Parent(read.parent)
+    Kinfo.NoProcess -> ProcessParent.NoProcess
+    Kinfo.Unknown -> ProcessParent.Unknown
+  }
+
+  /** One `sysctl(KERN_PROC_PID)` read of a process's `kinfo_proc`, as `ps` and `ProcessHandle` make it. */
+  private sealed interface Kinfo {
+    /** The whole record, for that process; `ps` prints these as signed ints. */
+    data class Record(val group: Long, val terminalGroup: Long, val parent: Long) : Kinfo
+
+    /** The call succeeded with no record: the kernel knows no such process, zombies included. */
+    data object NoProcess : Kinfo
+
+    /** Anything else: a failed call, a part of a record, another process's. */
+    data object Unknown : Kinfo
+  }
+
+  private fun kinfo(pid: Long): Kinfo {
+    val sysctl = calls?.sysctl ?: return Kinfo.Unknown
+    if (pid !in 1..Int.MAX_VALUE) return Kinfo.Unknown
     return runCatching {
       Memory(MibBytes).use { mib ->
         Memory(KinfoProcSize).use { record ->
@@ -68,13 +92,21 @@ internal object DarwinProcess {
             mib.setInt(12, pid.toInt())
             length.setLong(0, KinfoProcSize)
             val result = sysctl.invokeInt(arrayOf(mib, MibLength, record, length, Pointer.NULL, 0L))
-            // `ps` prints these as signed ints.
-            val whole = result == 0 && length.getLong(0) == KinfoProcSize && record.getInt(KinfoPid) == pid.toInt()
-            if (whole) Groups(group = record.getInt(KinfoPgid).toLong(), terminalGroup = record.getInt(KinfoTpgid).toLong()) else null
+            val read = length.getLong(0)
+            when {
+              result != 0 -> Kinfo.Unknown
+              read == 0L -> Kinfo.NoProcess
+              read == KinfoProcSize && record.getInt(KinfoPid) == pid.toInt() -> Kinfo.Record(
+                group = record.getInt(KinfoPgid).toLong(),
+                terminalGroup = record.getInt(KinfoTpgid).toLong(),
+                parent = record.getInt(KinfoPpid).toLong(),
+              )
+              else -> Kinfo.Unknown
+            }
           }
         }
       }
-    }.getOrNull()
+    }.getOrDefault(Kinfo.Unknown)
   }
 
   /**
@@ -118,9 +150,10 @@ internal object DarwinProcess {
   private const val MibBytes = 16L
   private const val SizeTBytes = 8L
 
-  // struct kinfo_proc: kp_proc.p_pid, kp_eproc.e_pgid and kp_eproc.e_tpgid, each an int32.
+  // struct kinfo_proc: kp_proc.p_pid, kp_eproc.e_ppid, e_pgid and e_tpgid, each an int32.
   private const val KinfoProcSize = 648L
   private const val KinfoPid = 40L
+  private const val KinfoPpid = 560L
   private const val KinfoPgid = 564L
   private const val KinfoTpgid = 576L
 

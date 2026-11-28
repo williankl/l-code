@@ -142,6 +142,19 @@ class DarwinProcessTest {
   }
 
   @Test
+  fun `a process's parent is read from the kernel, as ProcessHandle tells it`() {
+    if (!mac) return
+    val self = ProcessHandle.current()
+    assertEquals(ProcessParent.Parent(self.pid()), processParent(sleeper(root)))
+    assertEquals(ProcessParent.Parent(self.parent().get().pid()), processParent(self.pid()))
+    assertEquals(ProcessParent.Parent(0L), processParent(1L), "launchd's parent is the kernel")
+    val ended = ProcessBuilder("true").start().also { it.waitFor() }.pid()
+    assertEquals(ProcessParent.NoProcess, processParent(ended))
+    assertEquals(ProcessParent.Unknown, processParent(0L))
+    assertEquals(ProcessParent.Unknown, processParent(Int.MAX_VALUE + 1L))
+  }
+
+  @Test
   fun `a shell's foreground group reads as ps prints it, at its prompt and while a program runs`() = runBlocking<Unit> {
     if (!mac) return@runBlocking
     TerminalSession(TerminalLaunch(command = listOf("/bin/sh"), workingDirectory = root.path, environment = mapOf("PS1" to "$ "))).use { session ->

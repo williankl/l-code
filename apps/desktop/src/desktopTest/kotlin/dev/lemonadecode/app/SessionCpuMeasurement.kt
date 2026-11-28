@@ -16,8 +16,7 @@ import java.lang.management.ManagementFactory
 import java.time.Instant
 import java.util.Locale
 import java.util.UUID
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.ConcurrentLinkedQueue
 import kotlin.system.exitProcess
 
 /**
@@ -29,8 +28,9 @@ import kotlin.system.exitProcess
  * repository, leaves them for a warm-up, then counts for a while the processes the app launches
  * (from JFR's `jdk.ProcessStart` events) and the CPU time it uses, its own and its children's
  * (`getrusage`). Scenarios: `idle`, each shell at its prompt; `foreground`, each running `sleep`;
- * `agent`, each running a stand-in for Claude Code that reports a status, keeps a session file and a
- * transcript the way Claude does, and then sleeps.
+ * `pipeline`, each running `true | sleep`, whose group outlives its first process; `agent`, each
+ * running a stand-in for Claude Code that reports a status, keeps a session file and a transcript the
+ * way Claude does, and then sleeps.
  *
  * Arguments: scenario, sessions, warm-up seconds, measured seconds, work folder, results file.
  */
@@ -41,7 +41,7 @@ fun main(args: Array<String>) {
   val seconds = args.getOrElse(3) { "60" }.toLong()
   val work = File(args.getOrElse(4) { "build/cpu-measure" })
   val results = args.getOrNull(5)?.let(::File)
-  require(scenario in setOf("idle", "foreground", "agent")) { "scenario: idle, foreground or agent" }
+  require(scenario in setOf("idle", "foreground", "pipeline", "agent")) { "scenario: idle, foreground, pipeline or agent" }
 
   val home = File(System.getProperty("user.home"))
   check(home.canonicalPath.startsWith(work.canonicalPath)) { "the home folder must be the measurement's own: $home" }
@@ -60,6 +60,8 @@ fun main(args: Array<String>) {
     terminals.forEach { terminal ->
       when (scenario) {
         "foreground" -> terminal.send("sleep 100000\r")
+        // Like `cmd | less` once `cmd` is done: the group in front outlives its first process.
+        "pipeline" -> terminal.send("/usr/bin/true | sleep 100000\r")
         "agent" -> {
           val id = UUID.randomUUID().toString()
           val now = System.currentTimeMillis()
@@ -71,19 +73,16 @@ fun main(args: Array<String>) {
     }
     delay(warmup * 1_000)
 
-    val launches = ConcurrentHashMap<String, AtomicLong>()
-    val from = Instant.now()
+    val launches = ConcurrentLinkedQueue<Pair<Instant, String>>()
     val stream = RecordingStream().apply {
       enable("jdk.ProcessStart")
       onEvent("jdk.ProcessStart") { event ->
-        if (!event.startTime.isBefore(from)) {
-          val program = event.getString("command").substringBefore(' ').substringAfterLast('/')
-          launches.getOrPut(program) { AtomicLong() }.incrementAndGet()
-        }
+        launches += event.startTime to event.getString("command").substringBefore(' ').substringAfterLast('/')
       }
       startAsync()
     }
     val load = ManagementFactory.getOperatingSystemMXBean().systemLoadAverage
+    val from = Instant.now()
     val ownStart = Rusage.cpuNanos(Rusage.Self)
     val childrenStart = Rusage.cpuNanos(Rusage.Children)
     val started = System.nanoTime()
@@ -92,10 +91,10 @@ fun main(args: Array<String>) {
     val childrenEnd = Rusage.cpuNanos(Rusage.Children)
     val elapsed = (System.nanoTime() - started) / 1e9
     val until = Instant.now()
-    // JFR hands events over about once a second; those after the window are left out by their time.
+    // JFR hands events over about once a second: once the window's last ones are in, only those inside it count.
     delay(2_500)
     stream.close()
-    val counted = launches.mapValues { it.value.get() }
+    val counted = launches.filter { (at, _) -> !at.isBefore(from) && at.isBefore(until) }.groupingBy { it.second }.eachCount()
     val loadAfter = ManagementFactory.getOperatingSystemMXBean().systemLoadAverage
     // The stand-in agents should all show as working by now, or the scenario isn't the one measured.
     val working = service.sessions.value.count { it.status == SessionStatus.Working }

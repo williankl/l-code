@@ -38,7 +38,7 @@ tasks.withType<Test>().configureEach {
 }
 
 // What open sessions cost the CPU while nothing happens in them; see SessionCpuMeasurement.kt.
-// ./gradlew :apps:desktop:measureSessionCpu -Pscenario=idle|foreground|agent -Psessions=10 [-Pseconds=60 -Pwarmup=15]
+// ./gradlew :apps:desktop:measureSessionCpu -Pscenario=idle|foreground|pipeline|agent -Psessions=10 [-Pseconds=60 -Pwarmup=15]
 val desktopTestCompilation = kotlin.targets.getByName("desktop").compilations.getByName("test")
 
 tasks.register<JavaExec>("measureSessionCpu") {

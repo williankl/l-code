@@ -1,6 +1,7 @@
 package dev.lemonadecode.sessions.impl
 
 import dev.lemonadecode.platform.process.HomeDirectory
+import dev.lemonadecode.platform.terminal.DarwinProcessParents
 import java.io.File
 import java.nio.file.Files
 import java.time.Instant
@@ -16,6 +17,7 @@ class ClaudeAgentLocatorTest {
     object : HomeDirectory {
       override val path: String = home.path
     },
+    DarwinProcessParents(),
   )
 
   // A shell running a program, the way a terminal runs `claude`; `; true` keeps sh from exec'ing it.

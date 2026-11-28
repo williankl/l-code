@@ -5,7 +5,11 @@ import java.nio.file.Files
 import java.nio.file.Paths
 import java.util.concurrent.TimeUnit
 
-/** Reads a running process's current folder: `/proc` on Linux, `lsof` on macOS. */
+/**
+ * Reads a running process's current folder: `/proc` on Linux; on macOS what `lsof` names, from the
+ * kernel as `lsof` reads it (see [DarwinProcess]): nothing for a process that doesn't exist, and from
+ * `lsof` itself whenever that can't be told the same way.
+ */
 internal object ProcessDirectory {
   private val os = System.getProperty("os.name").orEmpty()
 
@@ -15,7 +19,11 @@ internal object ProcessDirectory {
   fun of(pid: Long): String? = runCatching {
     when {
       os.startsWith("Linux") -> Files.readSymbolicLink(Paths.get("/proc/$pid/cwd")).toString()
-      os.startsWith("Mac") -> fromLsof(pid)
+      os.startsWith("Mac") -> when (val read = DarwinProcess.currentDirectory(pid)) {
+        is DarwinProcess.DirectoryRead.Folder -> read.path
+        DarwinProcess.DirectoryRead.NoProcess -> null
+        DarwinProcess.DirectoryRead.AskLsof -> fromLsof(pid)
+      }
       else -> null
     }
   }.getOrNull()

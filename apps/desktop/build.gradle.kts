@@ -37,6 +37,36 @@ tasks.withType<Test>().configureEach {
   jvmArgs("-Djava.awt.headless=true")
 }
 
+// What open sessions cost the CPU while nothing happens in them; see SessionCpuMeasurement.kt.
+// ./gradlew :apps:desktop:measureSessionCpu -Pscenario=idle|foreground|pipeline|agent -Psessions=10 [-Pseconds=60 -Pwarmup=15]
+val desktopTestCompilation = kotlin.targets.getByName("desktop").compilations.getByName("test")
+
+tasks.register<JavaExec>("measureSessionCpu") {
+  group = "lemonade code"
+  description = "Measures the processes launched and the CPU used by open sessions, through the real app graph."
+  dependsOn(desktopTestCompilation.compileAllTaskName)
+  classpath(desktopTestCompilation.output.allOutputs, desktopTestCompilation.runtimeDependencyFiles)
+  mainClass.set("dev.lemonadecode.app.SessionCpuMeasurementKt")
+  val work = layout.buildDirectory.dir("cpu-measure").get().asFile
+  val home = work.resolve("home")
+  args(
+    providers.gradleProperty("scenario").getOrElse("idle"),
+    providers.gradleProperty("sessions").getOrElse("1"),
+    providers.gradleProperty("warmup").getOrElse("15"),
+    providers.gradleProperty("seconds").getOrElse("60"),
+    work.absolutePath,
+    providers.gradleProperty("results").getOrElse(work.resolve("results.txt").absolutePath),
+  )
+  // A home and a shell of its own: no one's profile, git config or Claude Code sessions.
+  environment("HOME", home.absolutePath)
+  environment("SHELL", "/bin/sh")
+  environment.remove("CLAUDE_CONFIG_DIR")
+  jvmArgs("-Djava.awt.headless=true", "-Duser.home=${home.absolutePath}")
+  javaLauncher.set(
+    javaToolchains.launcherFor { languageVersion.set(JavaLanguageVersion.of(libs.versions.jvmToolchain.get().toInt())) },
+  )
+}
+
 // The app is packaged from this classpath: FFmpeg's libraries go in, its command-line programs don't.
 stripFfmpegPrograms()
 

@@ -1,5 +1,6 @@
 package dev.lemonadecode.sessions.impl
 
+import dev.lemonadecode.platform.terminal.DarwinProcessParents
 import java.io.File
 import kotlin.test.AfterTest
 import kotlin.test.Test
@@ -30,9 +31,9 @@ class ProcessAncestryTest {
 
     fun check(pid: Long, ancestor: Long) {
       val before = AncestryOracle.descendsFrom(pid, ancestor)
-      val kernel = kernelWalk(pid, ancestor, MaxDepth)
+      val kernel = kernelWalk(pid, ancestor, MaxDepth, parents)
       val handle = handleWalk(pid, ancestor, MaxDepth)
-      val walk = runsUnder(pid, ancestor, MaxDepth)
+      val walk = runsUnder(pid, ancestor, MaxDepth, parents)
       val after = AncestryOracle.descendsFrom(pid, ancestor)
       if (before != after) {
         changed++
@@ -73,7 +74,7 @@ class ProcessAncestryTest {
     }
     comparison.assertSame()
     assertEquals(0, comparison.changed, "these processes don't come and go")
-    assertTrue(runsUnder(self, selfParent, MaxDepth))
+    assertTrue(runsUnder(self, selfParent, MaxDepth, parents))
   }
 
   @Test
@@ -93,12 +94,12 @@ class ProcessAncestryTest {
     comparison.assertSame()
     assertEquals(0, comparison.changed, "these processes don't come and go")
     // The cases mean what they say.
-    assertTrue(runsUnder(grandchild, shell, MaxDepth))
-    assertTrue(runsUnder(grandchild, self, MaxDepth))
-    assertTrue(runsUnder(zombie, zombieParent.pid(), MaxDepth), "a zombie is still under its parent")
-    assertTrue(!runsUnder(ended, self, MaxDepth))
-    assertTrue(!runsUnder(shell, grandchild, MaxDepth))
-    assertTrue(!runsUnder(unused, 1L, MaxDepth))
+    assertTrue(runsUnder(grandchild, shell, MaxDepth, parents))
+    assertTrue(runsUnder(grandchild, self, MaxDepth, parents))
+    assertTrue(runsUnder(zombie, zombieParent.pid(), MaxDepth, parents), "a zombie is still under its parent")
+    assertTrue(!runsUnder(ended, self, MaxDepth, parents))
+    assertTrue(!runsUnder(shell, grandchild, MaxDepth, parents))
+    assertTrue(!runsUnder(unused, 1L, MaxDepth, parents))
   }
 
   /** Runs `sh` nested [levels] deep, each waiting for the next, the innermost becoming `sleep`. */
@@ -161,11 +162,11 @@ class ProcessAncestryTest {
     }
     comparison.assertSame()
     assertEquals(0, comparison.changed, "these processes don't come and go")
-    assertTrue(runsUnder(chain[0], chain[7], MaxDepth))
-    assertTrue(runsUnder(chain[0], chain[8], MaxDepth), "8 up is the last step")
-    assertTrue(!runsUnder(chain[0], chain[9], MaxDepth), "9 up is past it")
-    assertTrue(runsUnder(chain[2], chain[10], MaxDepth))
-    assertTrue(!runsUnder(chain[1], chain[10], MaxDepth))
+    assertTrue(runsUnder(chain[0], chain[7], MaxDepth, parents))
+    assertTrue(runsUnder(chain[0], chain[8], MaxDepth, parents), "8 up is the last step")
+    assertTrue(!runsUnder(chain[0], chain[9], MaxDepth, parents), "9 up is past it")
+    assertTrue(runsUnder(chain[2], chain[10], MaxDepth, parents))
+    assertTrue(!runsUnder(chain[1], chain[10], MaxDepth, parents))
   }
 
   @Test
@@ -182,9 +183,9 @@ class ProcessAncestryTest {
     }
     comparison.assertSame()
     assertEquals(0, comparison.changed, "these processes don't come and go")
-    assertTrue(runsUnder(atLast[0], 1L, MaxDepth), "launchd as the 8th up")
-    assertTrue(!runsUnder(pastLast[0], 1L, MaxDepth), "launchd as the 9th up")
-    assertTrue(runsUnder(pastLast[1], 1L, MaxDepth))
+    assertTrue(runsUnder(atLast[0], 1L, MaxDepth, parents), "launchd as the 8th up")
+    assertTrue(!runsUnder(pastLast[0], 1L, MaxDepth, parents), "launchd as the 9th up")
+    assertTrue(runsUnder(pastLast[1], 1L, MaxDepth, parents))
   }
 
   @Test
@@ -197,8 +198,8 @@ class ProcessAncestryTest {
     }
     comparison.assertSame()
     assertEquals(0, comparison.changed, "these processes don't come and go")
-    assertTrue(runsUnder((1L shl 32) + self, selfParent, MaxDepth), "as the JDK, this process")
-    assertTrue(runsUnder((1L shl 32) + child, shell, MaxDepth))
+    assertTrue(runsUnder((1L shl 32) + self, selfParent, MaxDepth, parents), "as the JDK, this process")
+    assertTrue(runsUnder((1L shl 32) + child, shell, MaxDepth, parents))
   }
 
   @Test
@@ -217,5 +218,8 @@ class ProcessAncestryTest {
   private companion object {
     /** As deep as `ClaudeAgentLocator` walks. */
     const val MaxDepth = 8
+
+    /** The kernel's answers the app is given. */
+    val parents = DarwinProcessParents()
   }
 }

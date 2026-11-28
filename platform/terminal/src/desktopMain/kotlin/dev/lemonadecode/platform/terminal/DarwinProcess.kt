@@ -6,6 +6,7 @@ import com.sun.jna.Native
 import com.sun.jna.NativeLibrary
 import com.sun.jna.Platform
 import com.sun.jna.Pointer
+import dev.lemonadecode.platform.process.ProcessParent
 
 /**
  * What `ps` and `lsof` tell about a process on macOS, asked of the kernel directly, with the very
@@ -43,14 +44,14 @@ internal object DarwinProcess {
     data object AskLsof : DirectoryRead
   }
 
-  private class Calls(val sysctl: Function, val pidInfo: Function)
+  private class Calls(val sysctl: Function, val pidInfo: Function, val getppid: Function)
 
   private val calls: Calls? by lazy {
     runCatching {
       val supported = Platform.isMac() && Platform.ARCH in Architectures && Native.POINTER_SIZE == 8 && Native.SIZE_T_SIZE == 8
       if (!supported) return@runCatching null
       val process = NativeLibrary.getProcess()
-      Calls(sysctl = process.getFunction("sysctl"), pidInfo = process.getFunction("proc_pidinfo"))
+      Calls(sysctl = process.getFunction("sysctl"), pidInfo = process.getFunction("proc_pidinfo"), getppid = process.getFunction("getppid"))
     }.getOrNull()
   }
 
@@ -65,6 +66,12 @@ internal object DarwinProcess {
     is Kinfo.Record -> ProcessParent.Parent(read.parent)
     Kinfo.NoProcess -> ProcessParent.NoProcess
     Kinfo.Unknown -> ProcessParent.Unknown
+  }
+
+  /** This process's parent, from `getppid()`, which can't fail; null where it isn't asked. */
+  fun ownParent(): Long? {
+    val getppid = calls?.getppid ?: return null
+    return runCatching { getppid.invokeInt(emptyArray()).toLong() }.getOrNull()
   }
 
   /** One `sysctl(KERN_PROC_PID)` read of a process's `kinfo_proc`, as `ps` and `ProcessHandle` make it. */

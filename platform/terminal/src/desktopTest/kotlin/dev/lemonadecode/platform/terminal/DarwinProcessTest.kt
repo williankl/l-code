@@ -1,5 +1,6 @@
 package dev.lemonadecode.platform.terminal
 
+import dev.lemonadecode.platform.process.ProcessParent
 import dev.lemonadecode.platform.terminal.DarwinProcess.DirectoryRead
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
@@ -145,13 +146,15 @@ class DarwinProcessTest {
   fun `a process's parent is read from the kernel, as ProcessHandle tells it`() {
     if (!mac) return
     val self = ProcessHandle.current()
-    assertEquals(ProcessParent.Parent(self.pid()), processParent(sleeper(root)))
-    assertEquals(ProcessParent.Parent(self.parent().get().pid()), processParent(self.pid()))
-    assertEquals(ProcessParent.Parent(0L), processParent(1L), "launchd's parent is the kernel")
+    val parents = DarwinProcessParents()
+    assertEquals(ProcessParent.Parent(self.pid()), parents.of(sleeper(root)))
+    assertEquals(ProcessParent.Parent(self.parent().get().pid()), parents.of(self.pid()))
+    assertEquals(self.parent().get().pid(), parents.ofThisProcess(), "getppid()")
+    assertEquals(ProcessParent.Parent(0L), parents.of(1L), "launchd's parent is the kernel")
     val ended = ProcessBuilder("true").start().also { it.waitFor() }.pid()
-    assertEquals(ProcessParent.NoProcess, processParent(ended))
-    assertEquals(ProcessParent.Unknown, processParent(0L))
-    assertEquals(ProcessParent.Unknown, processParent(Int.MAX_VALUE + 1L))
+    assertEquals(ProcessParent.NoProcess, parents.of(ended))
+    assertEquals(ProcessParent.Unknown, parents.of(0L))
+    assertEquals(ProcessParent.Unknown, parents.of(Int.MAX_VALUE + 1L))
   }
 
   @Test

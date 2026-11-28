@@ -9,6 +9,9 @@ kotlin {
       api(libs.jediterm.core)
       // Asks macOS's kernel about the shell's processes; see DarwinProcess.
       implementation(libs.jna)
+      // DarwinProcessParents, the kernel's answer to process-core's ProcessParents.
+      api(projects.platform.processCore)
+      implementation(projects.platform.diCore)
       implementation(libs.compose.foundation)
       implementation(libs.compose.ui)
     }

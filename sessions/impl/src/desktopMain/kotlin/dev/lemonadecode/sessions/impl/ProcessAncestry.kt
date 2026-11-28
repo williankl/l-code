@@ -1,14 +1,14 @@
 package dev.lemonadecode.sessions.impl
 
-import dev.lemonadecode.platform.terminal.ProcessParent
-import dev.lemonadecode.platform.terminal.processParent
+import dev.lemonadecode.platform.process.ProcessParent
+import dev.lemonadecode.platform.process.ProcessParents
 
 /**
  * Whether process [pid] runs under [ancestor], at most [maxDepth] parents up, as the walk up its
  * parents through `ProcessHandle` ([handleWalk]) answers. On macOS the same walk reads each process
- * once ([kernelWalk]), and `ProcessHandle` walks only when a read isn't whole.
+ * once through [parents] ([kernelWalk]), and `ProcessHandle` walks only when a read isn't whole.
  */
-internal fun runsUnder(pid: Long, ancestor: Long, maxDepth: Int): Boolean = kernelWalk(pid, ancestor, maxDepth) ?: handleWalk(pid, ancestor, maxDepth)
+internal fun runsUnder(pid: Long, ancestor: Long, maxDepth: Int, parents: ProcessParents): Boolean = kernelWalk(pid, ancestor, maxDepth, parents) ?: handleWalk(pid, ancestor, maxDepth)
 
 /**
  * The walk through `ProcessHandle`. Process 1, launchd or init, never has a parent, so it ends
@@ -38,8 +38,8 @@ internal fun handleWalk(pid: Long, ancestor: Long, maxDepth: Int): Boolean {
  * before, the parent is read first and compared with [ancestor] only once it's there. No such
  * process ends the walk as `ProcessHandle` does; anything else hands it back to [handleWalk].
  */
-internal fun kernelWalk(pid: Long, ancestor: Long, maxDepth: Int): Boolean? {
-  var parent = when (val read = processParent(pid)) {
+internal fun kernelWalk(pid: Long, ancestor: Long, maxDepth: Int, parents: ProcessParents): Boolean? {
+  var parent = when (val read = parents.of(pid)) {
     is ProcessParent.Parent -> read.pid
     ProcessParent.NoProcess -> return false
     ProcessParent.Unknown -> return null
@@ -47,7 +47,7 @@ internal fun kernelWalk(pid: Long, ancestor: Long, maxDepth: Int): Boolean? {
   var current = pid
   repeat(maxDepth) {
     if (current == 1L || parent <= 0) return false
-    val next = when (val read = processParent(parent)) {
+    val next = when (val read = parents.of(parent)) {
       is ProcessParent.Parent -> read.pid
       ProcessParent.NoProcess -> return false
       ProcessParent.Unknown -> return null

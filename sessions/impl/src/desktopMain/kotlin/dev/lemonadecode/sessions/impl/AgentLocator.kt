@@ -3,6 +3,7 @@ package dev.lemonadecode.sessions.impl
 import dev.lemonadecode.domain.session.ClaudeConversation
 import dev.lemonadecode.platform.di.AppScope
 import dev.lemonadecode.platform.process.HomeDirectory
+import dev.lemonadecode.platform.process.ProcessParents
 import dev.zacsweers.metro.ContributesBinding
 import dev.zacsweers.metro.Inject
 import kotlinx.serialization.Serializable
@@ -32,7 +33,7 @@ internal data class RunningAgent(val pid: Long, val resume: String, val workingD
  */
 @ContributesBinding(AppScope::class)
 @Inject
-internal class ClaudeAgentLocator(home: HomeDirectory) : AgentLocator {
+internal class ClaudeAgentLocator(home: HomeDirectory, private val parents: ProcessParents) : AgentLocator {
   private val config = File(ClaudeConversation.configFolder(home.path, System.getenv("CLAUDE_CONFIG_DIR")))
   private val folder = File(config, "sessions")
   private val json = Json { ignoreUnknownKeys = true }
@@ -71,7 +72,7 @@ internal class ClaudeAgentLocator(home: HomeDirectory) : AgentLocator {
     return tail
   }
 
-  private fun descendsFrom(pid: Long, ancestor: Long): Boolean = runsUnder(pid, ancestor, MaxDepth)
+  private fun descendsFrom(pid: Long, ancestor: Long): Boolean = runsUnder(pid, ancestor, MaxDepth, parents)
 
   @Serializable
   private data class ClaudeSessionFile(

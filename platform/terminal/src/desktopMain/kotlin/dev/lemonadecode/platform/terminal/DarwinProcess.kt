@@ -13,11 +13,12 @@ import com.sun.jna.Pointer
  * process's `kinfo_proc`, read through `sysctl`; `lsof -a -d cwd -Fn` lists a process once
  * `proc_pidinfo` gives its task info, then names the folder `proc_pidinfo` gives as its current one.
  *
- * Each read is null unless the kernel answered in full: the call succeeded and filled the whole
- * record, for that very process. Its callers then start `ps` or `lsof` as they always did, which also
- * covers what isn't matched here: a folder name that isn't printable ASCII, or has a backslash,
- * which `lsof` prints escaped, depending on the locale. Every buffer is allocated at the size the
- * kernel is told, so it never writes past one.
+ * A read answers only when the kernel answered in full: the call succeeded and filled the whole
+ * record, for that very process. Otherwise its callers start `ps` or `lsof` as they always did, which
+ * also covers what isn't matched here: a folder name that isn't printable ASCII, or has a backslash,
+ * which `lsof` prints escaped, depending on the locale. The one failure answered without them is a
+ * process the kernel says doesn't exist (`ESRCH`), which `lsof` passes over too; see [DirectoryRead].
+ * Every buffer is allocated at the size the kernel is told, so it never writes past one.
  *
  * Record sizes and offsets are those of the macOS SDK's `sys/sysctl.h` and `sys/proc_info.h`,
  * checked alike for arm64 and x86_64; on any other system or architecture nothing here is used.
@@ -25,6 +26,24 @@ import com.sun.jna.Pointer
 internal object DarwinProcess {
   /** What `ps` prints for a process: the group it's in (`pgid`), and its terminal's foreground group (`tpgid`). */
   data class Groups(val group: Long, val terminalGroup: Long)
+
+  /** What the kernel tells of a process's current folder, read the way `lsof` reads it. */
+  sealed interface DirectoryRead {
+    /** The folder, as `lsof` would name it. */
+    data class Folder(val path: String) : DirectoryRead
+
+    /**
+     * No such process, or one that has ended: `lsof` lists it only once the kernel gives its task
+     * info, so it names no folder either. Its pid can't come back to another process in the
+     * meantime: macOS hands out pids in turn, never one still a process group's or a session's, so a
+     * pipeline's ended first process keeps its pid unused while the rest of its group runs, and any
+     * other only comes round again after nearly 100,000 newer processes.
+     */
+    data object NoProcess : DirectoryRead
+
+    /** Anything else, like another user's process or a name `lsof` writes escaped: only `lsof` can say. */
+    data object AskLsof : DirectoryRead
+  }
 
   private class Calls(val sysctl: Function, val pidInfo: Function)
 
@@ -62,25 +81,34 @@ internal object DarwinProcess {
 
   /**
    * The current folder of process [pid], as `lsof -a -d cwd -p <pid> -Fn` names it, when `lsof` would
-   * print it as it is; null otherwise, or when the kernel doesn't hand back both records.
+   * print it as it is; [DirectoryRead.NoProcess] when the kernel says there's no such process; else
+   * [DirectoryRead.AskLsof].
    */
-  fun currentDirectory(pid: Long): String? {
-    val pidInfo = calls?.pidInfo ?: return null
-    if (pid !in 1..Int.MAX_VALUE) return null
+  fun currentDirectory(pid: Long): DirectoryRead {
+    val pidInfo = calls?.pidInfo ?: return DirectoryRead.AskLsof
+    if (pid !in 1..Int.MAX_VALUE) return DirectoryRead.AskLsof
     return runCatching {
-      // `lsof` passes over a process whose task info it can't read.
-      val listed = Memory(TaskAllInfoSize.toLong()).use { info -> pidInfo.invokeInt(arrayOf(pid.toInt(), ProcPidTaskAllInfo, 0L, info, TaskAllInfoSize)) == TaskAllInfoSize }
-      if (!listed) return@runCatching null
+      // `lsof` passes over a process whose task info it can't read. The error is read straight after
+      // the call, on the same thread, before anything else can set it.
+      val listed = Memory(TaskAllInfoSize.toLong()).use { info ->
+        val read = pidInfo.invokeInt(arrayOf(pid.toInt(), ProcPidTaskAllInfo, 0L, info, TaskAllInfoSize))
+        if (read == TaskAllInfoSize) null else failure(read)
+      }
+      if (listed != null) return@runCatching listed
       val path = Memory(VnodePathInfoSize.toLong()).use { info ->
         val read = pidInfo.invokeInt(arrayOf(pid.toInt(), ProcPidVnodePathInfo, 0L, info, VnodePathInfoSize))
-        if (read == VnodePathInfoSize) info.getByteArray(CurrentDirectoryPath, PathSize) else null
-      } ?: return@runCatching null
+        // Ended since: `lsof` names no folder for one whose folder it can't read for that reason.
+        if (read == VnodePathInfoSize) info.getByteArray(CurrentDirectoryPath, PathSize) else return@runCatching failure(read)
+      }
       val end = path.indexOf(0)
-      if (end < 1 || path[0] != '/'.code.toByte()) return@runCatching null
-      if ((0 until end).any { !printedAsIs(path[it]) }) return@runCatching null
-      String(path, 0, end, Charsets.US_ASCII)
-    }.getOrNull()
+      if (end < 1 || path[0] != '/'.code.toByte()) return@runCatching DirectoryRead.AskLsof
+      if ((0 until end).any { !printedAsIs(path[it]) }) return@runCatching DirectoryRead.AskLsof
+      DirectoryRead.Folder(String(path, 0, end, Charsets.US_ASCII))
+    }.getOrDefault(DirectoryRead.AskLsof)
   }
+
+  /** What a `proc_pidinfo` call that returned [read] instead of a whole record means. */
+  private fun failure(read: Int): DirectoryRead = if (read <= 0 && Native.getLastError() == Esrch) DirectoryRead.NoProcess else DirectoryRead.AskLsof
 
   private val Architectures = setOf("aarch64", "x86-64")
 
@@ -105,6 +133,9 @@ internal object DarwinProcess {
   private const val VnodePathInfoSize = 2352
   private const val CurrentDirectoryPath = 152L
   private const val PathSize = 1024
+
+  /** errno for "no such process", in `sys/errno.h`. */
+  private const val Esrch = 3
 
   /** Whether `lsof` prints [byte] as it is, in every locale: printable ASCII, but for the backslash it doubles. */
   private fun printedAsIs(byte: Byte): Boolean = byte in 0x20..0x7e && byte != '\\'.code.toByte()

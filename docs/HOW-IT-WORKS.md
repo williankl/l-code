@@ -51,7 +51,9 @@ name, the top bar, the diff and your comments keep up with every `cd`.
 On macOS it asks the kernel itself, with the same calls `lsof` and `ps` make, instead of starting
 them every second for every session: `lsof` goes through every process on the computer to answer
 for one. It still starts them whenever the kernel's answer isn't whole, and for a folder whose name
-`lsof` writes escaped, like one with an accent, an emoji or a backslash.
+`lsof` writes escaped, like one with an accent, an emoji or a backslash. A process the kernel says
+is gone, like the first of a pipeline that has finished while the rest runs, has no folder, as
+`lsof` would find.
 
 While a program the shell started holds the terminal, Lemonade Code asks for that program's folder
 instead. A program can move without the shell: Claude Code entering a worktree changes its own folder

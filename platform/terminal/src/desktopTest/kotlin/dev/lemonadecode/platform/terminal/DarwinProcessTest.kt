@@ -1,5 +1,6 @@
 package dev.lemonadecode.platform.terminal
 
+import dev.lemonadecode.platform.terminal.DarwinProcess.DirectoryRead
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
@@ -48,7 +49,10 @@ class DarwinProcessTest {
   }
 
   /** The folder read three ways: the reader the app uses now, the kernel alone, and `lsof`, as before. */
-  private data class FolderReads(val reader: String?, val kernel: String?, val lsof: String?)
+  private data class FolderReads(val reader: String?, val kernel: DirectoryRead, val lsof: String?) {
+    /** The folder the kernel named, when it named one. */
+    val kernelFolder: String? get() = (kernel as? DirectoryRead.Folder)?.path
+  }
 
   private fun folderReads(pid: Long) = FolderReads(ProcessDirectory.of(pid), DarwinProcess.currentDirectory(pid), ProcessReaderOracles.directoryOf(pid))
 
@@ -70,7 +74,7 @@ class DarwinProcessTest {
       val folder = File(root, name).apply { mkdirs() }
       val reads = folderReads(sleeper(folder))
       assertEquals(folder.path, reads.lsof, "lsof in [$name]")
-      assertEquals(reads.lsof, reads.kernel, "the kernel in [$name]")
+      assertEquals(DirectoryRead.Folder(folder.path), reads.kernel, "the kernel in [$name]")
       assertEquals(reads.lsof, reads.reader, "the reader in [$name]")
     }
   }
@@ -82,7 +86,7 @@ class DarwinProcessTest {
     for (name in names) {
       val folder = File(root, name).apply { mkdirs() }
       val reads = folderReads(sleeper(folder))
-      assertNull(reads.kernel, "the kernel doesn't answer for [$name]")
+      assertEquals(DirectoryRead.AskLsof, reads.kernel, "the kernel leaves [$name] to lsof")
       assertEquals(reads.lsof, reads.reader, "the reader in [$name]")
       assertNotNull(reads.lsof, "lsof names [$name]")
     }
@@ -96,7 +100,7 @@ class DarwinProcessTest {
     Files.createSymbolicLink(link.toPath(), real.toPath())
     for (folder in listOf(link, File("/tmp"), File("/var/tmp"))) {
       val reads = folderReads(sleeper(folder))
-      assertEquals(reads.lsof, reads.kernel, "the kernel in $folder")
+      assertEquals<DirectoryRead>(DirectoryRead.Folder(checkNotNull(reads.lsof)), reads.kernel, "the kernel in $folder")
       assertEquals(reads.lsof, reads.reader, "the reader in $folder")
     }
     assertEquals("/private/tmp", ProcessDirectory.of(sleeper(File("/tmp"))))
@@ -110,7 +114,8 @@ class DarwinProcessTest {
     assertTrue(folder.delete())
     val reads = folderReads(pid)
     assertEquals(reads.lsof, reads.reader)
-    reads.kernel?.let { assertEquals(reads.lsof, it) }
+    assertTrue(reads.kernel != DirectoryRead.NoProcess)
+    reads.kernelFolder?.let { assertEquals(reads.lsof, it) }
   }
 
   @Test
@@ -123,7 +128,8 @@ class DarwinProcessTest {
     val pid = sleeper(root, prefix = (1..parts).joinToString("") { "cd $part && " })
     val reads = folderReads(pid)
     assertEquals(reads.lsof, reads.reader)
-    reads.kernel?.let { assertEquals(reads.lsof, it) }
+    assertTrue(reads.kernel != DirectoryRead.NoProcess)
+    reads.kernelFolder?.let { assertEquals(reads.lsof, it) }
   }
 
   @Test
@@ -171,26 +177,66 @@ class DarwinProcessTest {
     val zombie = parent.inputStream.bufferedReader().readLine().trim().toLong()
     Thread.sleep(600)
     val unused = (99_000L downTo 2L).first { !ProcessHandle.of(it).isPresent }
+    // What the kernel says: nothing of the gone, the zombie and the unused, as `lsof` passes over
+    // them; another user's is `lsof`'s to answer, as before.
     val cases = mapOf(
-      "an ended process" to ended,
-      "a zombie" to zombie,
-      "launchd, root's" to 1L,
-      "a pid no one has" to unused,
+      "an ended process" to (ended to DirectoryRead.NoProcess),
+      "a zombie" to (zombie to DirectoryRead.NoProcess),
+      "launchd, root's" to (1L to DirectoryRead.AskLsof),
+      "a pid no one has" to (unused to DirectoryRead.NoProcess),
     )
-    for ((what, pid) in cases) {
+    for ((what, case) in cases) {
+      val (pid, kernel) = case
       assertSameGroups(pid, what)
       val reads = folderReads(pid)
+      assertEquals(kernel, reads.kernel, "the kernel on $what")
+      assertNull(reads.lsof, "lsof on $what")
       assertEquals(reads.lsof, reads.reader, "the folder of $what")
-      reads.kernel?.let { assertEquals(reads.lsof, it, "the kernel's folder of $what") }
     }
-    assertNull(DarwinProcess.currentDirectory(1L), "another user's folder isn't the kernel's to tell")
     assertNull(DarwinProcess.groups(unused))
-    assertNull(DarwinProcess.currentDirectory(unused))
     assertNull(DarwinProcess.groups(0L))
     assertNull(DarwinProcess.groups(-1L))
     assertNull(DarwinProcess.groups(Int.MAX_VALUE + 1L))
-    assertNull(DarwinProcess.currentDirectory(0L))
-    assertNull(DarwinProcess.currentDirectory(Long.MAX_VALUE))
+    assertEquals(DirectoryRead.AskLsof, DarwinProcess.currentDirectory(0L))
+    assertEquals(DirectoryRead.AskLsof, DarwinProcess.currentDirectory(Long.MAX_VALUE))
+  }
+
+  @Test
+  fun `a pipeline in front whose first process has ended reads as before, in zsh and in bash`() = runBlocking<Unit> {
+    if (!mac) return@runBlocking
+    val shells = listOf(listOf("/bin/zsh", "-f", "-i"), listOf("/bin/bash", "--noprofile", "--norc", "-i")).filter { File(it.first()).exists() }
+    check(shells.isNotEmpty())
+    for (command in shells) {
+      TerminalSession(TerminalLaunch(command = command, workingDirectory = root.path, environment = mapOf("PS1" to "$ "))).use { session ->
+        withTimeout(10_000) {
+          while (ForegroundProcess.groupOf(session.pid) != session.pid) delay(20)
+        }
+        // `true` leads the pipeline's group and ends at once; `sleep` keeps the group, and the terminal, held.
+        session.send("/usr/bin/true | sleep 30\r")
+        val leader = withTimeout(10_000) {
+          var group: Long? = null
+          while (group == null) {
+            delay(20)
+            group = ForegroundProcess.groupOf(session.pid)?.takeIf { it != session.pid && !ProcessHandle.of(it).isPresent }
+          }
+          group
+        }
+        val member = ProcessHandle.of(session.pid).get().children().findFirst().get().pid()
+        assertEquals(leader, ProcessReaderOracles.processGroupOf(member), "${command.first()}: sleep is in the ended leader's group")
+        assertSameGroups(session.pid, "${command.first()} running the pipeline")
+        assertEquals(DirectoryRead.NoProcess, DarwinProcess.currentDirectory(leader), command.first())
+        assertNull(ProcessReaderOracles.directoryOf(leader), command.first())
+        assertNull(ProcessDirectory.of(leader), command.first())
+        // What the session sees, against the same read through `ps` and `lsof`: the shell's own folder.
+        val before = TerminalForeground(
+          group = ProcessReaderOracles.terminalGroupOf(session.pid),
+          directory = ProcessReaderOracles.directoryOf(leader) ?: ProcessReaderOracles.directoryOf(session.pid),
+        )
+        assertEquals(TerminalForeground(group = leader, directory = root.path), before, command.first())
+        assertEquals(before, session.foreground(), command.first())
+        session.send("\u0003")
+      }
+    }
   }
 
   @Test
@@ -225,9 +271,9 @@ class DarwinProcessTest {
           }
           val folder = DarwinProcess.currentDirectory(pid)
           val groups = DarwinProcess.groups(pid)
-          if (folder != null || groups != null) answered.incrementAndGet()
-          if (pid == steadyPid && (folder != steady.path || groups != steadyGroups)) failures += "steady: $folder $groups"
-          if (folder != null && !folder.startsWith("/")) failures += "folder of $pid: $folder"
+          if (folder is DirectoryRead.Folder || groups != null) answered.incrementAndGet()
+          if (pid == steadyPid && (folder != DirectoryRead.Folder(steady.path) || groups != steadyGroups)) failures += "steady: $folder $groups"
+          if (folder is DirectoryRead.Folder && !folder.path.startsWith("/")) failures += "folder of $pid: $folder"
           reads.incrementAndGet()
         }
       }

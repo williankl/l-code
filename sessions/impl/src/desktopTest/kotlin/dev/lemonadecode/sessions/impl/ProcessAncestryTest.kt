@@ -1,5 +1,6 @@
 package dev.lemonadecode.sessions.impl
 
+import java.io.File
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -98,6 +99,106 @@ class ProcessAncestryTest {
     assertTrue(!runsUnder(ended, self, MaxDepth))
     assertTrue(!runsUnder(shell, grandchild, MaxDepth))
     assertTrue(!runsUnder(unused, 1L, MaxDepth))
+  }
+
+  /** Runs `sh` nested [levels] deep, each waiting for the next, the innermost becoming `sleep`. */
+  private val nest = File.createTempFile("lemonade-code-nest", ".sh").apply {
+    deleteOnExit()
+    writeText("if [ \"\$1\" -gt 0 ]; then /bin/sh \"\$0\" \$((\$1 - 1)); true; else exec sleep 60; fi\n")
+  }
+
+  /** The processes from [top] down to the innermost, once all [levels] + 1 have started: innermost first. */
+  private fun chainUnder(top: Long, levels: Int): List<Long> {
+    repeat(500) {
+      val down = generateSequence(ProcessHandle.of(top).orElse(null)) { it.children().findFirst().orElse(null) }.map { it.pid() }.toList()
+      if (down.size == levels + 1 && ProcessHandle.of(down.last()).flatMap { it.info().command() }.orElse("").endsWith("/sleep")) return down.reversed()
+      Thread.sleep(20)
+    }
+    error("the nest never reached $levels levels under $top")
+  }
+
+  /** A nest [levels] deep started from this process: innermost first, its outermost `sh` last. */
+  private fun nested(levels: Int): List<Long> {
+    val top = ProcessBuilder("/bin/sh", nest.path, levels.toString()).start().also(started::add)
+    return chainUnder(top.pid(), levels)
+  }
+
+  /** A nest [levels] deep whose outermost `sh` launchd has taken over, its parent having ended. */
+  private fun orphanedNest(levels: Int): List<Long> {
+    val starter = ProcessBuilder("/bin/sh", "-c", "/bin/sh '${nest.path}' $levels >/dev/null 2>&1 & echo \$!").start()
+    val top = starter.inputStream.bufferedReader().readLine().trim().toLong()
+    starter.waitFor()
+    repeat(250) {
+      if (ProcessHandle.of(top).flatMap { it.parent() }.map { it.pid() }.orElse(-1L) == 1L) {
+        val chain = chainUnder(top, levels)
+        orphans += top
+        return chain
+      }
+      Thread.sleep(20)
+    }
+    error("launchd never took over $top")
+  }
+
+  private val orphans = mutableListOf<Long>()
+
+  @AfterTest
+  fun endOrphans() {
+    orphans.forEach { top ->
+      ProcessHandle.of(top).ifPresent { handle ->
+        handle.descendants().forEach { it.destroyForcibly() }
+        handle.destroyForcibly()
+      }
+    }
+  }
+
+  @Test
+  fun `a chain deeper than the walk goes, at the last step and one past it`() {
+    // chain[k] is the k-th process up from the innermost; the walk goes 8 up.
+    val chain = nested(10)
+    val comparison = Comparison(mac)
+    for (start in 0..3) {
+      for (ancestor in chain) comparison.check(chain[start], ancestor)
+    }
+    comparison.assertSame()
+    assertEquals(0, comparison.changed, "these processes don't come and go")
+    assertTrue(runsUnder(chain[0], chain[7], MaxDepth))
+    assertTrue(runsUnder(chain[0], chain[8], MaxDepth), "8 up is the last step")
+    assertTrue(!runsUnder(chain[0], chain[9], MaxDepth), "9 up is past it")
+    assertTrue(runsUnder(chain[2], chain[10], MaxDepth))
+    assertTrue(!runsUnder(chain[1], chain[10], MaxDepth))
+  }
+
+  @Test
+  fun `a chain under launchd, reaching it at the last step and one past it`() {
+    if (!mac) return
+    // launchd is the 8th process up from the innermost of a nest 7 deep under it, and the 9th of one 8 deep.
+    val atLast = orphanedNest(7)
+    val pastLast = orphanedNest(8)
+    val comparison = Comparison(mac)
+    for (chain in listOf(atLast, pastLast)) {
+      for (start in chain.indices) {
+        for (ancestor in chain + listOf(1L, self, unused)) comparison.check(chain[start], ancestor)
+      }
+    }
+    comparison.assertSame()
+    assertEquals(0, comparison.changed, "these processes don't come and go")
+    assertTrue(runsUnder(atLast[0], 1L, MaxDepth), "launchd as the 8th up")
+    assertTrue(!runsUnder(pastLast[0], 1L, MaxDepth), "launchd as the 9th up")
+    assertTrue(runsUnder(pastLast[1], 1L, MaxDepth))
+  }
+
+  @Test
+  fun `a pid beyond the int range, which the JDK reads as the pid it wraps to`() {
+    val (shell, child) = shellWithChild()
+    val wrapped = listOf((1L shl 32) + self, (1L shl 32) + child, (1L shl 32) + 1L, -(1L shl 32) + self)
+    val comparison = Comparison(mac)
+    for (pid in wrapped) {
+      for (ancestor in listOf(self, selfParent, shell, 1L, 0L)) comparison.check(pid, ancestor)
+    }
+    comparison.assertSame()
+    assertEquals(0, comparison.changed, "these processes don't come and go")
+    assertTrue(runsUnder((1L shl 32) + self, selfParent, MaxDepth), "as the JDK, this process")
+    assertTrue(runsUnder((1L shl 32) + child, shell, MaxDepth))
   }
 
   @Test

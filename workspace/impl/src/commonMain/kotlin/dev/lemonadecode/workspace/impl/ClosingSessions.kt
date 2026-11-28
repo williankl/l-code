@@ -28,9 +28,11 @@ internal object ClosingSessions {
 
   /**
    * It is in [worktree]: by where it works, its agent's folder included, by the checkout git found
-   * that in, or by where its programs run, where an agent working elsewhere keeps its conversation.
+   * that in, by where its programs run, where an agent working elsewhere keeps its conversation, or
+   * by where any agent running in it works or was started, a suspended one too, which carries on
+   * there after `fg`.
    */
-  private fun Session.uses(worktree: LinkedWorktree): Boolean = listOfNotNull(workingDirectory, repositoryRoot, processDirectory).any(worktree::contains)
+  private fun Session.uses(worktree: LinkedWorktree): Boolean = (listOfNotNull(workingDirectory, repositoryRoot, processDirectory) + agentDirectories).any(worktree::contains)
 
   fun dialog(closing: ClosingSession, home: String): CloseSessionDialogModel = CloseSessionDialogModel(
     sessionName = closing.name,

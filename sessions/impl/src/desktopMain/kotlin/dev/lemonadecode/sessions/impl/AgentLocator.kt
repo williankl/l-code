@@ -19,9 +19,10 @@ internal fun interface AgentLocator {
  * An agent running in a terminal, as process [pid], running or stopped. [resume] is the command that
  * picks it up again in the folder it started in. [workingDirectory] is the folder it says it works in
  * now, for an agent that keeps one of its own apart from its process's; null until it says, or once
- * that folder is gone.
+ * that folder is gone. [startedIn] is the folder its own session file names, there before it has
+ * said anything: the one it was started in, unless Claude has rewritten it since; null when none.
  */
-internal data class RunningAgent(val pid: Long, val resume: String, val workingDirectory: String?)
+internal data class RunningAgent(val pid: Long, val resume: String, val workingDirectory: String?, val startedIn: String? = null)
 
 /**
  * Claude Code keeps a file per running interactive session, `~/.claude/sessions/<pid>.json`, with
@@ -52,7 +53,7 @@ internal class ClaudeAgentLocator(home: HomeDirectory) : AgentLocator {
     .mapNotNull { (pid, session) ->
       val transcript = transcriptOf(pid, session)
       val resume = if (transcript == null) "claude" else ClaudeConversation.resumeCommand(session.sessionId)
-      resume?.let { RunningAgent(pid, it, transcript?.workingDirectory()) }
+      resume?.let { RunningAgent(pid, it, transcript?.workingDirectory(), startedIn = session.cwd) }
     }
 
   /**

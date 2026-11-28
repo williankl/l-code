@@ -207,6 +207,63 @@ class SessionServiceImplTest {
   }
 
   @Test
+  fun `a session keeps where every Claude in it works, suspended or not, and so does its archive on the next launch`() = runBlocking<Unit> {
+    val main = File(home, "storefront").apply { mkdirs() }
+    val first = File(home, "storefront.worktrees/rate-limit").apply { mkdirs() }
+    val second = File(home, "storefront.worktrees/flaky-login").apply { mkdirs() }
+    git.checkouts = listOf(main, first, second).associate { it.path to GitCheckout(root = it.path, branch = "feat/${it.name}") }
+    val id = service.openTerminal(main.path).getOrNull()!!
+    val terminal = registry.terminal(id)!!
+    suspend fun showing(folder: File) = withTimeout(10_000) { service.sessions.first { it.single().workingDirectory == folder.path }.single() }
+
+    terminal.send("sleep 30\r")
+    val claude = newProgram(terminal, known = emptySet())
+    var agents = listOf(RunningAgent(claude, "claude", first.path))
+    agentsUnder = { pid -> agents.takeIf { pid == terminal.pid }.orEmpty() }
+    showing(first)
+
+    // Suspended, the session is back with the shell, and still knows where that Claude works.
+    terminal.send("\u001a")
+    assertEquals(listOf(first.path), showing(main).agentDirectories)
+
+    // A newer Claude, suspended while the first is back in front.
+    terminal.send("sleep 31\r")
+    val newer = newProgram(terminal, known = setOf(claude))
+    agents = listOf(RunningAgent(newer, "claude", second.path), RunningAgent(claude, "claude", first.path))
+    showing(second)
+    terminal.send("\u001a")
+    showing(main)
+    terminal.send("fg %1\r")
+    assertEquals(listOf(second.path, first.path), showing(first).agentDirectories)
+
+    service.archive(id)
+    assertEquals(listOf(second.path, first.path), service.archived.value.single().session.agentDirectories)
+    service.shutdown()
+    val next = newService(SessionRegistry())
+    assertEquals(0, next.restore())
+    assertEquals(listOf(second.path, first.path), next.archived.value.single().session.agentDirectories)
+  }
+
+  @Test
+  fun `a suspended Claude that hasn't said where it works still keeps the folder it was started in`() = runBlocking<Unit> {
+    val main = File(home, "storefront").apply { mkdirs() }
+    val worktree = File(home, "storefront.worktrees/rate-limit").apply { mkdirs() }
+    git.checkouts = listOf(main, worktree).associate { it.path to GitCheckout(root = it.path, branch = "feat/${it.name}") }
+    val id = service.openTerminal(worktree.path).getOrNull()!!
+    val terminal = registry.terminal(id)!!
+    terminal.send("sleep 30\r")
+    val claude = newProgram(terminal, known = emptySet())
+    agentsUnder = { pid -> listOf(RunningAgent(claude, "claude", workingDirectory = null, startedIn = worktree.path)).takeIf { pid == terminal.pid }.orEmpty() }
+    withTimeout(20_000) { service.sessions.first { it.single().agentDirectories == listOf(worktree.path) } }
+
+    // Suspended, and the shell gone back to the main checkout: nothing else of the session is in that worktree.
+    terminal.send("\u001a")
+    terminal.send("cd ../../storefront\r")
+    val moved = withTimeout(20_000) { service.sessions.first { it.single().workingDirectory == main.path }.single() }
+    assertEquals(listOf(worktree.path), moved.agentDirectories)
+  }
+
+  @Test
   fun `a session stays where its process is while the agent moves within the same checkout`() = runBlocking<Unit> {
     val main = File(home, "storefront").apply { mkdirs() }
     val web = File(main, "apps/web").apply { mkdirs() }

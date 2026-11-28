@@ -47,7 +47,10 @@ class ClaudeAgentLocatorTest {
     error("the shell never started both programs")
   }
 
-  private fun claudeSession(pid: Long, id: String, kind: String = "interactive", cwd: String = "/Users/you/code/store.front", startedAt: Long = 1) {
+  /** Where the made-up Claudes were started, unless a test says otherwise. */
+  private val startedIn = "/Users/you/code/store.front"
+
+  private fun claudeSession(pid: Long, id: String, kind: String = "interactive", cwd: String = startedIn, startedAt: Long = 1) {
     File(sessions, "$pid.json").writeText("""{"pid":$pid,"sessionId":"$id","cwd":"$cwd","startedAt":$startedAt,"kind":"$kind"}""")
   }
 
@@ -71,7 +74,17 @@ class ClaudeAgentLocatorTest {
   fun `claude open with nothing said yet starts claude again, and says nothing of where it works`() {
     val pid = program()
     claudeSession(pid, "0b7c3a2e-1111-4222-8333-944455556666")
-    assertEquals(listOf(RunningAgent(pid, "claude", null)), locator.find(shell.pid()))
+    assertEquals(listOf(RunningAgent(pid, "claude", null, startedIn)), locator.find(shell.pid()))
+  }
+
+  @Test
+  fun `each Claude names the folder it was started in, before it says where it works`() {
+    val worktree = File(home, "code/store.front.worktrees/rate-limit").apply { mkdirs() }
+    val pid = program()
+    claudeSession(pid, "0b7c3a2e-1111-4222-8333-944455556666", cwd = worktree.path)
+    val found = locator.find(shell.pid()).single()
+    assertEquals(null, found.workingDirectory)
+    assertEquals(worktree.path, found.startedIn)
   }
 
   @Test
@@ -83,9 +96,9 @@ class ClaudeAgentLocatorTest {
     claudeSession(pid, id, startedAt = 1_000_000)
     // Written before this run, as a resumed conversation's history is.
     transcript(id, line(worktree, at = 999_000))
-    assertEquals(listOf(RunningAgent(pid, "claude --resume $id", null)), locator.find(shell.pid()))
+    assertEquals(listOf(RunningAgent(pid, "claude --resume $id", null, startedIn)), locator.find(shell.pid()))
     transcript(id, line(docs, at = 1_002_000))
-    assertEquals(listOf(RunningAgent(pid, "claude --resume $id", docs.path)), locator.find(shell.pid()))
+    assertEquals(listOf(RunningAgent(pid, "claude --resume $id", docs.path, startedIn)), locator.find(shell.pid()))
   }
 
   @Test
@@ -101,8 +114,8 @@ class ClaudeAgentLocatorTest {
       transcript("1c8d4b3f-2222-4333-8444-a55566667777", line(newer, at = 2_500))
       assertEquals(
         listOf(
-          RunningAgent(second, "claude --resume 1c8d4b3f-2222-4333-8444-a55566667777", newer.path),
-          RunningAgent(first, "claude --resume 0b7c3a2e-1111-4222-8333-944455556666", older.path),
+          RunningAgent(second, "claude --resume 1c8d4b3f-2222-4333-8444-a55566667777", newer.path, startedIn),
+          RunningAgent(first, "claude --resume 0b7c3a2e-1111-4222-8333-944455556666", older.path, startedIn),
         ),
         locator.find(two.pid()),
       )

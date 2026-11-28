@@ -218,7 +218,8 @@ worktree you made for a sub-session and one an agent made for itself, like Claud
 worktree, and the worktrees of the sub-sessions that close with it. Only a worktree a session runs in
 counts: one its Claude Code merely `cd`'d into may be someone else's, and is never offered. A
 repository's main checkout is never offered either, and neither is a worktree another open session is
-still in, or where its Claude Code is working.
+still in, or where any Claude Code running in it is working or was started, even one you suspended
+with Ctrl-Z.
 
 The dialog names the session and each worktree, with its folder and branch. A worktree with
 uncommitted changes or new files says so: they're lost if you delete it.
@@ -263,7 +264,7 @@ never touches a worktree or a branch.
 | Its folder is gone when you restore it | It opens in your home folder, without resuming its agent, and a message names the folder |
 | A sub-session can't come back when you restore it | That sub-session, and those under it, stay under Archived, and a message says how many |
 | You archive a session while one of its sub-sessions is still starting | The new sub-session isn't created, and a message says so. Review comments handed to it stay unsent, to send again |
-| Closing another session would leave unused a worktree an archived session is in | The worktree isn't offered for deletion, since the archived session still needs it |
+| Closing another session would leave unused a worktree an archived session is in, or its Claude Code was working in | The worktree isn't offered for deletion, since the archived session still needs it |
 
 Archived sessions have no status, make no sound and don't keep the computer awake.
 

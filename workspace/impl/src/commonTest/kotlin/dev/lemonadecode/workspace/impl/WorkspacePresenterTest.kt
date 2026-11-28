@@ -1365,6 +1365,34 @@ class WorkspacePresenterTest {
     }
   }
 
+  /** A session in the main checkout, its shell in front, whose suspended Claude works in a folder of sub-2's worktree. */
+  private val suspendedInWorktree = ShowcaseFixtures.session("s3", "storefront").copy(agentDirectories = listOf("${worktree.path}/apps/web"))
+
+  @Test
+  fun `a worktree an open session's suspended Claude works in isn't offered`() = runTest {
+    withWorktree(suspendedInWorktree)
+    presenter.test {
+      awaitItem().eventSink(WorkspaceEvent.CloseSession("s2"))
+      val closed = awaitItemWhere { it.sessions.tiles.none { tile -> tile.id == "s2" } }
+      assertEquals(listOf(SessionId("s2")), sessions.closed)
+      assertEquals(null, closed.closeSession)
+      assertEquals(emptyList(), sessions.removedWorktrees)
+    }
+  }
+
+  @Test
+  fun `a worktree an archived session's Claude worked in isn't offered`() = runTest {
+    withWorktree(suspendedInWorktree)
+    presenter.test {
+      awaitItem().eventSink(WorkspaceEvent.ArchiveSession("s3"))
+      awaitItemWhere { it.sessions.archived != null }.eventSink(WorkspaceEvent.CloseSession("s2"))
+      val closed = awaitItemWhere { it.sessions.tiles.none { tile -> tile.id == "s2" } }
+      assertEquals(listOf(SessionId("s2")), sessions.closed)
+      assertEquals(null, closed.closeSession)
+      assertEquals(emptyList(), sessions.removedWorktrees)
+    }
+  }
+
   @Test
   fun `closing asks about the worktree a session's programs run in, not one its agent works in`() = runTest {
     val agents = LinkedWorktree(path = "${ShowcaseFixtures.Repo}/.claude/worktrees/rate-limit", branch = "worktree-rate-limit", mainCheckout = ShowcaseFixtures.Repo, hasChanges = false)

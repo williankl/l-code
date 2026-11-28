@@ -43,6 +43,12 @@ public data class Session(
   val processRepositoryRoot: String? = null,
   /** The main checkout of the repository, while [repositoryRoot] is a linked worktree of it; null otherwise. */
   val mainCheckout: String? = null,
+  /**
+   * The folders of every agent running in it, the one holding the terminal or not, suspended ones
+   * included: where each says it works, and where it was started. For an archived session, as when
+   * it was archived. Unlike [workingDirectory], not where the session works.
+   */
+  val agentDirectories: List<String> = emptyList(),
 ) {
   /** What the session is called on screen. */
   public val displayName: String get() = customName ?: name

@@ -55,6 +55,11 @@ internal data class SavedSession(
   val agent: String? = null,
   /** For an archived session whose agent worked in another folder than [workingDirectory], that folder, shown while it's archived. */
   val agentDirectory: String? = null,
+  /**
+   * For an archived session, the folders of every agent that was running in it, the one in front or
+   * not: where each said it worked and where it was started. Unlike [agentDirectory], not shown.
+   */
+  val runningAgentDirectories: List<String>? = null,
 ) {
   fun placement(): SessionPlacement = SessionPlacement.entries.firstOrNull { it.name == placement } ?: SessionPlacement.Root
 

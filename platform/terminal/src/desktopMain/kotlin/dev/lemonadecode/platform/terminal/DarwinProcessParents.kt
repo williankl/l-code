@@ -8,7 +8,9 @@ import dev.zacsweers.metro.Inject
 
 /**
  * [ProcessParents] from macOS's kernel, read the way `ProcessHandle` reads them (see [DarwinProcess]);
- * elsewhere it can't tell. Here, beside the reads `ForegroundProcess` and `ProcessDirectory` make,
+ * elsewhere it can't tell. It's the binding on every desktop system, though: on Linux and Windows it
+ * answers [ProcessParent.Unknown] for every pid, so their walks go through `ProcessHandle` as before.
+ * Here, beside the reads `ForegroundProcess` and `ProcessDirectory` make,
  * rather than in process-core, so the record is read in one place; public so other modules' tests
  * can check walks over real processes with it.
  */

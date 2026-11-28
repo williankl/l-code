@@ -190,7 +190,9 @@ above the new prompt. If that folder is gone, it starts at home instead.
 
 If Claude Code was running, Lemonade Code finds which conversation it was in (from Claude's own
 `~/.claude/sessions/<pid>.json`) and resumes it with `claude --resume <id>`. A conversation you
-had already quit isn't resumed.
+had already quit isn't resumed. With more than one Claude under the shell, it's the one holding the
+terminal, the one whose folder is saved; while none does, as when they're all suspended, the most
+recently started.
 
 The file is also kept up to date while the app runs, so after a crash your sessions still come back,
 just without their latest output.

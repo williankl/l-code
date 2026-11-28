@@ -84,6 +84,9 @@ internal class SessionServiceImpl(
   /** For each session, the agents running in it, the most recently started first. */
   private val runningAgents = ConcurrentHashMap<SessionId, List<RunningAgent>>()
 
+  /** For each session, the process id of the agent holding its terminal when [followFolder] last chose its folder; none while none does. */
+  private val agentInFront = ConcurrentHashMap<SessionId, Long>()
+
   /** The archived sessions as kept, the most recently archived first; [archivedSessions] shows them. */
   private val archives = MutableStateFlow<List<SavedArchive>>(emptyList())
   private val archivedSessions = MutableStateFlow<List<ArchivedSession>>(emptyList())
@@ -229,6 +232,7 @@ internal class SessionServiceImpl(
       watchers.remove(sessionId)?.cancel()
       registry.remove(sessionId)?.let(::endShell)
       val _ = runningAgents.remove(sessionId)
+      val _ = agentInFront.remove(sessionId)
     }
   }
 
@@ -571,7 +575,8 @@ internal class SessionServiceImpl(
    * works, for [followFolder]. One brought back from last time counts until it shows up: for
    * [resumeGrace], and after that for as long as the program it was started as still runs (Claude
    * asking whether to trust a folder hasn't shown up yet). Once seen, it counts only while it runs,
-   * so an agent you quit yourself isn't started again.
+   * so an agent you quit yourself isn't started again. With more than one running, it's the one
+   * holding the terminal, whose folder the session is saved with, else the most recently started.
    */
   private suspend fun trackAgent(id: SessionId, terminal: TerminalSession, pendingResume: String?) {
     val started = TimeSource.Monotonic.markNow()
@@ -580,7 +585,7 @@ internal class SessionServiceImpl(
       delay(AgentPollInterval)
       val running = withContext(dispatchers.io) { agents.find(terminal.pid) }
       runningAgents[id] = running
-      val found = running.firstOrNull()?.resume
+      val found = (running.firstOrNull { it.pid == agentInFront[id] } ?: running.firstOrNull())?.resume
       if (found != null) seen = true
       val pending = pendingResume?.takeIf { !seen }
       val starting = pending != null &&
@@ -683,6 +688,8 @@ internal class SessionServiceImpl(
           if (agentAt.value == shared) process else elsewhere
         }
       }
+      // Noted with the folder it decided, so the conversation saved is always that folder's.
+      if (holding != null) agentInFront[id] = holding.pid else agentInFront -= id
       val moved = (folder to process) != last
       if (!moved && tick++ % BranchCheckEvery != 0) continue
       last = folder to process

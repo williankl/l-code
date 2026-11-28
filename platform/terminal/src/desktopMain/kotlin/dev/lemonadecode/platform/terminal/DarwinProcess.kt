@@ -33,11 +33,9 @@ internal object DarwinProcess {
     data class Folder(val path: String) : DirectoryRead
 
     /**
-     * No such process, or one that has ended: `lsof` lists it only once the kernel gives its task
-     * info, so it names no folder either. Its pid can't come back to another process in the
-     * meantime: macOS hands out pids in turn, never one still a process group's or a session's, so a
-     * pipeline's ended first process keeps its pid unused while the rest of its group runs, and any
-     * other only comes round again after nearly 100,000 newer processes.
+     * No such process, or one that has ended. The kernel says so (`ESRCH`) when it can't find the
+     * pid, before anything that depends on who is asking, and `lsof` makes the same call: asked at
+     * the same moment, it gets the same answer, passes over the process and names no folder.
      */
     data object NoProcess : DirectoryRead
 

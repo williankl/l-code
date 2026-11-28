@@ -37,9 +37,22 @@ internal fun handleWalk(pid: Long, ancestor: Long, maxDepth: Int): Boolean {
  * the same, so this reads each process once and goes on with the parent named in that read. As
  * before, the parent is read first and compared with [ancestor] only once it's there. No such
  * process ends the walk as `ProcessHandle` does; anything else hands it back to [handleWalk].
+ *
+ * Two processes aren't read at all. This process is there while it asks, and its parent is what
+ * `getppid()` says, which is what `ProcessHandle` asks for it. launchd, process 1, is always there
+ * and its parent is always 0: reaching it, the walk would compare it with [ancestor] and stop, at any
+ * step, the last included.
  */
 internal fun kernelWalk(pid: Long, ancestor: Long, maxDepth: Int, parents: ProcessParents): Boolean? {
-  var parent = when (val read = parents.of(pid)) {
+  val self = ProcessHandle.current().pid()
+
+  fun parentOf(process: Long): ProcessParent = if (process == self) {
+    parents.ofThisProcess()?.let(ProcessParent::Parent) ?: ProcessParent.Unknown
+  } else {
+    parents.of(process)
+  }
+
+  var parent = when (val read = parentOf(pid)) {
     is ProcessParent.Parent -> read.pid
     ProcessParent.NoProcess -> return false
     ProcessParent.Unknown -> return null
@@ -47,7 +60,8 @@ internal fun kernelWalk(pid: Long, ancestor: Long, maxDepth: Int, parents: Proce
   var current = pid
   repeat(maxDepth) {
     if (current == 1L || parent <= 0) return false
-    val next = when (val read = parents.of(parent)) {
+    if (parent == 1L) return ancestor == 1L
+    val next = when (val read = parentOf(parent)) {
       is ProcessParent.Parent -> read.pid
       ProcessParent.NoProcess -> return false
       ProcessParent.Unknown -> return null

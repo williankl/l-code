@@ -154,11 +154,12 @@ class ProcessAncestryTest {
 
   @Test
   fun `a chain deeper than the walk goes, at the last step and one past it`() {
-    // chain[k] is the k-th process up from the innermost; the walk goes 8 up.
+    // chain[k] is the k-th process up from the innermost; the walk goes 8 up. This process is 11 up
+    // from the innermost, so 8 up from chain[3] and 9 up from chain[2].
     val chain = nested(10)
     val comparison = Comparison(mac)
-    for (start in 0..3) {
-      for (ancestor in chain) comparison.check(chain[start], ancestor)
+    for (start in 0..4) {
+      for (ancestor in chain + listOf(self, selfParent)) comparison.check(chain[start], ancestor)
     }
     comparison.assertSame()
     assertEquals(0, comparison.changed, "these processes don't come and go")
@@ -167,6 +168,9 @@ class ProcessAncestryTest {
     assertTrue(!runsUnder(chain[0], chain[9], MaxDepth, parents), "9 up is past it")
     assertTrue(runsUnder(chain[2], chain[10], MaxDepth, parents))
     assertTrue(!runsUnder(chain[1], chain[10], MaxDepth, parents))
+    assertTrue(runsUnder(chain[3], self, MaxDepth, parents), "this process as the 8th up")
+    assertTrue(!runsUnder(chain[2], self, MaxDepth, parents), "this process as the 9th up")
+    assertTrue(runsUnder(chain[4], selfParent, MaxDepth, parents), "past this process, as the 8th up")
   }
 
   @Test
